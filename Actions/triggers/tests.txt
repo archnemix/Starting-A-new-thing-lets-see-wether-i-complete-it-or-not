@@ -12,3 +12,5 @@ trigger 4: record counts fix - test records now say 31 passed
 trigger 5: phase 2 - encoders + measured claims, 41 tests
 
 trigger 6: phase 3 - recorder + data capture + join
+
+trigger 7: authoritative test counts via junit xml
