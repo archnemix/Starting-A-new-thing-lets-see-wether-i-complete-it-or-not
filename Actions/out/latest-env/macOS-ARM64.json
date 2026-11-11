@@ -1,0 +1,20 @@
+{
+  "purpose": "runner environment record written by Actions/scripts/env_probe.py",
+  "written_utc": "2026-11-11T15:52:17.403435+00:00",
+  "runner": {
+    "os_name": "posix",
+    "platform": "macOS-26.7.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "cpu_count": 3,
+    "python_version": "3.11.9",
+    "github_os": "macOS",
+    "github_arch": "ARM64",
+    "github_ref": "arena/6de6b228-starting-a-new-thing-lets-see",
+    "github_sha": "cf6e39012500a3501b5856d28efaead59473b924",
+    "github_run_id": "43052619656"
+  },
+  "checks": {
+    "repo_checked_out": true,
+    "can_write_output": true
+  }
+}

@@ -1,0 +1,4 @@
+trigger intent: trigger 1: bootstrap - prove three runners can commit results into the repository
+runner: macOS ARM64
+Python 3.11.9
+macOS-26.7.2-arm64-arm-64bit
