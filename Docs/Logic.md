@@ -4,8 +4,9 @@
 > can be traced from the user's line to the exact file. Updated whenever a call chain
 > changes.
 
-Nothing is implemented yet; these chains are the contract the code will be built
-against. Files named here appear in `Plan/Architecture.md` section 9.
+Implemented so far: the container layer and the CLI (Phase 0-1). Chains for the recorder
+and adapters are still the contract the code will be built against. `[live]` marks a chain
+that exists in code today; `[planned]` marks one that does not.
 
 ---
 
@@ -77,14 +78,59 @@ child process imports torch
 nothing matched -> exit non-zero with instructions (never an empty file)
 ```
 
-## 5. Reading a file
+## 5. Reading a file `[live]`
 
 ```
-archx info / reconstruct / diff / recover      archx/cli/*
-  └─ container/reader.py  (header -> block scan -> CRC check -> index)
-       ├─ index present  -> random access by step
-       └─ index missing  -> container/recovery.py rebuilds it
-  └─ delta chain apply: anchor + sum(deltas)     archx/container/reader.py
+archx info <file>                         archx/cli/main.py -> archx/cli/info.py
+  └─ Reader(path)                         archx/container/reader.py
+       ├─ read_header()  magic/version/CRC    archx/container/reader.py
+       ├─ _scan(): per block
+       │     ├─ pair_crc over bytes 0..23     archx/container/schema.py
+       │     ├─ length cap (anti-DoS)         archx/container/schema.py
+       │     ├─ decompress (zstd/zlib/none)   archx/container/compress.py
+       │     └─ payload CRC + declared length
+       └─ footer found -> closed file, index usable
+            └─ Reader.index_block_payload()   archx/container/reader.py
+```
+
+## 5a. Writing a file `[live]`
+
+```
+Writer(path)                               archx/container/writer.py
+  ├─ header_bytes()  -> 40-byte header     archx/container/schema.py
+  ├─ write_block(type, payload, step=N)
+  │     ├─ compress.compress()             archx/container/compress.py
+  │     ├─ 28-byte prefix (step inside)    archx/container/schema.py
+  │     └─ batched fsync (bytes or time)
+  └─ close()
+        ├─ write_index()     INDEX block
+        ├─ footer_bytes()    footer last
+        └─ CLOSED flag set in the header
+```
+
+## 5b. Recovering a crashed file `[live]`
+
+```
+archx recover <file> [--out copy]          archx/cli/recover.py
+  └─ recover_in_place()                    archx/container/recovery.py
+       ├─ read_header()                    archx/container/reader.py
+       ├─ _good_prefix_end(): walk prefixes until one fails
+       ├─ truncate at the last whole block
+       ├─ _rebuild_index(): steps read from prefixes, no decompression
+       ├─ append INDEX + footer
+       └─ set RECOVERED | CLOSED flags
+```
+
+## 6. Failure paths `[live]` (must never propagate into training)
+
+```
+any recorder exception
+  └─ guard in archx/recorder.py [planned]: log once, mark feature unavailable,
+     write CAPABILITY_DEGRADED event, continue training
+
+any reader exception
+  └─ typed errors in archx/errors.py: FormatError / CorruptBlockError /
+     TruncatedFileError / UnsupportedVersionError -> CLI prints and exits 1
 ```
 
 ## 6. Failure paths (must never propagate into training)

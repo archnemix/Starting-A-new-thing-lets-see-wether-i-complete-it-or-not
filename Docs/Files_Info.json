@@ -352,18 +352,238 @@
     },
     "internels/chat/README.md": {
       "purpose": "Folder README for local-only chat exports: the rule, why they are kept, what is in here.",
+      "inputs": [],
+      "outputs": [],
+      "handles": "Committed on purpose; the chat bodies next to it are not."
+    },
+    "pyproject.toml": {
+      "purpose": "Packaging: distribution `archx.mdl`, import `archx`, CLI `archx`, MIT, py>=3.10, deps numpy+zstandard.",
       "inputs": [
-        "none"
+        "build backend"
       ],
       "outputs": [
-        "none"
+        "sdist/wheel",
+        "console script"
       ],
-      "handles": "States that the README is committed while the chat files are gitignored."
+      "handles": "Version lives in archx/version.py too; both are kept in step by hand at release."
+    },
+    "LICENSE": {
+      "purpose": "MIT license text.",
+      "inputs": [],
+      "outputs": [],
+      "handles": "Chosen by the user (2026-11-11)."
+    },
+    "archx/__init__.py": {
+      "purpose": "Public package surface; exposes __version__ and FORMAT_VERSION only.",
+      "inputs": [],
+      "outputs": [
+        "__version__",
+        "FORMAT_VERSION"
+      ],
+      "handles": "Stays tiny on purpose."
+    },
+    "archx/version.py": {
+      "purpose": "Single source of version and format constants (MAGIC, END_MAGIC, FORMAT_MAJOR/MINOR).",
+      "inputs": [],
+      "outputs": [
+        "__version__",
+        "FORMAT_MAJOR",
+        "FORMAT_MINOR",
+        "MAGIC",
+        "END_MAGIC"
+      ],
+      "handles": "Imported by schema, reader, writer and the CLI."
+    },
+    "archx/errors.py": {
+      "purpose": "Typed exceptions so callers can degrade selectively.",
+      "inputs": [],
+      "outputs": [
+        "ArchxError and subclasses"
+      ],
+      "handles": "FormatError, CorruptBlockError, TruncatedFileError, UnsupportedVersionError, DependencyMissingError."
+    },
+    "archx/container/__init__.py": {
+      "purpose": "Container package surface: Reader, Writer, BlockType, read_header.",
+      "inputs": [],
+      "outputs": [
+        "Reader",
+        "Writer",
+        "BlockType",
+        "read_header"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/container/schema.py": {
+      "purpose": "Byte-level layout: header/block/footer structs, block-type ids, codec ids, flag bits, CRC helpers.",
+      "inputs": [],
+      "outputs": [
+        "HEADER/BLOCK/FOOTER structs and sizes",
+        "header_bytes()",
+        "footer_bytes()",
+        "zlib_crc32()"
+      ],
+      "handles": "The only file where byte offsets live. Block prefix is 28 bytes: type, codec, flags, step, raw_len, payload_len, payload_crc, block_crc(over 0..23)."
+    },
+    "archx/container/compress.py": {
+      "purpose": "Per-block compression: zstandard if installed, else stdlib compression.zstd (3.14+), else zlib/none.",
+      "inputs": [
+        "bytes",
+        "Codec"
+      ],
+      "outputs": [
+        "compressed or decompressed bytes"
+      ],
+      "handles": "effective_codec() downgrades ZSTD to ZLIB when no zstd exists; NONE always works."
+    },
+    "archx/container/writer.py": {
+      "purpose": "Append-only block writer with batched fsync, index block and footer.",
+      "inputs": [
+        "output path",
+        "block type + payload + optional step"
+      ],
+      "outputs": [
+        ".archx.mdl bytes on disk"
+      ],
+      "handles": "Torn-write safety (header first, footer last), CLOSED/RECOVERED flags, index of (step, offset, length)."
+    },
+    "archx/container/reader.py": {
+      "purpose": "Validating reader: header checks, prefix CRCs, length caps, payload CRCs, footer detection, index decode.",
+      "inputs": [
+        "path",
+        "max_block_bytes",
+        "allow_torn"
+      ],
+      "outputs": [
+        "Header",
+        "Container(blocks, footer)",
+        "meta()",
+        "info()"
+      ],
+      "handles": "Refuses foreign files, newer majors, absurd lengths, bad CRCs; skips unknown block types; reports torn tails instead of trusting them."
+    },
+    "archx/container/recovery.py": {
+      "purpose": "Rebuild a crashed file: keep whole blocks, truncate the tail, rebuild the index, append a footer.",
+      "inputs": [
+        "path (in place or copy)"
+      ],
+      "outputs": [
+        "RecoveryReport",
+        "a closed, indexed file"
+      ],
+      "handles": "Steps are read from block prefixes, so no decompression is needed. Only truncates and re-appends; never rewrites block bytes."
+    },
+    "archx/cli/__init__.py": {
+      "purpose": "CLI package surface with a lazy import so `import archx` stays cheap.",
+      "inputs": [],
+      "outputs": [
+        "main()"
+      ],
+      "handles": "Console script target is archx.cli.main:main."
+    },
+    "archx/cli/main.py": {
+      "purpose": "Argument parsing and dispatch only.",
+      "inputs": [
+        "argv"
+      ],
+      "outputs": [
+        "exit code"
+      ],
+      "handles": "--version, info, recover; new commands are added as their modules land."
+    },
+    "archx/cli/info.py": {
+      "purpose": "`archx info`: summarize a recording (format, size, closure, blocks, key META fields).",
+      "inputs": [
+        "path",
+        "--json"
+      ],
+      "outputs": [
+        "human or JSON text, exit code"
+      ],
+      "handles": "Reads metadata only; never loads tensor payloads."
+    },
+    "archx/cli/recover.py": {
+      "purpose": "`archx recover`: close a crashed recording, in place or into a copy.",
+      "inputs": [
+        "path",
+        "--out"
+      ],
+      "outputs": [
+        "report text, exit code"
+      ],
+      "handles": "Delegates to container/recovery.py."
+    },
+    "Actions/scripts/run_tests.py": {
+      "purpose": "Run pytest and write a machine-readable record of the run.",
+      "inputs": [
+        "label argument",
+        "GITHUB_* env"
+      ],
+      "outputs": [
+        "Actions/out/test-runs/<label>.json"
+      ],
+      "handles": "Captures exit code, summary line, versions, commit and output tails."
+    },
+    "Tests/unit/container/test_schema.py": {
+      "purpose": "Unit tests for struct sizes and CRC placement.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Header 40, block 28, footer 56; header CRC over bytes 0..19, footer over 0..47."
+    },
+    "Tests/unit/container/test_writer.py": {
+      "purpose": "Unit tests for the writer: roundtrip, real compression, abort behaviour.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Proves stored_len < raw_len for compressible input and that abort leaves no footer."
+    },
+    "Tests/unit/container/test_reader.py": {
+      "purpose": "Unit tests for hostile/damaged files: foreign magic, newer major, bit flip, absurd length, torn tail, unknown block type.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Each test asserts a specific typed error."
+    },
+    "Tests/unit/container/test_recovery.py": {
+      "purpose": "Unit tests for recovery: whole blocks kept, index rebuilt, copy mode, no-op on healthy files.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Crash is simulated by truncation, SIGKILL is covered in integration."
+    },
+    "Tests/unit/cli/test_cli.py": {
+      "purpose": "Unit tests for the CLI surface through the real entry point.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "--version/help exit codes, info JSON, broken-file error path, recover."
+    },
+    "Tests/integration/test_container_end_to_end.py": {
+      "purpose": "Integration: writer -> crash -> recovery -> reader -> CLI as one flow, including a real SIGKILLed subprocess.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Proves the modules still agree when wired together."
+    },
+    "Tests/integration/test_recovery_property.py": {
+      "purpose": "Property test over 8 seeds: any tear point leaves a valid, ordered prefix and a rebuilt index that matches.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Documents that a tear inside META loses META but never corrupts it."
     }
   },
   "_generated": {
     "Actions/out/latest-env/<OS>-<ARCH>.json": "runner environment record written by env_probe.py during a workflow run; replaced on every run.",
-    "Actions/out/latest-env/<OS>-<ARCH>.log": "echoed trigger intent plus runner versions from the same run."
+    "Actions/out/latest-env/<OS>-<ARCH>.log": "echoed trigger intent plus runner versions from the same run.",
+    "Actions/out/test-runs/<label>.json": "test run record written by Actions/scripts/run_tests.py; one per runner, replaced each run"
   },
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."

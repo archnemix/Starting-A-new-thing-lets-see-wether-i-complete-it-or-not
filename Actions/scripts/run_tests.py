@@ -27,13 +27,16 @@ def main(argv: list[str]) -> int:
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     finished = datetime.now(timezone.utc)
 
-    tail = (proc.stdout or "").strip().splitlines()[-1:] or [""]
+    lines = [line for line in (proc.stdout or "").splitlines() if line.strip()]
+    summary = next((line.strip() for line in reversed(lines)
+                    if "passed" in line or "failed" in line or "error" in line), "")
+    summary = summary.strip("= ")
     record = {
         "purpose": "test run record written by Actions/scripts/run_tests.py",
         "label": label,
         "command": " ".join(cmd),
         "exit_code": proc.returncode,
-        "summary_line": tail[0],
+        "summary_line": summary,
         "started_utc": started.isoformat(),
         "duration_s": round((finished - started).total_seconds(), 3),
         "runner": {

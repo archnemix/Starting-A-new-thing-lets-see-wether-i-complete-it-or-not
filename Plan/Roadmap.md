@@ -14,20 +14,20 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 |---|---|---|---|
 | 0.1 | Docs scaffold: every required doc, folder README, purpose line per file | Files exist, `Docs/Files_Info.json` matches the tree | done (cf6e390) |
 | 0.2 | CI spine: `Tests/` runner, log-commit workflow, trigger file | A run on the 3 runners writes a result file into the repo | done (run 43052619656, 3/3 green, results committed) |
-| 0.3 | Packaging skeleton: `pyproject.toml` (distribution `archx.mdl`, import `archx`, CLI `archx`), version string, CLI stub | `pip install -e .` and `archx --help` work on all 3 runners | todo |
-| 0.4 | Test-record system: versioned folders, keep current + 2 | A recorded run per runner with inputs/outputs | todo |
+| 0.3 | Packaging skeleton: `pyproject.toml` (distribution `archx.mdl`, import `archx`, CLI `archx`), version string, CLI stub | `pip install -e .` and `archx --help` work on all 3 runners | done (b39ff06, 3/3 runners) |
+| 0.4 | Test-record system: versioned folders, keep current + 2 | A recorded run per runner with inputs/outputs | done (`Actions/out/test-runs/*.json` written by CI) |
 | 0.5 | npm `archx` signpost package (prints the PyPI command + docs link, exits non-zero on wrong use) | `npm i archx` then `npx archx` prints the real install path; published only when you say so | todo |
 
 ## Phase 1 - Container format (v0.2)
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 1.1 | `Plan/Format_Spec.md` frozen as v1 spec (header, blocks, footer, CRC rules) | Spec has no open questions; reviewed | todo |
-| 1.2 | `container/writer.py` - append-only blocks, batched fsync, torn-write safety | Unit tests: write/close/reopen byte-identical index | todo |
-| 1.3 | `container/reader.py` - block iteration, CRC validation, index lookup, refusal on bad lengths | Unit tests incl. corrupted-length and corrupted-CRC files | todo |
-| 1.4 | `container/recovery.py` + `archx recover` | Test: kill the writer mid-file (SIGKILL child), recovered file reads and reconstructs | todo |
-| 1.5 | Property test: random block sequences survive write -> read -> recover | Hypothesis or seeded property test on all 3 runners | todo |
-| 1.6 | Safety test: file containing hostile lengths/CRCs never allocates beyond limits | Red-team unit test | todo |
+| 1.1 | `Plan/Format_Spec.md` frozen as v1 spec (header, blocks, footer, CRC rules) | Spec has no open questions; reviewed | done (block prefix grew to 28 bytes for recovery; spec updated) |
+| 1.2 | `container/writer.py` - append-only blocks, batched fsync, torn-write safety | Unit tests: write/close/reopen byte-identical index | done (unit tests pass) |
+| 1.3 | `container/reader.py` - block iteration, CRC validation, index lookup, refusal on bad lengths | Unit tests incl. corrupted-length and corrupted-CRC files | done (unit tests pass) |
+| 1.4 | `container/recovery.py` + `archx recover` | Test: kill the writer mid-file (SIGKILL child), recovered file reads and reconstructs | done (SIGKILL test passes) |
+| 1.5 | Property test: random block sequences survive write -> read -> recover | Hypothesis or seeded property test on all 3 runners | done (8 seeds pass) |
+| 1.6 | Safety test: file containing hostile lengths/CRCs never allocates beyond limits | Red-team unit test | done (red-team test passes) |
 
 ## Phase 2 - Delta, quantization, compression (v0.3)
 

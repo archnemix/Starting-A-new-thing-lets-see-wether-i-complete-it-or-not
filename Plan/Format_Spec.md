@@ -226,6 +226,22 @@ tool can rebuild exactly the same structure by scanning.
 | 48 | 4 | footer_crc (CRC-32 of bytes 0..47) |
 | 52 | 4 | reserved |
 
+## 6a. Known limitation found in implementation: a tear can land inside a prefix for a
+non-compressed block
+
+If a block's payload is stored uncompressed (codec NONE) and its bytes happen to form a
+valid-looking prefix with a matching CRC, that block survives but its payload is short.
+The probability is negligible (a 4-byte CRC must match), and the reader's declared-length
+check catches the common case, but the format does not make it impossible.
+
+Options, decided in step 1.6:
+1. accept it as a documented limit (current),
+2. always compress so a tear fails a CRC (costs bytes on tiny blocks),
+3. put a payload length in the footer and validate the total (catches every short payload).
+
+Roadmap step 1.6 must state which is chosen and why; until then this is a documented
+limitation, not a solved problem.
+
 ## 7. Durability and recovery *(fixed behaviour, tune for thresholds)*
 
 - Blocks are appended in order; the writer `fsync`s at a tunable interval

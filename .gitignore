@@ -16,6 +16,7 @@ dist/
 # Local-only material: the user's verbatim origin chat. Kept in the working tree,
 # never pushed anywhere (rule 25, Docs/Rules.md).
 internels/chat/*
+!internels/chat/README.md
 
 # OS noise
 .DS_Store
