@@ -67,11 +67,20 @@ If a rule blocks the work, stop and ask; do not improvise around it.
     the secret name, the user sets it in repository settings, and the exact name
     plus what it is for is recorded in `Docs/Secrets.md`.
 
-## 6. Environment facts that shape the rules
+## 6. Local-only material
 
-25. This sandbox has no Rust toolchain and cannot reach `static.rust-lang.org`,
+25. The original working conversation that produced this project is stored verbatim in
+    `internels/chat/` and is **local only**: never committed, never pushed, never in a
+    nested folder on GitHub. It is excluded by `.gitignore`. Its conclusions are
+    extracted into `Plan/` and `Docs/`; the raw text stays here.
+26. The same applies to any file the user marks as local-only in future: status is
+    recorded in `Docs/Thinking.md` and enforced by `.gitignore` in the same change.
+
+## 7. Environment facts that shape the rules
+
+27. This sandbox has no Rust toolchain and cannot reach `static.rust-lang.org`,
     `sh.rustup.rs`, `crates.io`, `index.crates.io`, `static.crates.io`, `docs.rs`,
     `raw.githubusercontent.com` or general websites. It can reach GitHub,
     `api.github.com`, `codeload.github.com`, PyPI and npm.
-26. Therefore: code that must build here is Python. Anything that cannot be built
+28. Therefore: code that must build here is Python. Anything that cannot be built
     or tested here belongs in an Actions workflow (see section 5).

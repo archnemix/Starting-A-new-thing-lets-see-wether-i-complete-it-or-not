@@ -81,8 +81,36 @@ Reader rules, all mandatory:
 | 8 | `INFO` | JSON | out-of-band notes, warnings, degradations |
 | 9 | `INDEX` | binary | block offsets by step (see section 6) |
 | 16 | `INDEX_FOOTER` | binary | optional compact index written just before the footer |
+| 17 | `DATA_BLOB` | bytes | **reserved, not written in v1**: opt-in training data payload (Q17) |
+| 18 | `ATLAS` | binary | **reserved**: data -> weight -> capability map (post-v1) |
+| 19 | `EDIT_VECTOR` | binary | **reserved**: direction in weight space per capability (post-v1) |
 
 Blocks 1-8 are version 1; new types are added as integers, never by changing these.
+Reserved ids are allocated so that a file written by a future version is skipped, not
+misread, by a v1 reader.
+
+### 4.1 Required `META` fields (v1)
+
+```json
+{
+  "format": "1.0",
+  "library": "archx <version>",
+  "adapter": "torch | hf | lightning | launcher",
+  "framework": {"name": "torch", "version": "..."},
+  "model_class": "...",
+  "capability_tier": 0,
+  "capabilities_missing": {"grad_norms": "reason it was unavailable"},
+  "recorder_settings": {"policy": "...", "region_tags": {}, "compression": "..."},
+  "components": ["vision_encoder", "language_model"],
+  "base_model": null,
+  "ancestor": null,
+  "data_stored": false
+}
+```
+
+`base_model` and `ancestor` are reserved-but-null in v1: a future version can make a file
+a pure delta against a parent (Q18). `data_stored` must be `false` in v1 and must agree
+with the presence or absence of `DATA_BLOB` blocks.
 
 ## 5. Payload encodings
 

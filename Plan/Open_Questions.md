@@ -51,6 +51,24 @@ if more ranks are detected without sharding support.*
 CPU-only by design unless you want a GPU runner (cost). *Recommend: CPU-only
 benchmarks; every accelerator claim stays unverified until a GPU run happens.*
 
+## New, from the origin chat (`Plan/Origin_Chat.md`)
+
+**Q17. Training data: fingerprints only, or store the data itself?** The brief says
+"never the data itself"; the origin chat says the data should be stored so a human or AI
+can see which data caused which change. *Recommendation: fingerprints always; real data
+only as an opt-in `DATA_BLOB` section that is off by default and announced in META.* A
+recording with data in it is much larger, and that must be a deliberate choice per run.
+
+**Q18. Reserve the cross-file base reference in v1?** "Model B = model A + deltas" was
+called the most valuable feature in the origin chat, and it is not the same thing as
+in-run history. *Recommendation: ship `META.base_model` / `META.ancestor` as reserved
+null fields in the v1 format (costs 2 keys, keeps v1 files composable), and build the
+actual composition in v2.*
+
+**Q19. Is "final anchor is a usable model snapshot" a hard requirement?** It is in the
+design because it was in the origin chat (a file must stay useful as a weights file).
+Confirm that removing history from a closed file should keep it loadable.
+
 ## Small, but affects structure
 
 **Q10. Folder spellings.** `internels/` (as you wrote it) and `Docs/` keep their

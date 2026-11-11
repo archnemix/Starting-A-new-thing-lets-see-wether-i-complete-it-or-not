@@ -14,7 +14,8 @@ Where to start reading:
 - `Plan/Architecture.md` - what we are building and how it is structured.
 - `Plan/Open_Questions.md` - decisions that are still yours to make.
 - `Docs/Rules.md` - the working rules for this repository.
-- `Docs/Roadmap.md` - the order of work.
+- `Plan/Roadmap.md` - the order of work.
+- `Plan/Origin_Chat.md` - what the original conversation asked for.
 
 Folders:
 

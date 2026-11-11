@@ -67,3 +67,50 @@ content and docs sites are blocked)
 
 **Process note:** docs were written before any code, per the brief's "do not write
 code yet" and the rules' "nothing new until the current thing is built and tested".
+
+## Round 2 - 2026-11-11 - The origin chat arrives
+
+**Input:** the full export of the conversation that produced the idea (2387 lines), with
+the instruction that it must be kept but never pushed to GitHub, not even in a deeply
+nested folder.
+
+**What was done**
+
+1. Stored verbatim at `internels/chat/2026-11-10-to-11-11_origin-chat.md` with an added
+   header comment (body untouched), ignored by `.gitignore`, and made a rule (25) so the
+   exclusion is policy, not a stray pattern. Verified with `git check-ignore`.
+2. Read all 11 user turns and wrote `Plan/Origin_Chat.md`, because the raw text is local
+   only: if the workspace is ever recreated, the *conclusions* must survive.
+3. Compared the chat against the approved brief instead of trusting the brief to be
+   complete. Three real gaps came out, listed below.
+
+**Gaps found (and what I did about them)**
+
+- *Training data.* The brief says "never the data itself". The chat says the data should
+  be stored so a human or AI can see what caused which change. These are not compatible,
+  so it is a question (Q17), with `DATA_BLOB` reserved as id 17 and off by default. Not
+  silently resolved.
+- *Base-model composition.* The chat calls "store only what changed from the base model"
+  the most valuable format feature - and it is **not** the same thing as in-run history,
+  which is what v1 builds. Reserved `META.base_model` / `META.ancestor` now, composition
+  in v2 (Q18), because two keys today prevent a format major bump later.
+- *The file must stay a model file.* The origin chat started from safetensors/GGUF, and
+  the user expects a closed recording to still be usable as weights. That became a stated
+  property: the final anchor is always full, and blocks are independently readable.
+
+**One equivalence that saved complexity**
+
+The chat's "accumulate small deltas and flush when the threshold is crossed" looked like
+a different scheme from the phase-adaptive policy. It is not: a delta flushed at a trigger
+is exactly `state(trigger) - state(last stored)`. Accumulating every step would cost
+more copies and store the same bytes. So the design copies at store points only, and the
+wording in Architecture 6.2 now says the stored delta is the accumulated movement. One
+mechanism, not two.
+
+**Numbers deliberately not adopted**
+
+The chat's 244x / 20-100x / 60-250x ratios are arithmetic on a hypothetical 4096x4096
+matrix with no measured error. They are marked as hypotheses in `Plan/Origin_Chat.md`
+section 6 and stay out of the design until Phase 2 measures them.
+
+**Still open:** Q17, Q18, Q19 (new), plus Q2-Q16 from round 1.

@@ -64,6 +64,7 @@ lists the *what*.
 | `Roadmap.md` | ordered steps, each finished before the next |
 | `Format_Spec.md` | normative container format, versioned (`format_major.minor`) |
 | `Open_Questions.md` | decisions waiting on the user, with recommendations |
+| `Origin_Chat.md` | what the original conversation asked for, and how it maps to v1 |
 
 ### archx/ (planned, not created yet)
 

@@ -13,6 +13,10 @@ dist/
 *.archx.mdl
 !Actions/out/**/*.archx.mdl
 
+# Local-only material: the user's verbatim origin chat. Kept in the working tree,
+# never pushed anywhere (rule 25, Docs/Rules.md).
+internels/chat/*
+
 # OS noise
 .DS_Store
 Thumbs.db

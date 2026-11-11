@@ -19,6 +19,23 @@ later, other AI systems can reconstruct any point of the run, diff two runs, and
 which data moved which weights. v1 proves three things only: the format works, it
 compresses well, and it costs almost nothing at training time.
 
+### Where the idea came from
+
+The product is the third idea in a longer conversation, and the shape of that
+conversation still explains the design. In short: it started from model file formats
+(safetensors vs GGUF), moved through "computers inside models", and landed on a simple
+observation - *a checkpoint keeps the destination and throws away the journey*. That
+journey is the product. The full extraction, including what the original chat asked for
+that this brief left out, is in `Plan/Origin_Chat.md`.
+
+Two properties inherited from that origin and kept as requirements:
+
+- **The final anchor doubles as a model snapshot.** A closed file with history removed is
+  still a usable weights file. That is why the last anchor is always full, never
+  delta-only.
+- **Parts are independently usable.** Every block is self-describing and independently
+  compressed, so history, metadata and final weights can be read separately.
+
 ### Non-goals for v1 (explicitly out)
 
 - Not a training framework, not a trainer, not a dataloader, not an optimizer.
@@ -287,6 +304,10 @@ becomes a v1 feature is **[ASK]**; the investigation is a v1 roadmap step regard
 | cool-down | last 1% | every step |
 | end | last step | full anchor |
 
+A stored delta is the exact accumulated movement since the last stored state (the sum of
+every skipped step), not a single step's change. Copying every step and accumulating it
+would cost more and store nothing more, so copies happen at store points only.
+
 Thresholds are **per region** (per parameter, or per user region tag), never global:
 CNNs and RNNs have layer rates that differ by orders of magnitude, so a global
 threshold silently drops the layers that matter. Anchoring policy for chained deltas
@@ -360,6 +381,17 @@ Blocks are appended sequentially and fsynced in batches; the footer is written l
 scans from the header, reads each block header, validates the CRC, stops at the first
 torn block (truncating it), and rebuilds the index. Because deltas are self-contained
 per tensor per step, a lost tail costs only the tail.
+
+**Reserved for later, defined now so v1 files stay composable:**
+
+- `META.base_model` (fingerprint + registry hash of a parent file) and `META.ancestor`
+  (content hash of the file this run continued from). With a valid base reference the
+  first anchor becomes optional and a file can be a pure delta against a parent - the
+  "fine-tune B = model A + changes" case the origin chat called the most valuable
+  feature. Not implemented in v1; the fields ship so v1 files compose later.
+- `DATA_BLOB` block type (id reserved): stores actual training data, opt-in and off by
+  default, because the brief says fingerprints only while the origin chat wants the data
+  stored so a human or AI can see what caused what change (Q17).
 
 **Safety:** no executable content is possible by design - no pickle, no code
 dereferencing, only fixed-width numbers, bytes and UTF-8 JSON metadata. The reader

@@ -338,10 +338,24 @@
         "none"
       ],
       "handles": "Points each kind of document at its home folder."
+    },
+    "Plan/Origin_Chat.md": {
+      "purpose": "Durable extraction of the user's origin conversation: pipeline lineage, format wishlist, requirements the later brief omitted, and where the two disagree.",
+      "inputs": [
+        "internels/chat/2026-11-10-to-11-11_origin-chat.md (local only)"
+      ],
+      "outputs": [
+        "requirement changes in Plan/ and Docs/Change.md",
+        "questions Q17-Q19"
+      ],
+      "handles": "Replaces the raw chat as a reference; the raw chat is never committed."
     }
   },
   "_generated": {
     "Actions/out/latest-env/<OS>-<ARCH>.json": "runner environment record written by env_probe.py during a workflow run; replaced on every run.",
     "Actions/out/latest-env/<OS>-<ARCH>.log": "echoed trigger intent plus runner versions from the same run."
+  },
+  "_local_only": {
+    "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   }
 }
