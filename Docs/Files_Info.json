@@ -1,0 +1,343 @@
+{
+  "_purpose": "Per-file map for the assistant: what each file is for, what it takes in, what it gives out, what it handles. Consult this instead of re-reading the codebase; update it whenever a file is created, changed or removed.",
+  "_rules": [
+    "One entry per tracked file, keyed by path from the repository root.",
+    "inputs/outputs describe data that crosses the file boundary, not internal details.",
+    "Remove an entry in the same commit that deletes the file.",
+    "If an entry disagrees with the file, the file wins - then fix the entry."
+  ],
+  "structure": {
+    "Docs/": "Binding rules, reasoning log, reference, research, secrets. No code.",
+    "Plan/": "Architecture, roadmap, format spec, open questions. Decisions before code.",
+    "Tests/": "Test code (unit, integration, bench) and the permanent record of every run.",
+    "Actions/": "Workflow triggers, inputs, and committed outputs. No artifacts are used.",
+    "internels/": "Non-public helper material; skills are one markdown file each.",
+    "examples/": "Small runnable examples, empty until there is an API.",
+    ".github/workflows/": "CI definitions. Each workflow is started by editing its trigger file."
+  },
+  "files": {
+    "README.md": {
+      "purpose": "Entry point: what the product is, status, and where to start reading.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Orientation only. Points to Plan/Architecture.md and Docs/Rules.md."
+    },
+    "Docs/Rules.md": {
+      "purpose": "The binding working rules: structure, process, testing, CI workaround, environment limits.",
+      "inputs": [
+        "user directives"
+      ],
+      "outputs": [
+        "constraints every change must satisfy"
+      ],
+      "handles": "Must be read before any change. Numbered rules are referenced from other docs."
+    },
+    "Docs/Thinking.md": {
+      "purpose": "Reasoning log: why something was built or changed, what broke, how it was split and solved.",
+      "inputs": [
+        "problems met during a round of work"
+      ],
+      "outputs": [
+        "one dated section per round"
+      ],
+      "handles": "Decision history. Updated after every round."
+    },
+    "Docs/Technical.md": {
+      "purpose": "Technical reference: stack, repository layout, per-file roles, glossary, environment facts.",
+      "inputs": [
+        "the codebase and the environment"
+      ],
+      "outputs": [
+        "human-readable reference"
+      ],
+      "handles": "The 'why'; Files_Info.json is the machine-readable 'what'."
+    },
+    "Docs/Logic.md": {
+      "purpose": "Call chains from a user entry point down to files, plus failure paths.",
+      "inputs": [
+        "implemented call chains"
+      ],
+      "outputs": [
+        "traceable flow per feature"
+      ],
+      "handles": "Breakage tracing. Updated whenever a call chain changes."
+    },
+    "Docs/Changelog.md": {
+      "purpose": "What each version shipped and what changed between versions.",
+      "inputs": [
+        "completed roadmap phases"
+      ],
+      "outputs": [
+        "release notes per version"
+      ],
+      "handles": "Features only; no implementation notes."
+    },
+    "Docs/Change.md": {
+      "purpose": "Inbox for user-requested additions and changes, each with an effect on the roadmap.",
+      "inputs": [
+        "new user requests"
+      ],
+      "outputs": [
+        "roadmap edits or a documented decline"
+      ],
+      "handles": "Nothing here is silently dropped."
+    },
+    "Docs/Workaround.md": {
+      "purpose": "Environment limitations and the exact workaround for each.",
+      "inputs": [
+        "failures caused by the sandbox, token or runner limits"
+      ],
+      "outputs": [
+        "repeatable instructions"
+      ],
+      "handles": "Rust toolchain, Actions logs, raw.githubusercontent.com, heavy installs, runner cap, binary recordings."
+    },
+    "Docs/Secrets.md": {
+      "purpose": "Exact name and purpose of every GitHub Actions secret the project needs.",
+      "inputs": [
+        "workflow requirements"
+      ],
+      "outputs": [
+        "names the user sets in repository settings"
+      ],
+      "handles": "The assistant never sets a secret; names must match character for character."
+    },
+    "Docs/Files_Info.json": {
+      "purpose": "This file: the per-file map used instead of re-reading the codebase.",
+      "inputs": [
+        "the current tree and each file's role"
+      ],
+      "outputs": [
+        "purpose, inputs, outputs, handles per path"
+      ],
+      "handles": "Must be updated in the same change that adds or edits a file."
+    },
+    "Docs/Research.json": {
+      "purpose": "Every lookup that influenced a decision, with sources and verdict.",
+      "inputs": [
+        "library/API research, measurements"
+      ],
+      "outputs": [
+        "findings plus exact URLs"
+      ],
+      "handles": "Prevents re-researching the same thing. Sources are GitHub API URLs because raw and docs hosts are blocked."
+    },
+    "Plan/Architecture.md": {
+      "purpose": "The decided design: observer model, adapters per setup, storage, tiers, non-goals, risks.",
+      "inputs": [
+        "the project brief",
+        "verified framework behaviour"
+      ],
+      "outputs": [
+        "scope the roadmap is derived from"
+      ],
+      "handles": "Every decision is marked DECIDED (mine to defend) or ASK (user's)."
+    },
+    "Plan/Roadmap.md": {
+      "purpose": "Ordered work list by phase and version; one step at a time.",
+      "inputs": [
+        "Architecture.md",
+        "Docs/Change.md"
+      ],
+      "outputs": [
+        "what to build next and its acceptance test"
+      ],
+      "handles": "Status column is the source of truth for progress."
+    },
+    "Plan/Format_Spec.md": {
+      "purpose": "Normative byte-level specification of the .archx.mdl container (format 1.0, draft).",
+      "inputs": [
+        "storage design decisions"
+      ],
+      "outputs": [
+        "header, block, payload, footer layouts and reader rules"
+      ],
+      "handles": "Frozen by roadmap step 1.1; code must match it or the spec is amended."
+    },
+    "Plan/Open_Questions.md": {
+      "purpose": "Decisions waiting on the user, with recommendation and evidence.",
+      "inputs": [
+        "ambiguities found while writing the plan"
+      ],
+      "outputs": [
+        "numbered questions to answer"
+      ],
+      "handles": "Unanswered question means the dependent step is not started."
+    },
+    "Plan/README.md": {
+      "purpose": "Folder README: what belongs in Plan/ and what does not.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Structure discoverability."
+    },
+    "Tests/README.md": {
+      "purpose": "Folder README: test layers, when each runs, where records go.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Test policy in practice."
+    },
+    "Tests/Records/README.md": {
+      "purpose": "Naming, shape and retention rules for recorded test runs.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "record schema"
+      ],
+      "handles": "Version folders; keep current plus two."
+    },
+    "Actions/README.md": {
+      "purpose": "Folder README: layout and rules for CI inputs and committed outputs.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "No artifacts, no Actions API reads."
+    },
+    "Actions/in/README.md": {
+      "purpose": "Inputs folder rule: fixtures and matrices only, never written by a run.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Size discipline."
+    },
+    "Actions/out/README.md": {
+      "purpose": "Outputs folder rule: one label folder per run, summary plus raw logs.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Anti-reliance on the Actions UI."
+    },
+    "Actions/scripts/README.md": {
+      "purpose": "Index of workflow helper scripts.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "One purpose per script."
+    },
+    "Actions/scripts/env_probe.py": {
+      "purpose": "Writes one JSON describing the runner (OS, Python, CPU, refs) to prove all three runners work and can commit.",
+      "inputs": [
+        "output path argument"
+      ],
+      "outputs": [
+        "JSON record on disk"
+      ],
+      "handles": "Reads GITHUB_* environment variables; writes nothing else."
+    },
+    "Actions/scripts/commit_results.sh": {
+      "purpose": "Commits Actions/out and Actions/triggers changes back to the branch with rebase retries.",
+      "inputs": [
+        "commit message argument",
+        "GITHUB_REF_NAME"
+      ],
+      "outputs": [
+        "a pushed commit on the branch"
+      ],
+      "handles": "Race between matrix runners; bot identity; no-op when nothing changed."
+    },
+    "Actions/triggers/README.md": {
+      "purpose": "How trigger files start workflows, and why.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "One trigger file per workflow."
+    },
+    "Actions/triggers/tests.txt": {
+      "purpose": "Trigger file for .github/workflows/tests.yml; editing it starts a run.",
+      "inputs": [
+        "human edits"
+      ],
+      "outputs": [
+        "a workflow run; last line echoed into the log"
+      ],
+      "handles": "Free text only, never configuration."
+    },
+    ".github/workflows/tests.yml": {
+      "purpose": "Runner check matrix (ubuntu, windows, macos) that records each environment and commits results.",
+      "inputs": [
+        "push touching Actions/triggers/tests.txt, or manual dispatch"
+      ],
+      "outputs": [
+        "Actions/out/latest-env/*.json and *.log committed to the branch"
+      ],
+      "handles": "Matrix of 3 (under the 5-runner cap), contents: write, no artifacts."
+    },
+    ".gitignore": {
+      "purpose": "Keeps build noise and binary recordings out of git, with a narrow exception for tiny CI outputs.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "*.archx.mdl is ignored everywhere except Actions/out."
+    },
+    "examples/README.md": {
+      "purpose": "Folder README: example contract (one folder, runs on CPU, writes its own recording).",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Empty until the API exists."
+    },
+    "internels/README.md": {
+      "purpose": "Folder README: what non-public helper material is allowed here.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Nothing here is imported by the package."
+    },
+    "internels/skills/README.md": {
+      "purpose": "Skill file format: when to use, steps, pitfalls.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Skills are added only when reused."
+    },
+    "Docs/README.md": {
+      "purpose": "Folder README for Docs/: what belongs here and what does not.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Points each kind of document at its home folder."
+    }
+  }
+}

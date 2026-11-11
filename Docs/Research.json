@@ -1,0 +1,194 @@
+{
+  "_purpose": "Research log. Key = the specific thing looked up; value = what was found, verdict, and the exact URLs so it is never researched twice.",
+  "_rules": "One entry per distinct question. Update the entry when re-checking a version. Never delete a URL that a decision rests on.",
+  "schema": {
+    "id": "short stable slug",
+    "question": "what was being decided",
+    "sources": ["exact URLs actually read"],
+    "findings": ["facts, with version/tag attached"],
+    "verdict": "what we do because of it",
+    "affects": ["docs or future files"]
+  },
+  "entries": [
+    {
+      "id": "env-python-baseline",
+      "question": "What Python and libraries exist in the build sandbox, and can pip install?",
+      "sources": ["https://pypi.org/pypi/zstandard/json", "https://pypi.org/pypi/torch/json"],
+      "findings": [
+        "Python 3.11.2, pip 23.0.1, 2 vCPU, 3.6 GiB RAM, no swap, ~20 GB disk.",
+        "Nothing preinstalled: no numpy, zstandard, torch, lightning, transformers, pytest, maturin.",
+        "pip download from PyPI works (numpy 2.4.6 wheel fetched at ~100 MB/s).",
+        "zstandard 0.25.0 has manylinux/mac/windows cp311 wheels; torch 2.15.0 wheels: 514 MiB linux x86_64, 461 MiB aarch64, 132 MiB macOS arm64, 121 MiB win_amd64.",
+        "torch wheels exist for cp311-cp314 plus free-threaded cp314t."
+      ],
+      "verdict": "Pure-Python archx is buildable and testable here; torch integration tests are local-possible but heavy (514 MiB download) so full matrices go to CI.",
+      "affects": ["Docs/Technical.md", "Plan/Architecture.md"]
+    },
+    {
+      "id": "env-network-allowlist",
+      "question": "Which hosts can this sandbox reach?",
+      "sources": [
+        "https://static.rust-lang.org/dist/channel-rust-stable.toml.sha256",
+        "https://sh.rustup.rs",
+        "https://index.crates.io/config.json",
+        "https://static.crates.io/crates/cfg-if/cfg-if-1.0.0.crate",
+        "https://crates.io/api/v1/crates/serde",
+        "https://docs.rs/",
+        "https://raw.githubusercontent.com/actions/checkout/main/README.md",
+        "https://example.com/"
+      ],
+      "findings": [
+        "Reachable: github.com, api.github.com, codeload.github.com, pypi.org, files.pythonhosted.org, registry.npmjs.org.",
+        "Blocked (curl 000, no connection): static.rust-lang.org, sh.rustup.rs, crates.io, index.crates.io, static.crates.io, docs.rs, doc.rust-lang.org, raw.githubusercontent.com, objects.githubusercontent.com, release-assets.githubusercontent.com, docs.github.com, example.com.",
+        "github.com release-asset URLs answer 302 but the redirect target is blocked."
+      ],
+      "verdict": "No Rust toolchain can be installed here, ever. GitHub file content must be read through the API (contents endpoint), not raw. Docs must be written from API-read sources.",
+      "affects": ["Docs/Rules.md", "Plan/Architecture.md", "Docs/Workaround.md"]
+    },
+    {
+      "id": "env-token-permissions",
+      "question": "What can the GitHub token do in this repo?",
+      "sources": [
+        "https://api.github.com/repos/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/workflows",
+        "https://api.github.com/repos/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/runs",
+        "https://api.github.com/repos/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/secrets",
+        "https://api.github.com/repos/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/permissions"
+      ],
+      "findings": [
+        "actions/workflows: 200 (currently 0 workflows). actions/runs: 200. actions/artifacts: 200.",
+        "actions/secrets: 403. actions/variables: 403. actions/permissions: 403. branches/main/protection: 403.",
+        "contents: 200 read. X-Oauth-Scopes header empty; fine-grained token style permissions."
+      ],
+      "verdict": "We can create commits and read workflow metadata, but never logs, artifacts, secrets or variables. Therefore every workflow must commit its results into the repo, which is exactly the user's stated workaround.",
+      "affects": ["Docs/Rules.md", "Docs/Workaround.md", "Actions/"]
+    },
+    {
+      "id": "torch-optimizer-step-hooks",
+      "question": "Which public optimizer hook does archx attach to, and since which version?",
+      "sources": [
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/optim/optimizer.py?ref=v2.0.0",
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/optim/optimizer.py?ref=v1.13.1",
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/optim/optimizer.py?ref=main"
+      ],
+      "findings": [
+        "v2.0.0 has register_step_pre_hook / register_step_post_hook (lines ~298/320).",
+        "v1.13.1 has only the internal profile_hook_step decorator, no public hook.",
+        "post hooks run after func(*args, **kwargs) inside profile_hook_step, i.e. after the weights are updated.",
+        "profile_hook_step patches the optimizer CLASS lazily on first step (_patch_step_function), so the first step pays a one-time patch cost."
+      ],
+      "verdict": "attach() uses optimizer.register_step_post_hook; minimum torch is 2.0 for attach(), 2.1 for the accumulate-grad hook. Deltas therefore come from a shadow copy of the previous step (Architecture section 4).",
+      "affects": ["archx/adapters/torch.py", "Plan/Architecture.md"]
+    },
+    {
+      "id": "torch-post-accumulate-grad-hook",
+      "question": "Since which torch version can we observe gradients cheaply without a backward hook?",
+      "sources": [
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/_tensor.py?ref=v2.0.0",
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/_tensor.py?ref=v2.1.0",
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/_tensor.py?ref=v2.9.0",
+        "https://api.github.com/repos/pytorch/pytorch/contents/torch/nn/modules/module.py?ref=v2.4.0"
+      ],
+      "findings": [
+        "Tensor.register_post_accumulate_grad_hook exists at v2.1.0 and v2.9.0, absent at v2.0.0.",
+        "It is defined on torch._tensor.Tensor (line ~572 at v2.4.0), not on nn.Module.",
+        "The hook fires right after the gradient for that tensor has accumulated, before zero_grad."
+      ],
+      "verdict": "Preferred gradient-norm path on torch >= 2.1: one hook per tracked parameter, no full backward hook. Fallback: read param.grad in the optimizer pre-step hook.",
+      "affects": ["archx/adapters/torch.py"]
+    },
+    {
+      "id": "hf-trainer-callback-surface",
+      "question": "What does the HF Trainer callback expose, and when can archx read gradients and the trainer object?",
+      "sources": [
+        "https://api.github.com/repos/huggingface/transformers/contents/src/transformers/trainer_callback.py",
+        "https://api.github.com/repos/huggingface/transformers/contents/src/transformers/trainer.py",
+        "https://api.github.com/repos/huggingface/transformers/contents/src/transformers/trainer_callback.py?ref=v4.44.0",
+        "https://api.github.com/repos/huggingface/transformers/contents/src/transformers/trainer_callback.py?ref=v4.46.0"
+      ],
+      "findings": [
+        "Callback methods take (args, state, control, **kwargs); the Trainer is reachable via kwargs when provided.",
+        "Available: on_train_begin/end, on_epoch_begin/end, on_step_begin/end, on_pre_optimizer_step, on_optimizer_step, on_substep_end, on_log, on_evaluate, on_save, on_predict.",
+        "on_pre_optimizer_step and on_optimizer_step are absent in 4.44 and present in 4.46.",
+        "Inner loop order in current trainer.py: optimizer.step() -> model.zero_grad() -> global_step += 1 -> on_step_end, so gradients are zero by on_step_end."
+      ],
+      "verdict": "Default gradient capture is an optimizer post-hook on trainer.optimizer (version independent). on_pre_optimizer_step is used when >= 4.46. Minimum supported transformers for Tier 2 is 4.46, with a silent fallback below it.",
+      "affects": ["archx/adapters/hf.py", "Plan/Architecture.md"]
+    },
+    {
+      "id": "hf-accelerate-wrapping",
+      "question": "What is wrapped by Accelerate/DDP and how does that affect parameter access?",
+      "sources": [
+        "https://api.github.com/repos/huggingface/transformers/contents/src/transformers/trainer.py",
+        "https://api.github.com/repos/huggingface/accelerate/contents/src/accelerate/optimizer.py"
+      ],
+      "findings": [
+        "Trainer creates an Accelerator; model may become DistributedDataParallel (extra 'module.' name prefix) and the optimizer becomes AcceleratedOptimizer (its step() is what runs, and it can skip steps).",
+        "In the DDP case every rank holds identical full parameters; in FSDP/ZeRO cases it does not."
+      ],
+      "verdict": "Names come from accelerator.unwrap_model(model); the observed optimizer is the wrapped one; only the main process writes to the file. Sharded setups are detected and degraded (Architecture 5.4).",
+      "affects": ["archx/adapters/hf.py"]
+    },
+    {
+      "id": "trl-axolotl-trainer-subclassing",
+      "question": "Do TRL SFTTrainer/DPOTrainer and Axolotl's trainer accept a plain TrainerCallback?",
+      "sources": [
+        "https://api.github.com/repos/huggingface/trl/contents/trl/trainer/sft_trainer.py",
+        "https://api.github.com/repos/huggingface/trl/contents/trl/trainer/dpo_trainer.py",
+        "https://api.github.com/repos/axolotl-ai-cloud/axolotl/contents/src/axolotl/core/trainers/base.py"
+      ],
+      "findings": [
+        "class SFTTrainer(_BaseTrainer) and class DPOTrainer(_BaseTrainer) in current TRL.",
+        "class AxolotlTrainer(...) in axolotl core/trainers/base.py subclasses the same Trainer hierarchy.",
+        "DPO-style trainers run more than one backward per optimizer step (policy and reference)."
+      ],
+      "verdict": "No separate adapters: one ArchxCallback covers all three. Step accounting must key on optimizer steps, not backward passes.",
+      "affects": ["archx/adapters/hf.py", "Plan/Roadmap.md"]
+    },
+    {
+      "id": "lightning-callback-surface",
+      "question": "Which Lightning callbacks exist, and where are gradients available?",
+      "sources": [
+        "https://api.github.com/repos/Lightning-AI/pytorch-lightning/contents/src/lightning/pytorch/callbacks/callback.py",
+        "https://api.github.com/repos/Lightning-AI/pytorch-lightning/contents/src/lightning/pytorch/loops/optimization/automatic.py"
+      ],
+      "findings": [
+        "Hooks include on_fit_start/end, on_train_batch_start/end, on_before_backward, on_after_backward, on_before_optimizer_step, on_before_zero_grad, on_validation_*, on_save_checkpoint, on_exception.",
+        "Automatic optimization runs the optimizer with a closure (Closure/_optimizer_step), and may call zero_grad inside the closure; manual optimization does not.",
+        "Lightning can call optimizer.step() itself or via the closure, so one step per batch cannot be assumed."
+      ],
+      "verdict": "Use on_before_optimizer_step (post-clipping gradients) as the default capture point, plus an optimizer post-hook for deltas; count steps from loop state. on_after_backward is available for pre-clipping norms.",
+      "affects": ["archx/adapters/lightning.py", "Plan/Architecture.md"]
+    },
+    {
+      "id": "zstd-python-bindings",
+      "question": "Which zstd binding should a pure-Python archx use?",
+      "sources": [
+        "https://pypi.org/pypi/zstandard/json",
+        "https://api.github.com/repos/python/cpython/contents/Lib/compression/zstd"
+      ],
+      "findings": [
+        "zstandard 0.25.0 windows/mac/linux wheels for cp311 and friends, ~5 MiB.",
+        "CPython 3.14 ships a stdlib compression.zstd package (Lib/compression/zstd present on the 3.14 branch).",
+        "lz4 exists but trades ratio for speed; not needed for a background writer."
+      ],
+      "verdict": "Use zstandard, with a stdlib compression.zstd path on Python >= 3.14 and a pure-fallback 'no compression' mode when neither is importable.",
+      "affects": ["archx/container/writer.py", "pyproject.toml"]
+    },
+    {
+      "id": "rust-in-sandbox",
+      "question": "Can a Rust core (Rust + PyO3/maturin) be built in this environment?",
+      "sources": [
+        "https://static.rust-lang.org/dist/channel-rust-stable.toml.sha256",
+        "https://index.crates.io/config.json",
+        "https://sh.rustup.rs"
+      ],
+      "findings": [
+        "No rustc/cargo/rustup installed; apt has no rustc candidate.",
+        "Every Rust distribution and crate host is unreachable from the sandbox.",
+        "Only GitHub, PyPI and npm are reachable."
+      ],
+      "verdict": "A Rust core can never be compiled or unit-tested locally. The v1 core is Python; a native accelerator is an optional later add-on built only on CI. Recorded as a decision for the user in Open_Questions Q4.",
+      "affects": ["Docs/Workaround.md", "Plan/Architecture.md"]
+    }
+  ]
+}

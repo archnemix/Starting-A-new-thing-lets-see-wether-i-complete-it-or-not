@@ -1,0 +1,114 @@
+# Plan: Roadmap
+
+> Purpose: the ordered work list. Each step is finished, tested and recorded before
+> the next begins (rule 7, 8). Steps come from `Plan/Architecture.md`; new ideas go
+> into `Docs/Change.md` first and land here after agreement.
+
+Status legend: `todo` / `doing` / `done`. Version tags are what the step ships in.
+
+---
+
+## Phase 0 - Foundations (v0.1, no product code)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 0.1 | Docs scaffold: every required doc, folder README, purpose line per file | Files exist, `Docs/Files_Info.json` matches the tree | doing |
+| 0.2 | CI spine: `Tests/` runner, log-commit workflow, trigger file | A run on the 3 runners writes a result file into the repo | todo |
+| 0.3 | Packaging skeleton: `pyproject.toml`, `archx` importable, version string, CLI stub `archx info` | `pip install -e .` and `archx --help` work on all 3 runners | todo |
+| 0.4 | Test-record system: versioned folders, keep current + 2 | A recorded run per runner with inputs/outputs | todo |
+
+## Phase 1 - Container format (v0.2)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 1.1 | `Plan/Format_Spec.md` frozen as v1 spec (header, blocks, footer, CRC rules) | Spec has no open questions; reviewed | todo |
+| 1.2 | `container/writer.py` - append-only blocks, batched fsync, torn-write safety | Unit tests: write/close/reopen byte-identical index | todo |
+| 1.3 | `container/reader.py` - block iteration, CRC validation, index lookup, refusal on bad lengths | Unit tests incl. corrupted-length and corrupted-CRC files | todo |
+| 1.4 | `container/recovery.py` + `archx recover` | Test: kill the writer mid-file (SIGKILL child), recovered file reads and reconstructs | todo |
+| 1.5 | Property test: random block sequences survive write -> read -> recover | Hypothesis or seeded property test on all 3 runners | todo |
+| 1.6 | Safety test: file containing hostile lengths/CRCs never allocates beyond limits | Red-team unit test | todo |
+
+## Phase 2 - Delta, quantization, compression (v0.3)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 2.1 | Measurement harness (`bench/`) independent of the recorder | Runs on CI, writes numbers into `Actions/out/` | todo |
+| 2.2 | Encoders: unchanged, sparse, quantized dense, low-rank | Each has unit tests + error/ratio numbers | todo |
+| 2.3 | Byte-plane shuffle + xor, then zstd; compressor per section | Ratio and speed table vs plain zstd | todo |
+| 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | todo |
+| 2.5 | Claim 3 measured: chained-delta error vs anchor spacing | Recommended spacing written into the spec | todo |
+| 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | todo |
+
+## Phase 3 - Core recorder (v0.4)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 3.1 | Tensor registry: dtype/shape map, tied weights by `data_ptr`, frozen detection | Unit tests for ties and frozen params | todo |
+| 3.2 | Shadow-buffer delta engine + async writer thread with bounded queue and degrade-not-block policy | Overhead measured on synthetic loops; drop policy tested | todo |
+| 3.3 | Phase policy: warmup/middle/cool-down, per-region thresholds, event triggers | Claim 6 measured: adaptive vs fixed interval at equal bytes | todo |
+| 3.4 | Event stream + annotations + component transitions | Round-trip test of every event type | todo |
+| 3.5 | Crash test end-to-end: recorder killed mid-run, file recovered, partial history readable | Test record on all 3 runners | todo |
+
+## Phase 4 - PyTorch adapter (v0.5)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 4.1 | `archx.attach(model, optimizer, path)` via optimizer post-hook | Works for SGD/Adam/AdamW; gradient norms captured | todo |
+| 4.2 | `recorder.log(loss=, data_id=)` and `annotate()` | Tier 1-2 reached, data fingerprints stored | todo |
+| 4.3 | Numerics guard: same seed, recorder off vs on, bit-identical final weights (claim 9) | Passing on all 3 runners, recorded | todo |
+| 4.4 | Overhead guard: median step time delta < 5% (claim 5) | Numbers recorded per architecture | todo |
+| 4.5 | Architecture sweep: transformer, CNN, RNN, SSM-like, MoE-ish, multimodal-style custom stack | Tier 0/1 on all, no model-specific code | todo |
+| 4.6 | Claim 7 measured: optimizer-hook only vs richer hooking - what is lost | Written comparison | todo |
+
+## Phase 5 - Reader and CLI (v0.6)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 5.1 | `archx info` - header, tiers, capabilities, warnings, counts | Human + `--json` output | todo |
+| 5.2 | `archx reconstruct --step N --out` - weights rebuilt from anchor + deltas | Bit-exactness test vs live weights at anchor, measured error elsewhere | todo |
+| 5.3 | `archx events`, `archx diff` (two files or two steps) | Tests with synthetic runs | todo |
+| 5.4 | Reader rejects unsupported future minor versions with a clear message | Test with forged header | todo |
+
+## Phase 6 - HF Trainer adapter (v0.7)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 6.1 | `ArchxCallback` on transformers 4.46+ (`on_pre_optimizer_step` path) | Integration test passes | todo |
+| 6.2 | Fallback path for < 4.46 (`on_step_end` + optimizer hook) | Integration test passes | todo |
+| 6.3 | Multi-GPU/Accelerate correctness: unwrap model, wrapped optimizer, single writing rank | Documented + tested single-process; multi-process covered by CI if feasible | todo |
+| 6.4 | TRL `SFTTrainer` and `DPOTrainer` accepted unchanged; Axolotl subclass accepted | Matrix test, no code fork | todo |
+
+## Phase 7 - Zero-code launcher investigation (v0.8)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 7.1 | Prototype `sitecustomize` + `Optimizer.step` patch; measure what it captures for plain torch | Working recording, honest report | todo |
+| 7.2 | Same for HF Trainer and Lightning | Report per framework | todo |
+| 7.3 | Claim 8 measured: reliability across torch versions (matrix of 2-3 versions) | Version matrix table | todo |
+| 7.4 | Decision: ship launcher or drop it | Written decision + user approval | todo |
+
+## Phase 8 - Lightning adapter (v0.9)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 8.1 | `ArchxCallback` with `on_after_backward` / `on_before_optimizer_step` | Integration test | todo |
+| 8.2 | Manual optimization support (step counting from loop state) | Integration test | todo |
+| 8.3 | Tier 3 with validation metrics | Integration test | todo |
+
+## Phase 9 - End-to-end proof (v1.0)
+
+| # | Step | Done when | Status |
+|---|---|---|---|
+| 9.1 | Tiny transformer, CNN and RNN trained on small CPU datasets, recorded | Three `.archx.mdl` files, reproducible seeds | todo |
+| 9.2 | Storage comparison vs naive checkpointing; overhead table per adapter | Numbers in `Docs/Research.json` | todo |
+| 9.3 | Reconstruction fidelity report (anchor-exact, delta-chained error) | Report committed | todo |
+| 9.4 | Format spec v1 published in-repo, `Changelog.md` v1.0 entry | Docs complete | todo |
+| 9.5 | DeepSpeed/FSDP detection warnings proven on a stubbed engine | Unit test with fake engine types | todo |
+
+---
+
+## Explicitly out of v1 (do not start)
+
+Weight atlas, edit vectors, weight-space programming, shared signature dictionaries,
+AI-agent query tooling, DeepSpeed/FSDP real support, Keras/TF adapter, GGUF export.
+The format keeps room for these (extensible block types, minor-version rules).

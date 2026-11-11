@@ -1,0 +1,18 @@
+# Build and run artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Recordings: binary run data, never committed (see Docs/Workaround.md W6)
+*.archx.mdl
+!Actions/out/**/*.archx.mdl
+
+# OS noise
+.DS_Store
+Thumbs.db

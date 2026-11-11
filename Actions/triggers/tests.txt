@@ -1,0 +1,4 @@
+Editing this file triggers .github/workflows/tests.yml (Linux, Windows, macOS runner check).
+The last line is echoed into the run log, so write the intent here.
+
+trigger 1: bootstrap - prove three runners can commit results into the repository
