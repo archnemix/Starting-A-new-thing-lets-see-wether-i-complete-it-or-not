@@ -1,0 +1,4 @@
+trigger intent: trigger 1: bootstrap - prove three runners can commit results into the repository
+runner: Windows X64
+Python 3.11.9
+Windows-10-10.0.26100-SP0
