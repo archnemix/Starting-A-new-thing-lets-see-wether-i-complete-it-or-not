@@ -22,6 +22,7 @@ import numpy as np
 
 from .container.schema import BlockType
 from .container.writer import Writer
+from .data.capture import DataCapture, DataLevel
 from .encoders import DenseQuant, DenseRaw, LowRank, Sparse, Unchanged, choose_encoder
 from .formats.registry import TensorRegistry
 from .policy import Decision, PhasePolicy
@@ -72,6 +73,8 @@ class Recorder:
         queue_size: int = 8,
         meta: dict[str, Any] | None = None,
         codec: int | None = None,
+        data_level: DataLevel | str = DataLevel.SEGMENTS,
+        data_max_bytes: int | None = None,
     ) -> None:
         self.registry = registry
         self._read = read
@@ -85,6 +88,7 @@ class Recorder:
         self._error: BaseException | None = None
         self._encoders = [Unchanged(), Sparse(threshold=0.0), DenseQuant(bits=8),
                           LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw()]
+        self.data = DataCapture(data_level, max_bytes=data_max_bytes)
 
         self._writer_kwargs = {} if codec is None else {"codec": codec}
         self._path = path
@@ -93,7 +97,7 @@ class Recorder:
             "format": "1.0",
             "capability_tier": 1,
             "attribution": "observational",
-            "data_level": "none",
+            "data_level": self.data.level.value,
             "tensors": len(registry),
             "ties": sum(1 for e in registry if e.tie_group),
             **(meta or {}),
@@ -103,12 +107,21 @@ class Recorder:
     # ------------------------------------------------------------ observation
 
     def step(self, step: int, *, loss: float | None = None, grad_norm: float | None = None,
-             event: bool = False, data: dict[str, Any] | None = None) -> Decision:
-        """Call once per optimizer step, after the weights have been updated."""
+             event: bool = False, data: bytes | None = None,
+             segment_id: str = "", source: str = "") -> Decision:
+        """Call once per optimizer step, after the weights have been updated.
+
+        `data` is the batch (or a fingerprint-worthy slice of it). It is deduplicated by
+        content, so passing the same batch again costs a pointer, not a copy.
+        """
         try:
             decision = self.policy.decide(step, loss=loss, grad_norm=grad_norm, event=event)
             self.stats.steps_seen += 1
-            context = {"loss": loss, "grad_norm": grad_norm, "data": data or {}}
+            segment = None
+            if data is not None:
+                segment = self.data.observe(data, step, segment_id=segment_id, source=source)
+            context = {"loss": loss, "grad_norm": grad_norm,
+                       "segment_id": segment.segment_id if segment else ""}
             if decision is Decision.SKIP:
                 self.stats.steps_skipped += 1
                 self.policy.observe(loss=loss, grad_norm=grad_norm)
@@ -184,8 +197,29 @@ class Recorder:
                     if item is None:
                         break
                     self._handle(writer, item)
+                self._write_data(writer)
         except BaseException as exc:  # noqa: BLE001 - surfaced at close()
             self._error = exc
+
+    def _write_data(self, writer: Writer) -> None:
+        """Write deduplicated shards first, then the segments that point at them."""
+        for shard_id, shard in self.data.shards.items():
+            payload = json.dumps({
+                "shard_id": shard_id,
+                "codec": shard.codec,
+                "raw_len": shard.raw_len,
+                "content_crc32": shard.content_crc32,
+                "reconstruction_error": shard.reconstruction_error,
+            }).encode()
+            writer.write_block(BlockType.DATA_SHARD, payload + b"\n" + shard.payload)
+        for segment in self.data.segments.values():
+            writer.write_block(BlockType.DATA_SEGMENT,
+                               json.dumps(segment.to_dict()).encode(), step=segment.first_step)
+        if self.data.sensitive:
+            writer.write_block(BlockType.DATA_POINTER, json.dumps({
+                "sensitive": sorted(self.data.sensitive),
+                "reason": "content withheld by request; hash and characteristics kept",
+            }).encode())
 
     def _registry_payload(self) -> bytes:
         import struct
