@@ -38,6 +38,8 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | todo |
 | 2.5 | Claim 3 measured: chained-delta error vs anchor spacing | Recommended spacing written into the spec | todo |
 | 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | todo |
+| 2.7 | Claim 13-14 measured: data capture overhead per level, and the join round-trip | Numbers recorded; join answers from file alone | todo |
+| 2.8 | Shard codecs: text dict, token varint-delta, lossless image; Claim 11-12 measured | Byte ratio + exactness per data type | todo |
 
 ## Phase 3 - Core recorder (v0.4)
 
@@ -48,6 +50,8 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 3.3 | Phase policy: warmup/middle/cool-down, per-region thresholds, event triggers | Claim 6 measured: adaptive vs fixed interval at equal bytes | todo |
 | 3.4 | Event stream + annotations + component transitions | Round-trip test of every event type | todo |
 | 3.5 | Crash test end-to-end: recorder killed mid-run, file recovered, partial history readable | Test record on all 3 runners | todo |
+| 3.6 | Data capture pipeline: segment detection, content hashing, dedup, shard writing, `data_level` | Unit tests: epoch re-seen stores 0 new bytes; opt-out recorded in META | todo |
+| 3.7 | Conversion evidence: per-region effect summaries + thresholded streams + segment join | Join round-trip test from a recorded run | todo |
 
 ## Phase 4 - PyTorch adapter (v0.5)
 

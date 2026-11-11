@@ -7,6 +7,14 @@
 Source: chat export "Safetensors vs GGUF model formats", 2026-11-10 20:55 to
 2026-11-11 20:28. Section references below are the user turns, by timestamp.
 
+**Priority:** this chat outranks the generated brief wherever they disagree (user
+instruction, 2026-11-11). The real starting point is **11-11 19:51**; turns before it are
+the road that led there and explain where the brief's assumptions came from.
+
+**Order to read, if short on time:** section 1 (lineage) -> 3a (the main-thing turn) ->
+3b (the four later refinements, which are the real storage spec) -> 4 (where the brief
+disagrees) -> 6 (numbers not to trust).
+
 ---
 
 ## 1. How the idea actually formed (the lineage)
@@ -43,6 +51,56 @@ The chat called **delta compression with a base-model reference** "the single mo
 important focus". That is the one wish v1 only half-serves, and it is cheap to reserve
 now.
 
+## 3a. The main-thing turn (11-11 19:51) - verbatim and unpacked
+
+> "What if we build rather than a format a way to store model durign trainig ... after
+> traingi the mdoel is stored at its final point no wya of know wha tits shape was before
+> ... design a system such that durign trinanig it stores information such as whn this set
+> of data was introduces it changesd like this its state changed like this with different
+> level of detials now what this woudl solve or brign is that the ability to udnerstand how
+> the model changes ists states based onteh data adn different states of model liek a git
+> but for ai models and can later the new emerging concept of weight space programming ti
+> can help other ai nderstand hwat kidn of input effect it how and let them give a direction
+> on how they can do what htey can change manaulyl withotu traingn to make it better towards
+> something"
+
+Unpacked into requirements, in the order the sentence gives them:
+
+| Phrase | Requirement |
+|---|---|
+| "rather than a format, a system that stores the model during training" | the product is a *recorder*, not a file spec; the format is its container |
+| "after training the model is stored at its final point, no way of knowing what its shape was before" | anchors + history are mandatory; final weights alone are the thing we replace |
+| "when this set of data was introduced, it changed like this, its state changed like this" | the **data -> state-change join**, per step, is the core record (Architecture 6.0) |
+| "with different levels of detail" | phase-adaptive policy (6.2) - detail varies by stage and by event |
+| "understand how the model changes its states based on the data" | the readable output is a *change explanation*, not a weight dump |
+| "like a git but for AI models" | reconstruct any point, diff two points, annotate events |
+| "weight space programming ... other AI understand what kind of input affects it how" | machine-readable metadata; other models are first-class readers |
+| "give a direction ... change manually without training to make it better" | the post-v1 goal the format must not foreclose (6.10) |
+
+The assistant's reply to this turn supplied the first architecture: a four-level capture
+scheme (macro/meso/micro/semantic), the git analogy **and** its limits (weights are
+continuous, attribution is probabilistic, scale is gigabytes), and the three hard problems
+(storage scale, causal attribution, semantic meaning). Those limits are why this project
+records *observational* evidence and says so, instead of claiming causation.
+
+## 3b. The four refinements that followed (the real storage spec)
+
+These turns came after the main idea and are the user's own design decisions, so they
+outrank anything the brief assumed:
+
+| Turn | User's words (condensed) | Requirement |
+|---|---|---|
+| 19:52 | "this set of training data ... modified these weights ... which would help other AI understand what set of weights are handling what things and how we can add new data correctly" | per-region effects and a reusable map; "add new data correctly" is the practical use case |
+| 20:00 | "it can easily become for a medium model gigabytes to even terabytes ... steps can be thousands to millions, epochs differ" | storage must be sub-linear in steps and epochs; dedup is mandatory, not optional |
+| 20:04 | "store the first initial changes with more detail, then when the threshold passes, then in detail for the middle, then threshold, then the end"; "rather than storing the whole weights store what changed like git"; "compression algorithms that heavily do textual data ... these are numerical" | phase-adaptive detail; delta storage; numerical-aware compression. This is 6.2-6.4 |
+| 20:11 | the rules prompt, then: "we would also be storing the training data so the AI or human could understand that this set of data implemented this set of change ... stored as parts of the file so each part can have a different thing" | **data is stored** (overriding the brief), and **per-part codecs** (each block chooses its own) |
+
+The assistant's reply to 20:04 added the concrete tooling that this project should test
+rather than assume: sparsify-then-compress (index gaps are compressible), low-rank delta
+factors, fp16/int8 delta quantization, zstd with numerical preprocessing, fingerprints +
+characteristics for data, shared signatures across models, and event-driven storage instead
+of step-driven. All of it is candidate machinery in Phase 2; none of it is adopted as fact.
+
 ## 3. Requirements in the closing paragraph that the brief left out
 
 The brief (section 6) says: fingerprints only, *never the data itself*. The origin chat
@@ -66,16 +124,18 @@ Three other things appear only in the chat:
 
 ## 4. Where the chat and the approved brief disagree (needs a decision)
 
-### 4.1 Training data: fingerprints only, or store the data?
+### 4.1 Training data: fingerprints only, or store the data? - RESOLVED
 
 - Brief: "Data fingerprints: hash, token count, characteristics per segment. **Never the
   data itself.**"
 - Chat: store the data so a human or AI can see which data caused which change.
+- **User decision (2026-11-11): store it.** On by default, opt-out possible, cost optimised.
+  The brief's sentence is treated as an artefact of the earlier format-only discussion.
 
-Recommendation: keep the brief's rule as the **default**, and make data storage an
-**opt-in section type** (`DATA_BLOB`, reserved, off by default, with the fingerprint
-always present). That satisfies both without changing the byte budget: a file with
-`DATA_BLOB` sections is bigger and says so in its META. **Asked as Q17.**
+Implemented as `data_level` (`none | pointers | segments | full`, default `segments`):
+deduplicated content-addressed shards, per-shard codecs, explicit and recorded opt-out.
+See Architecture 6.8. The byte budget changes because the user chose value over size, and
+compression effort moved to where it matters (deltas).
 
 ### 4.2 Cross-file base reference (the chat's most-wanted feature)
 

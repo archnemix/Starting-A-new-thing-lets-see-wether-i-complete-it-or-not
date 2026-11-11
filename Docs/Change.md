@@ -35,13 +35,15 @@ Effect on roadmap: not a v1 step. v1 reserves `META.base_model` / `META.ancestor
 first-anchor-optional rule so v1 files can be composed later without a format major bump.
 Real composition becomes a v2 roadmap step. See Q18.
 
-## C3 - Optionally store the training data itself - 2026-11-11 - awaiting decision
+## C3 - Store the training data itself - 2026-11-11 - accepted, on by default
 
 Requested: the origin chat says the data behind a weight change must be stored so a human
 or AI can see what caused it. The approved brief says fingerprints only.
 
-Effect on roadmap: adds `DATA_BLOB` (reserved id 17) as an opt-in, off-by-default section
-plus a `recording.data_store` option, if approved (Q17). Fingerprints are unaffected.
+Effect on roadmap: new steps 2.7-2.8 (codec benchmarks) and 3.6-3.7 (capture + conversion
+evidence). Format gains `DATA_SHARD` (20), `DATA_SEGMENT` (17), `DATA_POINTER` (21) and
+`data_level` in META. Compression effort shifts to float deltas, since data is stored once
+and deltas repeat.
 
 ## C4 - Make the origin chat local-only - 2026-11-11 - accepted
 
@@ -50,3 +52,14 @@ nested folder.
 
 Effect on roadmap: none. Applied immediately: file lives in `internels/chat/`, excluded by
 `.gitignore`, rule 25, and the extracted conclusions live in `Plan/Origin_Chat.md`.
+
+## C5 - The chat outranks the generated brief - 2026-11-11 - accepted
+
+Requested: "follow what the chat says more than what the prompt i sent you says because the
+chat is the original source of truth", and the real starting point is the 19:51 turn, not
+the earlier format discussion.
+
+Effect on roadmap: the product definition is now the recording triple (state + cause +
+stage, Architecture 6.0), data content is default-on, and every place where the brief
+assumed otherwise is marked as superseded rather than quietly changed. See
+`Plan/Origin_Chat.md` sections 3a and 3b.

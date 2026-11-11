@@ -1,8 +1,9 @@
 # Archnemix Model Life Line (`.archx.mdl`)
 
 A recorder for neural network training. It attaches to a training run that already
-exists, records how the weights change over time, stores the whole journey in one
-compact file, and lets you query it later.
+exists and records three things together: **how the weights changed**, **which data caused
+it**, and **at which stage**. The whole journey goes into one compact, crash-safe file that
+humans and other AI systems can query afterwards.
 
 Think "git for model training": a few full snapshots (anchors) plus compressed deltas,
 instead of only the final weights.

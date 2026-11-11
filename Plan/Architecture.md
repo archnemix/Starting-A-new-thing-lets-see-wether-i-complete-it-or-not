@@ -36,7 +36,32 @@ Two properties inherited from that origin and kept as requirements:
 - **Parts are independently usable.** Every block is self-describing and independently
   compressed, so history, metadata and final weights can be read separately.
 
+### The priority rule (decided by the user, 2026-11-11)
+
+**The origin chat outranks the generated brief.** Where they disagree, the chat wins and
+the deviation is recorded.
+
+The real starting point was **2026-11-11 19:51** (user turn: "What if we build rather than a
+format a way to store model during training..."). Everything before it - model formats,
+computers inside models, 2D attention, the Pygame idea - is the road that led there. The
+generated brief was written 20 minutes later and inherited the earlier "fingerprints only"
+assumption from that road. That is the origin of the disagreement, and why the chat wins.
+
+The user's newest statement of intent is:
+
+> "the real chatting about it started later ... this is the main thing"
+
+and the main thing is a system that records *when this data was introduced, how the state
+changed, at which stage* - with the data itself, because "that would show the conversion
+that this data had this effect on the weights at this stage". So data content is **in**,
+on by default, and the recording is optimised around keeping the data-to-weight join cheap
+(6.0 and 6.8), not around avoiding it.
+
 ### Non-goals for v1 (explicitly out)
+
+The atlas, edit vectors and query tooling are out of *v1 scope*, but they are the reason
+v1 exists: every v1 file must contain enough information for an atlas to be computed from
+it later without retraining. That constraint is now a requirement (6.10), not a nice-to-have.
 
 - Not a training framework, not a trainer, not a dataloader, not an optimizer.
 - No weight atlas, edit vectors, weight-space programming, shared signature
@@ -56,6 +81,7 @@ Two properties inherited from that origin and kept as requirements:
 | The user keeps their script, model, optimizer, scheduler, dataloader and config. | Adapters attach to existing hooks/callbacks. No subclassing of the user's classes, no monkey-patching of their objects. |
 | Integration cost is at most: one launcher, one line, or one callback. | Four adapters, all opt-in: `archx.attach(...)`, `ArchxCallback(...)` (HF), `ArchxCallback(...)` (Lightning), `archx run -- ...` (launcher, if feasible). |
 | If a framework does not expose something, record less and say so in the file. | Every optional field is nullable, and the file records a `capabilities` block listing what was unavailable and why. |
+| Report evidence, never claim causation. | Segment summaries record correlation under the observed schedule and META says `attribution: "observational"`. |
 | Recording must never change numerics. | Read-only access to `param.data` / `param.grad`; no writes, no `.detach_()`, no in-place ops on user tensors, no RNG use at record time. |
 | Recording must never break training. | Every recorder entry point is wrapped in a guard: on exception, log once, mark the tier degraded, disable the failing feature, continue. |
 
@@ -284,6 +310,30 @@ becomes a v1 feature is **[ASK]**; the investigation is a v1 roadmap step regard
 
 ## 6. Storage design
 
+### 6.0 The recording triple: state, cause, stage
+
+The brief describes "a recording engine". The chat describes something more specific, and
+what must be recorded is not the weights over time. It is the **pairing of three things at
+every moment**:
+
+| Element | What it is | Where it lives |
+|---|---|---|
+| **State** | what the weights were and how they changed | anchors + deltas |
+| **Cause** | which data produced that change, with the data itself retrievable | data segments + per-step join |
+| **Stage** | where in training it happened: step, phase, epoch, freeze/unfreeze, eval | timeline + events |
+
+Any two of the three is a weaker, already-existing product:
+
+- state + stage, no cause -> checkpointing with metadata (what the world has today)
+- cause + state, no stage -> an offline dataset ablation
+- stage + cause, no state -> a training log
+
+The join of all three answers the question the product exists to answer: *which data moved
+which weights, when, and by how much*. Every design decision below is judged by one test:
+**does it keep that join exact?** Byte savings that break the join are rejected, and that
+is why compression work targets float deltas (6.5, 6.6) while data content is stored
+losslessly per unique shard (6.8).
+
 ### 6.1 What is stored
 
 - **Anchors:** full parameter snapshots - at start, at phase boundaries, at major
@@ -291,8 +341,13 @@ becomes a v1 feature is **[ASK]**; the investigation is a v1 roadmap step regard
 - **Deltas:** per tensor per step (subject to the phase-adaptive policy), encoded.
 - **Events:** the always-on timeline plus discrete events (grad-norm anomaly, loss
   drop, eval result, annotation, component transition).
-- **Data fingerprints:** hash + token/byte count + characteristics per segment. Never
-  the data itself.
+- **Data segments (the cause):** every distinct unit of training data the recorder sees,
+  stored **once**, content-addressed, compressed per shard, each with a fingerprint,
+  characteristics, source reference and first/last-seen steps. Cost scales with the amount
+  of *unique* data, not with steps or epochs - re-seeing data is a pointer, never a copy.
+- **The join:** every delta block and every event carries the segment id(s) active during
+  those steps and the component mask. "This data moved these weights at this stage" is a
+  direct read of the file, not something reconstructed later.
 - **Registry + index + footer.**
 
 ### 6.2 Phase-adaptive detail (defaults [DECIDED], tunable, all tested)
@@ -335,6 +390,12 @@ previous plane -> zstd (level tuned per section)`.
   `lz4` is not a default: worse ratio at similar speed for our payload.
 - Small sections may use `lz4`/`zlib` when decompression latency matters more than
   bytes; the compressor is a per-section field, not a global assumption.
+- **Deltas before data.** Compressing the data is far easier than compressing float deltas
+  and saves less of the total (deltas repeat at every store point; data is stored once).
+  So the split is: data gets a per-shard codec chosen automatically, deltas get the
+  measured treatment above. That is where the bytes are.
+- Distance-based encoding for correlated tensors (`w_2 - 2w_1 + w_0`, the chat's "distance
+  based weights encoding") is a per-tensor encoding to test in Phase 2, not a default.
 - Every number in this section is a hypothesis to benchmark in roadmap step 2, not a
   claim.
 
@@ -389,9 +450,8 @@ per tensor per step, a lost tail costs only the tail.
   first anchor becomes optional and a file can be a pure delta against a parent - the
   "fine-tune B = model A + changes" case the origin chat called the most valuable
   feature. Not implemented in v1; the fields ship so v1 files compose later.
-- `DATA_BLOB` block type (id reserved): stores actual training data, opt-in and off by
-  default, because the brief says fingerprints only while the origin chat wants the data
-  stored so a human or AI can see what caused what change (Q17).
+- `DATA_BLOB` / `DATA_SHARD` / `DATA_SEGMENT` / `DATA_POINTER` block types: the data
+  itself, on by default (6.8). The brief said fingerprints only; the chat outranks it.
 
 **Safety:** no executable content is possible by design - no pickle, no code
 dereferencing, only fixed-width numbers, bytes and UTF-8 JSON metadata. The reader
@@ -408,7 +468,91 @@ validates every length and CRC before allocating.
 - Optional future: encode in a second process to escape the GIL. Python 3.14's
   free-threaded build is a real option (torch 2.15 ships `cp314t` wheels) - **[ASK]**.
 
-### 6.7 Capability tiers (recorded in every file)
+<!-- 6.7 is intentionally unused: the numbering was reflowed when 6.8-6.10 were inserted;
+     renumbering would break cross-references from Docs/ and Plan/Origin_Chat.md. -->
+### 6.8 Data capture: on by default, four levels, opt-out only
+
+The data a run saw is part of the record, not an accessory. Default level: **`segments`**.
+
+| Level | Stores | Typical size (illustrative, to be measured) | Breaks the join? |
+|---|---|---|---|
+| `none` | only a hash + count per batch | tiny | yes - the data cannot be recovered |
+| `pointers` | where to get each shard (path/URL/hub id + content hash) + characteristics | KB | only if the source later moves or changes |
+| `segments` **(default)** | one compressed copy per unique shard + characteristics + join | data size x (1/ratio) x dedup factor | no |
+| `full` | every batch exactly as fed, no dedup, no normalisation | 100%+ | no, and exact sample order |
+
+Rules for `segments`:
+
+- **Deduplicate by content hash.** An epoch over the same data adds 2,000 pointers, not
+  2,000 copies.
+- **Per-shard codec chosen automatically**, recorded in the shard header: text-like data
+  -> zstd dictionary trained on the run's own data; token-id arrays -> varint + delta +
+  zstd; images -> lossless (webp/png) or zstd. Lossy codecs are never applied silently;
+  if used, the shard records the codec and the measured reconstruction error.
+- **The fingerprint is always present** at every level, so a `none`/`pointers` run is still
+  analysable, it simply cannot show the data.
+- **Opting out is allowed but must be explicit**: `data="none"` or an env var. The file
+  records `data_level` and, when the level is not `segments`/`full`, a
+  `JOIN_INCOMPLETE` info block stating what the reader will not be able to answer.
+- **Legal/PII guard**: shards can be marked `sensitive=true`, which stores the hash and
+  characteristics only for that shard. This is the one place where redaction beats
+  fidelity, and it is per shard, not per run.
+
+### 6.9 Conversion evidence: what "this data had this effect at this stage" costs
+
+The user's requirement is stronger than "store the data next to the deltas". Evidence means
+the join can be read back and defended. What is stored, per data segment:
+
+| Field | Why |
+|---|---|
+| `segment_id`, content hash, source ref, time span | identity and provenance |
+| characteristics: language, domain, complexity, token/byte count, dedup ratio | what kind of data it is, for cross-run comparison later |
+| first/last step seen, times seen, batches per epoch | the "stage" half of the join |
+| **per-region weight movement during the segment's steps** | the effect, already summarised so it does not need recomputation |
+| **per-region gradient norm during those steps** | the pressure the data applied |
+| **local loss trend over those steps** | whether the movement helped |
+| component mask (which sub-model was active) | multimodal/staged runs |
+| reconstruction error of the deltas in those steps | how much of the effect is missing due to compression |
+
+The last six rows are computed by the recorder from data it already holds, so the cost is
+CPU on the writer thread, not extra storage. They are what makes a file answer
+"python data -> moved attention in layers 4-7 -> loss fell 0.023 -> reconstruction error
+1e-5" in one query instead of an offline re-analysis.
+
+**What is *not* stored per step.** The per-region streams above are thresholded: a region's
+entry is written only when it crosses its own threshold, otherwise the steps fold into the
+next written entry (which covers a range, exactly like a flushed delta). If a region never
+crosses, its summary is still written at the end of the segment. This is what keeps the
+join affordable at millions of steps: no per-step rows, no unbounded metadata growth.
+
+For extreme run lengths, the recorder also writes a **coarse dense tail**: a rolling
+summary of N steps at a time, so the timeline stays complete at low resolution even where
+nothing triggered. `Docs/Rules.md` applies - this is measured in Phase 2, not assumed.
+
+**Honesty requirement:** that is *evidence of correlation under a controlled schedule*, not
+proof of causation. The format states this in META (`attribution: "observational"`) so no
+downstream reader overclaims. Designed-schedule experiments (same seed, one variable
+changed) are the way to strengthen it, and the format supports them by tagging runs that
+share a schedule id.
+
+### 6.10 Atlas-ready from day one
+
+The chat's end goal is a queryable map: which data shapes which weights, which capabilities
+live where, and directions in weight space to edit them. None of that is v1 *scope*, but v1
+must not make it require retraining. Three requirements follow:
+
+1. **Region and component statistics are written continuously** (6.9), not computed later.
+2. **Segment characteristics are comparable across runs** (same schema, same field names),
+   so signatures can be matched between models in v2.
+3. **Per-layer data links are recorded in run one** (chat, 20:11): layer ids in the
+   file are stable and named exactly as PyTorch names them (`model.layers.4.self_attn.q_proj`),
+   so an atlas built from one run can be reused on another model when names coincide. A
+   tool that groups by layer must be able to do so without a mapping table.
+4. **The join is machine-readable without the recorder**: a reader can extract
+   `(segment, step range, region, movement)` tuples straight from the file, which is exactly
+   the input an atlas builder needs.
+
+### 6.11 Capability tiers (recorded in every file)
 
 | Tier | Contents |
 |---|---|
@@ -511,6 +655,13 @@ One file per responsibility, each with a purpose line, per the rules.
 8. Zero-code launcher reliability across PyTorch versions.
 9. Same seed, recorder on/off -> identical weights (hard requirement, must pass).
 10. A crashed file is readable after `archx recover`.
+11. Data-shard dedup: an N-epoch run stores N pointers, not N copies - measured bytes.
+12. Per-shard codec choice: byte ratio and reconstruction exactness per data type
+    (text, token ids, images), including whether text-like data is lossless.
+13. Recording overhead with data capture on vs off, per level (none/pointers/segments/full) -
+    the data path is I/O, so this is measured separately from the delta path.
+14. The join round-trip: given a segment id, the file returns its steps, regions moved,
+    gradient norms and loss trend without re-reading weights.
 
 Each is a record in `Tests/Records/<version>/` and an entry in `Docs/Research.json`.
 

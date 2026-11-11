@@ -53,21 +53,24 @@ benchmarks; every accelerator claim stays unverified until a GPU run happens.*
 
 ## New, from the origin chat (`Plan/Origin_Chat.md`)
 
-**Q17. Training data: fingerprints only, or store the data itself?** The brief says
-"never the data itself"; the origin chat says the data should be stored so a human or AI
-can see which data caused which change. *Recommendation: fingerprints always; real data
-only as an opt-in `DATA_BLOB` section that is off by default and announced in META.* A
-recording with data in it is much larger, and that must be a deliberate choice per run.
+**Q17 - ANSWERED (2026-11-11): store the real data.** User: the data is stored because that
+is what shows "this data had this effect on the weights at this stage", which is far more
+valuable; on by default, can be opted out, and the cost must be optimised as far as
+possible. Implemented as `data_level` with `segments` as the default (Architecture 6.8).
+Opting out stays possible but must be explicit and is recorded in the file.
 
-**Q18. Reserve the cross-file base reference in v1?** "Model B = model A + deltas" was
-called the most valuable feature in the origin chat, and it is not the same thing as
-in-run history. *Recommendation: ship `META.base_model` / `META.ancestor` as reserved
-null fields in the v1 format (costs 2 keys, keeps v1 files composable), and build the
-actual composition in v2.*
+**Q18 - ANSWERED (2026-11-11): reserve the fields, build composition in v2.** Still a
+reserved-null pair (`META.base_model` / `META.ancestor`) in v1, since the main thing is
+the in-run record and composition is a separate feature. Confirm if that ordering is wrong.
 
-**Q19. Is "final anchor is a usable model snapshot" a hard requirement?** It is in the
-design because it was in the origin chat (a file must stay useful as a weights file).
-Confirm that removing history from a closed file should keep it loadable.
+**Q19 - ANSWERED (2026-11-11): yes, keep it.** The user confirmed the file must stay useful
+as a weights file, which is also what the origin chat's GGUF lineage implies.
+
+**Q20. Data retention and privacy.** Now that data is stored by default: for a real
+training run, is storing the first N% of each shard (default: all of it) acceptable, or do
+you want a cap (`data_max_bytes`) so a run can never fill the disk? *Recommendation: no cap
+by default, but the recorder reports projected data size at start and supports
+`data_max_bytes` with a documented degradation to `pointers` when exceeded.*
 
 ## Small, but affects structure
 

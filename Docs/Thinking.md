@@ -88,8 +88,9 @@ nested folder.
 
 - *Training data.* The brief says "never the data itself". The chat says the data should
   be stored so a human or AI can see what caused which change. These are not compatible,
-  so it is a question (Q17), with `DATA_BLOB` reserved as id 17 and off by default. Not
-  silently resolved.
+  so it was left as a question at the time (Q17). **Resolved in round 3: the data is
+  stored, default on** - the brief's sentence was a leftover from the earlier format
+  discussion and the user's 20:11 turn overrode it.
 - *Base-model composition.* The chat calls "store only what changed from the base model"
   the most valuable format feature - and it is **not** the same thing as in-run history,
   which is what v1 builds. Reserved `META.base_model` / `META.ancestor` now, composition
@@ -114,3 +115,49 @@ matrix with no measured error. They are marked as hypotheses in `Plan/Origin_Cha
 section 6 and stay out of the design until Phase 2 measures them.
 
 **Still open:** Q17, Q18, Q19 (new), plus Q2-Q16 from round 1.
+
+## Round 3 - 2026-11-11 - The main thing is the join, and the data is stored
+
+**Input:** decision that real training data is stored by default (opt-out allowed, cost
+optimised), instruction that the origin chat outranks the generated brief, and the exact
+turn where the idea started (11-11 19:51) plus everything after it.
+
+**What re-reading the chat in detail changed**
+
+1. **The product is not "a recording engine".** The main turn says the point is to know
+   *when this data was introduced and how the state changed at that stage*. Recorded as the
+   recording triple in Architecture 6.0: state + cause + stage. Any two of the three is a
+   product that already exists (checkpointing, ablation, training log), which is a useful
+   test for every feature: does it keep the join, or does it only look like it does?
+2. **The brief's "never the data itself" is a leftover from the earlier format discussion**
+   (the chat's own Strategy 5 from 20:05 said fingerprints were enough). The user's 20:11
+   message overrode it - the data is what proves the effect. Note the ordering: the brief
+   was generated 20 minutes after the main turn and inherited the older assumption. That is
+   exactly why rule 12a now puts the chat above generated prompts.
+3. **Storage has to be sub-linear in steps and epochs** (20:00: trillions of tokens,
+   millions of steps). Two independent mechanisms: dedup for data (an epoch writes pointers,
+   not copies), and phase-adaptive deltas for weights. Written as a hard measurement
+   (claims 11-14), not an assumption.
+4. **"Different levels of detail" was already the user's idea before the brief** (20:04),
+   including the numerical-vs-text compression distinction. So the phase policy is not an
+   invention to justify; it is the spec.
+
+**Design that came out of it**
+
+- `data_level` with `segments` default; `sensitive` per-shard redaction; explicit recorded
+  opt-out with a `JOIN_INCOMPLETE` block. Silence is not allowed to look like compliance.
+- Compression effort moved to float deltas: data is stored once, deltas repeat at every
+  store point, so that is where bytes actually are.
+- Per-region effect summaries written during the run (not recomputed later), thresholded so
+  they stay affordable at millions of steps, with a coarse dense tail for long runs.
+- `attribution: "observational"` in META. The chat's own reply warned that attribution is
+  probabilistic; the format must not let a reader overclaim causation from correlation.
+
+**Deliberately not adopted**
+
+The chat's 244x/50-200x/100-200GB figures stay hypotheses. The shared-signature and
+edit-vector ideas stay post-v1, but 6.10 now requires that v1 files contain enough to build
+an atlas later without retraining - which is a v1 requirement created by a v2 feature
+accepting the constraint in advance.
+
+**Open:** Q20 (a byte cap for stored data), plus Q2-Q16.

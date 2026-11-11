@@ -20,6 +20,13 @@ No code yet. This stage produced documentation only:
   macos) green, each committing `Actions/out/latest-env/<os>.json` back to the branch.
 - Decided: Python core instead of a Rust core (no Rust toolchain reachable; the
   brief's requirement was "must work in Python").
+- Decided: the product is a **recording triple** (state + cause + stage), not a storage
+  format (Architecture 6.0).
+- Decided: training data is **stored by default** (`data_level=segments`), deduplicated and
+  content-addressed, opt-out recorded; the brief's "fingerprints only" is superseded.
+- Format: `DATA_SEGMENT`, `DATA_SHARD`, `DATA_POINTER` block types; `data_level`,
+  `attribution`, `base_model`, `ancestor` in META.
+- Added claims 11-14 (dedup, codecs, data overhead, join round-trip) to the measurement list.
 
 ## v0.1.0 - not released
 

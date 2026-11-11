@@ -81,13 +81,17 @@ Reader rules, all mandatory:
 | 8 | `INFO` | JSON | out-of-band notes, warnings, degradations |
 | 9 | `INDEX` | binary | block offsets by step (see section 6) |
 | 16 | `INDEX_FOOTER` | binary | optional compact index written just before the footer |
-| 17 | `DATA_BLOB` | bytes | **reserved, not written in v1**: opt-in training data payload (Q17) |
+| 17 | `DATA_SEGMENT` | JSON + binary | a segment of training data: metadata, characteristics, step span, region effects (6.9) |
+| 20 | `DATA_SHARD` | binary | one deduplicated, compressed unit of data content referenced by segments |
 | 18 | `ATLAS` | binary | **reserved**: data -> weight -> capability map (post-v1) |
 | 19 | `EDIT_VECTOR` | binary | **reserved**: direction in weight space per capability (post-v1) |
 
 Blocks 1-8 are version 1; new types are added as integers, never by changing these.
+| 21 | `DATA_POINTER` | JSON | content hash + source reference instead of content (level `pointers`, or a `sensitive` shard) |
+
 Reserved ids are allocated so that a file written by a future version is skipped, not
-misread, by a v1 reader.
+misread, by a v1 reader. `DATA_SEGMENT` (17) supersedes the previously reserved
+`DATA_BLOB`; 17 keeps its meaning of "training data payload" so nothing is ambiguous.
 
 ### 4.1 Required `META` fields (v1)
 
@@ -104,9 +108,17 @@ misread, by a v1 reader.
   "components": ["vision_encoder", "language_model"],
   "base_model": null,
   "ancestor": null,
-  "data_stored": false
+  "attribution": "observational",
+  "data_level": "segments",
+  "data_codecs": {"text": "zstd-dict", "tokens": "varint-delta-zstd", "images": "lossless-webp"},
+  "sensitive_shards": 0
 }
 ```
+
+`data_level` is one of `none | pointers | segments | full` (default `segments`). It must
+agree with the blocks present: `segments`/`full` require at least one `DATA_SHARD`,
+`pointers` requires `DATA_POINTER` blocks and no shards, `none` requires neither. A reader
+that finds a mismatch reports a corrupt header rather than guessing.
 
 `base_model` and `ancestor` are reserved-but-null in v1: a future version can make a file
 a pure delta against a parent (Q18). `data_stored` must be `false` in v1 and must agree
@@ -150,6 +162,38 @@ per entry:
 
 Reconstruction: `w_t = w_anchor + sum(delta_i)`, then compare against the recorded
 float32 reference; the format itself never claims exactness beyond the dtype stored.
+
+### 5.2.1 `DATA_SHARD`
+
+```
+str  shard_id            (its content hash, so the id is the dedup key)
+u8   codec               (0 raw, 1 zstd, 2 zstd-dict, 3 varint-delta-zstd, 4 lossless image)
+u8   sensitive           (1 -> content omitted, only hash and characteristics remain)
+u32  dict_id             (0 = no dictionary; otherwise an id in the run's dictionary table)
+u64  raw_len
+u64  stored_len
+bytes payload            (empty when sensitive = 1)
+u32  content_crc         (CRC-32 of the *uncompressed* content, so identity survives any codec)
+f32  reconstruction_error (0.0 for lossless; measured value if a lossy codec was used)
+```
+
+A shard is written once per run. Seeing the same content again never writes it again; the
+segment that mentions it just points at the existing shard id.
+
+### 5.2.2 `DATA_SEGMENT`
+
+```
+str  segment_id
+str  shard_id            (or "" when the shard is a DATA_POINTER)
+str  source              (path, URL or hub id; may be empty)
+str  fingerprint         (hash of the shard set + order)
+json characteristics     (language, domain, complexity, counts, dedup ratio, ...)
+u64  first_step, u64 last_step
+u32  times_seen
+json region_effects      (region -> {delta_norm, grad_norm, loss_trend, steps})
+u32  component_mask
+f32  delta_reconstruction_error
+```
 
 ### 5.3 `ANCHOR`
 

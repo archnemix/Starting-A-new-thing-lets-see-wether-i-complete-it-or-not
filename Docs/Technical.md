@@ -13,6 +13,7 @@
 | Arrays | numpy | tensor staging, byte-plane work |
 | Compression | zstandard (or stdlib `compression.zstd` on 3.14+) | best ratio/speed for our payload, wheels everywhere |
 | Optional numeric | numpy only (SVD via `numpy.linalg.svd`) | avoid a scipy dependency for v1 |
+| Data capture | content-addressed shards, per-shard codec, zstd dictionaries trained per run | one copy per unique unit of data; dedup is what keeps epochs free |
 | Framework glue | torch >= 2.0/2.1, transformers >= 4.46 (soft), lightning 2.x | public hooks verified by reading source at tags |
 | Tests | pytest, run on GitHub Actions (ubuntu / windows / macos) | cross-runner requirement |
 | Packaging | pyproject.toml + hatchling | simple, no build backend trickery |
@@ -95,6 +96,23 @@ purpose line at the top of each.
   arbitrary sites. Source reading therefore happens through the GitHub contents API.
 - Token: contents read/write and actions metadata read; no secrets, variables, logs
   or artifacts. Consequence: CI writes results into the repo.
+
+## 5a. The data path (v1, on by default)
+
+```
+training loop
+  └─ batch (as the user's dataloader produced it)
+       ├─ hash content -> shard id                       (writer thread)
+       ├─ already stored? -> pointer only                (dedup, the epoch win)
+       └─ new -> codec by type -> compress -> DATA_SHARD
+              + DATA_SEGMENT (characteristics, step span,
+                 per-region effects, gradient norms, loss trend)
+```
+
+Levels: `none | pointers | segments (default) | full`. Everything is written on the writer
+thread; the training loop only hands over a reference. A `sensitive` shard keeps hash and
+characteristics and drops content, which is the only allowed fidelity exception and is
+recorded per shard.
 
 ## 6. CI runners (measured 2026-11-11, run 43052619656)
 
