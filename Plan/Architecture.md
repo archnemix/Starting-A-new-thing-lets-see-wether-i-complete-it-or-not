@@ -393,9 +393,17 @@ is a measured question (section 10).
 
 ### 6.3 Encodings, chosen per tensor per step by measurement
 
+Measured on 256x256 float32 deltas, seed 0 (`Bench/claim01_error_vs_ratio.py`):
+
+| Delta shape | sparse | dense_quant (int8) | lowrank | dense_raw (exact) |
+|---|---|---|---|---|
+| 1% of entries moved | **77x, exact** | 125x, 8.9e-3 | refused | 34x, exact |
+| dense, all moved | refused | **4.7x, 1.1e-2** | refused | 1.2x, exact |
+| rank-4 structure | refused | 5.0x, 1.5e-2 | **34x, 8.4e-8** | 1.1x, exact |
+
 | Encoding | When it wins | Notes |
 |---|---|---|
-| sparse (index + value pairs) | few changed elements: embeddings with small batches, MoE blocks, frozen-ish layers | index cost dominates when density > ~2-5%; benchmark decides |
+| sparse (index + value pairs) | few changed elements: embeddings with small batches, MoE blocks, frozen-ish layers | loses to int8 at **any density when error is allowed**, and is the *only* exact choice below full density. Threshold must come from a noise floor; a zero threshold keeps essentially everything (measured at 0.8% of the max delta) |
 | low-rank (U·V factors) | coordinated, structured movement: attention projections, most full-batch fine-tuning | rank chosen to hit an error target |
 | quantized dense delta (int8 / fp16 / bf16 + scale) | dense small deltas | error measured, not assumed |
 | "unchanged" marker | ties, frozen parameters, zero delta | must never double-count tied tensors |
@@ -407,12 +415,20 @@ Encoder choice is recorded in the file per tensor block, so the reader never gue
 Order: `delta -> (optional quantize) -> byte-plane shuffle -> xor/delta against
 previous plane -> zstd (level tuned per section)`.
 
-- Byte-plane shuffling (split fp32/fp16 into exponent/mantissa planes) is what makes
-  float deltas compressible; plain text compressors on raw floats do almost nothing.
+- **Measured, and it corrected the design:** byte-plane shuffling does *not* make float
+  deltas compressible. On realistic deltas it costs bytes (sparse 1%: 4,533 -> 7,774, i.e.
+  0.58x) because it scatters the long zero runs zstd already exploits, and it gains only
+  ~1.07x on dense deltas. So the lossless path compresses raw bytes and the shuffle is
+  opt-in (`Bench/claim_plane_shuffle.py`). Plain zstd on raw floats is weak, as expected:
+  1.1-1.2x. The bytes come from *sparsification and low rank*, not from shuffling.
 - **zstd** via `zstandard` (wheels everywhere; `compression.zstd` in CPython 3.14).
   `lz4` is not a default: worse ratio at similar speed for our payload.
 - Small sections may use `lz4`/`zlib` when decompression latency matters more than
   bytes; the compressor is a per-section field, not a global assumption.
+- **A lossless fallback is mandatory** (`dense_raw`, encoding 4). Measurement showed the gap:
+  at full density with unstructured movement, sparse refuses (indices cost more than values)
+  and low rank refuses (noise is not low rank), so without it a recording would have had no
+  exact option. Every tensor must have an exact encoding available, always.
 - **Deltas before data.** Compressing the data is far easier than compressing float deltas
   and saves less of the total (deltas repeat at every store point; data is stored once).
   So the split is: data gets a per-shard codec chosen automatically, deltas get the

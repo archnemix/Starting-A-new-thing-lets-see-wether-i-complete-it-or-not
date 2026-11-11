@@ -296,6 +296,29 @@
         "archx/container/*",
         "Actions/scripts/run_tests.py"
       ]
+    },
+    {
+      "id": "delta-encoder-measurements",
+      "question": "Which delta encoder is smallest, and at what error, on realistic training deltas?",
+      "sources": [
+        "Bench/claim01_error_vs_ratio.py",
+        "Bench/claim02_sparse_vs_lowrank.py",
+        "Bench/claim_plane_shuffle.py"
+      ],
+      "findings": [
+        "256x256 f32, 1% moved: sparse 3,404 B exact (77x); int8 2,098 B at 8.9e-3 (125x); lowrank refused.",
+        "256x256 f32, all moved: int8 56,190 B at 1.1e-2 (4.7x); sparse refused; lowrank refused; dense_raw 227,534 B exact (1.2x).",
+        "rank-4 structure: lowrank found rank 4 exactly, 7,680 B (34x, 8.4e-8); int8 52,266 B at 1.5e-2; dense_raw 233,011 B exact.",
+        "Sparse vs int8 crossover: int8 is smaller at every density from 0.1% to 100% when error is allowed; sparse only wins when exactness is required.",
+        "Byte-plane shuffle: sparse 1% 4,533 -> 7,774 B (0.58x, a loss); dense 242,473 -> 227,533 (1.07x); rank-4 243,457 -> 233,010 (1.04x). An all-zero tensor is shuffle-invariant.",
+        "Low-rank refuses random noise at rank 8 with a 1e-3 budget (relative error stays ~0.9)."
+      ],
+      "verdict": "Policy is per tensor: exact path = sparse or dense_raw, lossy path = int8 unless the delta is genuinely low rank. Shuffle stays off by default. Any ratio quoted in the docs must come from these scripts.",
+      "affects": [
+        "archx/encoders/*",
+        "Plan/Architecture.md 6.3-6.4",
+        "Docs/Technical.md"
+      ]
     }
   ]
 }

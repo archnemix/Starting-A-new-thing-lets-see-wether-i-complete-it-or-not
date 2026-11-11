@@ -578,6 +578,160 @@
         "pass/fail"
       ],
       "handles": "Documents that a tear inside META loses META but never corrupts it."
+    },
+    "archx/formats/__init__.py": {
+      "purpose": "Format-level value types shared by file, encoders and reader.",
+      "inputs": [],
+      "outputs": [
+        "DType",
+        "to_numpy",
+        "from_numpy",
+        "name_of"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/formats/dtype.py": {
+      "purpose": "The one-byte dtype ids from the spec mapped to numpy.",
+      "inputs": [
+        "wire name or numpy dtype"
+      ],
+      "outputs": [
+        "numpy dtype or wire id"
+      ],
+      "handles": "bf16 is refused at decode (no numpy equivalent); everything else round-trips."
+    },
+    "archx/encoders/__init__.py": {
+      "purpose": "Encoder package surface.",
+      "inputs": [],
+      "outputs": [
+        "encoder classes",
+        "choose_encoder"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/encoders/base.py": {
+      "purpose": "Encoder contract, the Encoded result, and smallest-under-budget choice.",
+      "inputs": [
+        "np.ndarray delta"
+      ],
+      "outputs": [
+        "Encoded(encoding, body, nnz_or_rank, value_dtype, max_abs_error, rel_error)"
+      ],
+      "handles": "relative_error() is the single definition of error used everywhere."
+    },
+    "archx/encoders/unchanged.py": {
+      "purpose": "Encoding 0: zero delta, zero bytes.",
+      "inputs": [
+        "delta",
+        "atol"
+      ],
+      "outputs": [
+        "Encoded or None"
+      ],
+      "handles": "Tied and frozen parameters hit this every step."
+    },
+    "archx/encoders/sparse.py": {
+      "purpose": "Encoding 1: index-gap + value compression for deltas with few moved entries.",
+      "inputs": [
+        "delta",
+        "threshold",
+        "codec"
+      ],
+      "outputs": [
+        "Encoded (exact)"
+      ],
+      "handles": "Refuses when more than half the entries moved, because index cost then beats density."
+    },
+    "archx/encoders/dense.py": {
+      "purpose": "Encoding 2: symmetric int8/int16 quantization of a dense delta.",
+      "inputs": [
+        "delta",
+        "bits"
+      ],
+      "outputs": [
+        "Encoded (lossy, error measured by re-decoding)"
+      ],
+      "handles": "Error is computed from the decoded array, not from pre-decode values."
+    },
+    "archx/encoders/lowrank.py": {
+      "purpose": "Encoding 3: truncated SVD of a 2-D delta at the smallest rank meeting the error budget.",
+      "inputs": [
+        "delta (2-D)",
+        "max_rank",
+        "max_rel_error"
+      ],
+      "outputs": [
+        "Encoded or None"
+      ],
+      "handles": "Refuses non-2-D tensors and refuses noise, which is the honest behaviour."
+    },
+    "archx/encoders/dense_raw.py": {
+      "purpose": "Encoding 4: the lossless fallback, raw (optionally shuffled) bytes through zstd.",
+      "inputs": [
+        "delta",
+        "codec",
+        "shuffle_planes"
+      ],
+      "outputs": [
+        "Encoded (exact)"
+      ],
+      "handles": "Guarantees every tensor has an exact option; shuffle is opt-in because it measured badly."
+    },
+    "archx/encoders/plane.py": {
+      "purpose": "Reversible byte-plane shuffle and XOR-against-previous helper.",
+      "inputs": [
+        "raw bytes",
+        "itemsize"
+      ],
+      "outputs": [
+        "reordered bytes"
+      ],
+      "handles": "Measured to hurt zero-heavy data; used only where it helps."
+    },
+    "Bench/README.md": {
+      "purpose": "Folder README: one script per claim, numbers go to Research.json.",
+      "inputs": [],
+      "outputs": [],
+      "handles": "CPU-only, fixed seeds, prints markdown."
+    },
+    "Bench/claim01_error_vs_ratio.py": {
+      "purpose": "Claim 1: error vs compression ratio per encoder on three delta shapes.",
+      "inputs": [
+        "--seed",
+        "--json"
+      ],
+      "outputs": [
+        "markdown table, JSON"
+      ],
+      "handles": "Shapes: sparse 1%, dense small, rank-4 structure."
+    },
+    "Bench/claim02_sparse_vs_lowrank.py": {
+      "purpose": "Claim 2: smallest encoder per density, both at any error and at exactness.",
+      "inputs": [
+        "--seed"
+      ],
+      "outputs": [
+        "markdown table"
+      ],
+      "handles": "The two columns are the finding: lossy and exact answers differ below full density."
+    },
+    "Bench/claim_plane_shuffle.py": {
+      "purpose": "Does byte-plane shuffling help? Measured, not assumed.",
+      "inputs": [
+        "--seed"
+      ],
+      "outputs": [
+        "markdown table"
+      ],
+      "handles": "Result: hurts sparse, barely helps dense, identity on all-zero."
+    },
+    "Tests/unit/encoders/test_encoders.py": {
+      "purpose": "Unit tests for the encoders: exactness where promised, measured error elsewhere.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Also pins the measured shuffle behaviour so the finding cannot silently regress."
     }
   },
   "_generated": {

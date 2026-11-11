@@ -33,10 +33,10 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 2.1 | Measurement harness (`bench/`) independent of the recorder | Runs on CI, writes numbers into `Actions/out/` | todo |
-| 2.2 | Encoders: unchanged, sparse, quantized dense, low-rank | Each has unit tests + error/ratio numbers | todo |
-| 2.3 | Byte-plane shuffle + xor, then zstd; compressor per section | Ratio and speed table vs plain zstd | todo |
-| 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | todo |
+| 2.1 | Measurement harness (`bench/`) independent of the recorder | Runs on CI, writes numbers into `Actions/out/` | done (Bench/ + claim scripts, local and in CI) |
+| 2.2 | Encoders: unchanged, sparse, quantized dense, low-rank | Each has unit tests + error/ratio numbers | done (5 encoders, tests green) |
+| 2.3 | Byte-plane shuffle + xor, then zstd; compressor per section | Ratio and speed table vs plain zstd | done (shuffle measured: hurts sparse deltas, so opt-in) |
+| 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | done (claims 1-2 measured, numbers in Research.json) |
 | 2.5 | Claim 3 measured: chained-delta error vs anchor spacing | Recommended spacing written into the spec | todo |
 | 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | todo |
 | 2.7 | Claim 13-14 measured: data capture overhead per level, and the join round-trip | Numbers recorded; join answers from file alone | todo |
