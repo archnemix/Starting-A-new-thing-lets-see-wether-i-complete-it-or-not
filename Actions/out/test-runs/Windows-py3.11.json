@@ -1,0 +1,20 @@
+{
+  "purpose": "test run record written by Actions/scripts/run_tests.py",
+  "label": "Windows-py3.11",
+  "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q --tb=short",
+  "exit_code": 0,
+  "summary_line": ".......................                                                  [100%]",
+  "started_utc": "2026-11-11T16:38:01.439765+00:00",
+  "duration_s": 1.422,
+  "runner": {
+    "os": "Windows-10-10.0.26100-SP0",
+    "github_os": "Windows",
+    "github_arch": "X64",
+    "python": "3.11.9",
+    "github_sha": "b39ff06c65d2a8433d90ff531eec79cf28cdf25d"
+  },
+  "stdout_tail": [
+    ".......................                                                  [100%]"
+  ],
+  "stderr_tail": []
+}
