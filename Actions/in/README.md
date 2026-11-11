@@ -15,3 +15,7 @@
 - Files here are inputs, never overwritten by a run.
 - Anything reproducible in code does not belong here; only data does.
 - Keep it small: this is committed on every run that changes it.
+
+## Current inputs
+
+None yet. `Actions/scripts/run_tests.py` takes only a label argument.

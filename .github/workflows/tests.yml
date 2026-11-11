@@ -1,7 +1,9 @@
 # Tests
 #
-# Purpose: proves that every runner works, records its environment into `Actions/out/`,
-# and later runs archx's unit and integration tests on Linux, Windows and macOS.
+# Purpose: run the suite on Linux, Windows and macOS, and commit the records back into
+# Actions/out/test-runs/ so results are readable without the Actions API.
+#
+# Triggered by editing Actions/triggers/tests.txt, or by a push to archx/** and Tests/**.
 
 name: tests
 
@@ -9,6 +11,9 @@ on:
   push:
     paths:
       - "Actions/triggers/tests.txt"
+      - "archx/**"
+      - "Tests/**"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -19,13 +24,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  runner-check:
-    name: runner check (${{ matrix.os }})
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,24 +39,23 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
 
-      - name: Record runner environment
+      - name: Install package and test dependencies
         shell: bash
         run: |
-          label="latest-env/${RUNNER_OS}-${RUNNER_ARCH}"
-          python Actions/scripts/env_probe.py "Actions/out/${label}.json"
-          {
-            echo "trigger intent: $(tail -n 1 Actions/triggers/tests.txt || true)"
-            echo "runner: ${RUNNER_OS} ${RUNNER_ARCH}"
-            python --version
-            python -c "import platform; print(platform.platform())"
-          } > "Actions/out/${label}.log"
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
 
-      - name: Commit results into the repository
+      - name: Run tests and record the result
+        shell: bash
+        run: |
+          python Actions/scripts/run_tests.py "${RUNNER_OS}-py${{ matrix.python }}"
+
+      - name: Commit records into the repository
         if: always()
         shell: bash
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          bash Actions/scripts/commit_results.sh "ci: runner check ${RUNNER_OS}"
+          bash Actions/scripts/commit_results.sh "ci: tests ${RUNNER_OS} py${{ matrix.python }}"

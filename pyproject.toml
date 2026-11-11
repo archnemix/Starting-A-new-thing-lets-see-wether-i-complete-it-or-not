@@ -1,0 +1,35 @@
+# Packaging: distribution `archx.mdl` (normalises to archx-mdl), import and CLI stay `archx`.
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "archx.mdl"
+version = "0.1.0"
+description = "Model life line: record how a model changes during training, why, and when."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "archnemix" }]
+keywords = ["training", "checkpoint", "delta", "interpretability", "pytorch"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = ["numpy>=1.24", "zstandard>=0.21"]
+
+[project.optional-dependencies]
+torch = ["torch>=2.1"]
+test = ["pytest>=7.4"]
+
+[project.scripts]
+archx = "archx.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["archx"]
+
+[tool.pytest.ini_options]
+testpaths = ["Tests"]
+pythonpath = ["."]
+addopts = "-q"

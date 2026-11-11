@@ -1,0 +1,20 @@
+{
+  "purpose": "test run record written by Actions/scripts/run_tests.py",
+  "label": "Linux-py3.11",
+  "command": "/home/user/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/.venv/bin/python -m pytest Tests -q --tb=short",
+  "exit_code": 0,
+  "summary_line": ".......................                                                  [100%]",
+  "started_utc": "2026-11-11T16:36:58.585505+00:00",
+  "duration_s": 0.401,
+  "runner": {
+    "os": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "github_os": "Linux",
+    "github_arch": "",
+    "python": "3.11.2",
+    "github_sha": "local"
+  },
+  "stdout_tail": [
+    ".......................                                                  [100%]"
+  ],
+  "stderr_tail": []
+}

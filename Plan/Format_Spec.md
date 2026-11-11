@@ -47,17 +47,24 @@ rebuilds the index from the blocks that survived.
 Reader rule: refuse if `format_major != 1`; accept any `format_minor >= 0` but skip
 unknown block types; refuse if the header CRC fails.
 
-## 3. Block *(fixed 24-byte prefix + payload)*
+## 3. Block *(fixed 28-byte prefix + payload)*
 
 | off | size | field | notes |
 |---|---|---|---|
 | 0 | 2 | block_type | see section 4 |
 | 2 | 1 | codec | 0 none, 1 zstd, 2 zlib, 3 lz4 *(fixed ids; new ids only in a minor bump)* |
 | 3 | 1 | flags | 0 unless the type defines them |
-| 4 | 4 | payload_raw_len | length before compression, for allocation sanity |
-| 8 | 8 | payload_len | length after compression |
-| 16 | 4 | payload_crc | CRC-32 of the stored (compressed) payload |
-| 20 | 4 | block_crc | CRC-32 of bytes 0..19 *(guards the prefix itself)* |
+| 4 | 8 | step | the training step this block belongs to; `0xFFFFFFFFFFFFFFFF` = not step-bound |
+| 12 | 4 | payload_raw_len | length before compression, for allocation sanity |
+| 16 | 8 | payload_len | length after compression |
+| 24 | 4 | payload_crc | CRC-32 of the stored (compressed) payload |
+| 28 | 4 | block_crc | CRC-32 of bytes 0..23 *(guards the prefix itself)* |
+
+**Why the step is in the prefix (v1.0, changed during implementation step 1.2):** recovery
+must rebuild the index from a crashed file, and the step otherwise only exists *inside the
+compressed payload*. Putting it in the prefix costs 8 bytes per block and makes
+`archx recover` a pure prefix scan, with no decompression and no guessing. It also means the
+reader can list the timeline of a file without decoding a single delta.
 
 Reader rules, all mandatory:
 1. `block_crc` must match before the payload length is used.
