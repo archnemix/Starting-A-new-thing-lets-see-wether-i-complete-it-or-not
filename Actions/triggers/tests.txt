@@ -10,3 +10,5 @@ trigger 3: phase 1 complete - property test, closed-flag fix, test-record summar
 trigger 4: record counts fix - test records now say 31 passed
 
 trigger 5: phase 2 - encoders + measured claims, 41 tests
+
+trigger 6: phase 3 - recorder + data capture + join
