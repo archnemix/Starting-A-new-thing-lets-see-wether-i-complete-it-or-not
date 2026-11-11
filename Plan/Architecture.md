@@ -128,9 +128,32 @@ kernels, which is a measurable, optional win - not a correctness requirement. It
 therefore designed as an *accelerator behind the same interface* (see section 6.6),
 which also means v1 can be measured before that bet is made.
 
-**[ASK]** Whether to keep a Rust/maturin accelerator on the v1 table at all, and
-whether the distribution is named `archx` (the PyPI name `archx` is already taken by
-an unrelated project) or ships as `archx-mdl` while still importing as `archx`.
+### Naming [DECIDED by the user, 2026-11-11]
+
+`archx` is the brand identity and stays the name people *use*. Because the bare name is
+taken on PyPI, the **extension is the disambiguator**:
+
+| Surface | Name | Note |
+|---|---|---|
+| file extension | `.archx.mdl` | unchanged |
+| import | `import archx` | unchanged, always |
+| CLI | `archx` | unchanged |
+| PyPI distribution | `archx.mdl` | normalises to `archx-mdl` (PEP 503), so both `pip install archx.mdl` and `pip install archx-mdl` resolve to the same project |
+| npm package | `archx` | **free** (measured 404); used as a seam that tells people where the real tool is |
+
+Measured 2026-11-11: PyPI `archx` = 200 (someone else's "framework to explore the design
+space of computer systems", v0.1.1), PyPI `archx-mdl` / `archx.mdl` / `archnmix` variants =
+404. npm `archx` = 404, so it is available. npm *usernames* cannot be checked without
+auth (401), which only matters if the user's npm account name has to match.
+
+**The npm seam (why an npm package at all):** someone who hears about the tool types
+`npm i archx`. That package installs a tiny CLI that prints the PyPI install command and
+the docs link, and exits with a clear message. It is a signpost, never a reimplementation:
+no Python code, no native bindings, nothing that can drift. It exists so the brand is not
+squatted and so the wrong install is impossible to reach silently. Roadmap step 0.5.
+
+**[ASK]** Whether to keep a Rust/maturin accelerator on the v1 table at all. The core is
+Python either way; the accelerator is an optional later step (Open_Questions Q4).
 
 ---
 
@@ -494,6 +517,11 @@ Rules for `segments`:
 - **Opting out is allowed but must be explicit**: `data="none"` or an env var. The file
   records `data_level` and, when the level is not `segments`/`full`, a
   `JOIN_INCOMPLETE` info block stating what the reader will not be able to answer.
+- **No size cap by default** (user decision). The recorder prints a projected data size
+  when it starts, warns once per doubling, and reports the real total at close. A cap
+  (`data_max_bytes`) exists only if the user sets one; when it is hit the level degrades to
+  `pointers` and the file records it, because silently truncating data would break the join
+  while still looking complete.
 - **Legal/PII guard**: shards can be marked `sensitive=true`, which stores the hash and
   characteristics only for that shard. This is the one place where redaction beats
   fidelity, and it is per shard, not per run.

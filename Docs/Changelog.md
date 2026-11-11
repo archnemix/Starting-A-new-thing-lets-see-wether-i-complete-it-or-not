@@ -27,6 +27,8 @@ No code yet. This stage produced documentation only:
 - Format: `DATA_SEGMENT`, `DATA_SHARD`, `DATA_POINTER` block types; `data_level`,
   `attribution`, `base_model`, `ancestor` in META.
 - Added claims 11-14 (dedup, codecs, data overhead, join round-trip) to the measurement list.
+- Naming decided: PyPI distribution `archx.mdl` (normalises to `archx-mdl`), import and CLI
+  stay `archx`, npm `archx` reserved as a signpost package. No cap on stored data by default.
 
 ## v0.1.0 - not released
 

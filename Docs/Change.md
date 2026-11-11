@@ -63,3 +63,13 @@ Effect on roadmap: the product definition is now the recording triple (state + c
 stage, Architecture 6.0), data content is default-on, and every place where the brief
 assumed otherwise is marked as superseded rather than quietly changed. See
 `Plan/Origin_Chat.md` sections 3a and 3b.
+
+## C6 - Naming: `archx.mdl` on PyPI, npm `archx` as a signpost - 2026-11-11 - accepted
+
+Requested: no cap on stored data by default; `archx` is the user's brand on the npm registry
+too; since the clean package name is taken, the extension is used as the disambiguator
+because "extension is a must to represent the tool".
+
+Effect on roadmap: step 0.3 pins the distribution name `archx.mdl` (import/CLI stay
+`archx`), and step 0.5 adds the npm signpost package. Nothing else changes name: file
+extension, import, CLI and docs all keep `archx`.

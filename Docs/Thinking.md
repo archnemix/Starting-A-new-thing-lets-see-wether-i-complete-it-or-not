@@ -161,3 +161,28 @@ an atlas later without retraining - which is a v1 requirement created by a v2 fe
 accepting the constraint in advance.
 
 **Open:** Q20 (a byte cap for stored data), plus Q2-Q16.
+
+## Round 4 - 2026-11-11 - Naming and the data cap
+
+**Decisions:** no cap on stored data by default; PyPI distribution `archx.mdl` while the
+import and CLI stay `archx`; npm `archx` used as a signpost.
+
+**Why the extension does the disambiguating:** the bare name is taken on PyPI by an
+unrelated project (v0.1.1). The user's rule is that the brand never changes and the
+extension represents the tool, so the distribution name carries the extension - the same
+`.archx.mdl` idea applied to packaging. PEP 503 normalises `archx.mdl` to `archx-mdl`, so
+either spelling resolves; that is checked, not assumed.
+
+**Why an npm package at all:** not to build anything in JavaScript. `npm i archx` is what a
+person tries first, and an empty name is a name someone else can take later. A signpost
+package that prints the real install command is ~20 lines and cannot drift from the Python
+code because it contains none.
+
+**No-cap decision, applied honestly:** "no cap" without reporting would mean a surprise
+terabyte. So: projected size at start, a warning per doubling, real total at close. The cap
+still exists as an opt-in and degrades to `pointers` rather than truncating - truncation
+would leave a file that looks complete but has a broken join.
+
+**Not decided here:** whether the npm package gets published now or after v1 (roadmap step
+0.5 says built when ready, published on your word), and the npm account name (uncheckable
+without auth).

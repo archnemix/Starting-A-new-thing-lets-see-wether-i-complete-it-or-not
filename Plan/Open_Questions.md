@@ -10,11 +10,16 @@ implementation language is my call.
 
 ## Blocking (needed before Phase 1 code)
 
-**Q2. Distribution name.** PyPI `archx` is taken by an unrelated project; `archx-mdl`
-is free. Options: (a) ship `archx-mdl` importing as `archx`, (b) pick another name.
-*Recommend (a).*
+**Q2 - ANSWERED (2026-11-11): `archx.mdl` on PyPI, `archx` everywhere people type it.**
+Measured: PyPI `archx` is someone else's project (v0.1.1, "framework to explore the design
+space of computer systems"); `archx-mdl` / `archx.mdl` are free; npm `archx` is free. The
+user's rule: the extension represents the tool, and the brand name never changes. So the
+distribution is `archx.mdl` (normalises to `archx-mdl`), the import stays `archx`, the CLI
+stays `archx`, and an npm `archx` signpost package prevents the brand being squatted.
+See Architecture section 3.
 
-**Q3. Minimum Python and PyTorch versions.** Evidence: torch 2.15 is current with
+**Q3. Minimum Python and PyTorch versions.** (still open - the only hard blocker left before
+code) Evidence: torch 2.15 is current with
 wheels for CPython 3.11-3.14 (including the free-threaded `cp314t` build);
 `Optimizer.register_step_post_hook` exists from 2.0 (verified at v2.0.0);
 `register_post_accumulate_grad_hook` exists from 2.1 (verified at v2.1.0);
@@ -66,11 +71,10 @@ the in-run record and composition is a separate feature. Confirm if that orderin
 **Q19 - ANSWERED (2026-11-11): yes, keep it.** The user confirmed the file must stay useful
 as a weights file, which is also what the origin chat's GGUF lineage implies.
 
-**Q20. Data retention and privacy.** Now that data is stored by default: for a real
-training run, is storing the first N% of each shard (default: all of it) acceptable, or do
-you want a cap (`data_max_bytes`) so a run can never fill the disk? *Recommendation: no cap
-by default, but the recorder reports projected data size at start and supports
-`data_max_bytes` with a documented degradation to `pointers` when exceeded.*
+**Q20 - ANSWERED (2026-11-11): no cap by default.** Projected size is reported at start,
+growth is warned once per doubling, and the real total is written at close.
+`data_max_bytes` remains available as an opt-in, degrading to `pointers` (never to silent
+truncation).
 
 ## Small, but affects structure
 

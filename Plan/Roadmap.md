@@ -14,8 +14,9 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 |---|---|---|---|
 | 0.1 | Docs scaffold: every required doc, folder README, purpose line per file | Files exist, `Docs/Files_Info.json` matches the tree | done (cf6e390) |
 | 0.2 | CI spine: `Tests/` runner, log-commit workflow, trigger file | A run on the 3 runners writes a result file into the repo | done (run 43052619656, 3/3 green, results committed) |
-| 0.3 | Packaging skeleton: `pyproject.toml`, `archx` importable, version string, CLI stub `archx info` | `pip install -e .` and `archx --help` work on all 3 runners | todo |
+| 0.3 | Packaging skeleton: `pyproject.toml` (distribution `archx.mdl`, import `archx`, CLI `archx`), version string, CLI stub | `pip install -e .` and `archx --help` work on all 3 runners | todo |
 | 0.4 | Test-record system: versioned folders, keep current + 2 | A recorded run per runner with inputs/outputs | todo |
+| 0.5 | npm `archx` signpost package (prints the PyPI command + docs link, exits non-zero on wrong use) | `npm i archx` then `npx archx` prints the real install path; published only when you say so | todo |
 
 ## Phase 1 - Container format (v0.2)
 

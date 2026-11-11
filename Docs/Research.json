@@ -252,6 +252,29 @@
         "Docs/Workaround.md",
         "Plan/Roadmap.md"
       ]
+    },
+    {
+      "id": "package-name-availability",
+      "question": "Which package names are free for this project on PyPI and npm?",
+      "sources": [
+        "https://pypi.org/pypi/archx/json",
+        "https://pypi.org/pypi/archx-mdl/json",
+        "https://registry.npmjs.org/archx",
+        "https://registry.npmjs.org/archx-mdl"
+      ],
+      "findings": [
+        "PyPI archx: 200, version 0.1.1, 'A framework to explore the design space of computer systems' - unrelated project.",
+        "PyPI archx-mdl, archxmdl, archx_mdl, archnemix, archx-lifeline: 404 (free).",
+        "npm archx: 404 (free). npm archx-mdl: 404 (free).",
+        "npm username existence cannot be checked unauthenticated (401 for both archx and archnemix).",
+        "PEP 503 normalises archx.mdl and archx-mdl to the same project name, so both pip spellings resolve."
+      ],
+      "verdict": "Distribution archx.mdl on PyPI, npm archx as a signpost, import/CLI stay archx. Re-check right before publishing; availability can change.",
+      "affects": [
+        "Plan/Architecture.md",
+        "pyproject.toml",
+        "npm/archx/"
+      ]
     }
   ]
 }

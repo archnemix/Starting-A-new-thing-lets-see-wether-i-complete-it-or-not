@@ -372,6 +372,7 @@
     "archx/data/capture.py": "segment detection, content hashing, dedup, data_level enforcement",
     "archx/data/codecs.py": "per-shard codec choice (text dict, token varint-delta, image, raw)",
     "archx/data/join.py": "writes DATA_SEGMENT with per-region effects, gradient norms, loss trend; serves the join back",
-    "archx/data/dictionary.py": "per-run zstd dictionary training for text-like shards"
+    "archx/data/dictionary.py": "per-run zstd dictionary training for text-like shards",
+    "npm/archx/": "signpost package: bin prints the PyPI install command and docs link; no runtime logic (Roadmap 0.5)"
   }
 }
