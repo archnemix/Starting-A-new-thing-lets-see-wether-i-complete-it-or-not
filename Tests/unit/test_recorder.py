@@ -1,0 +1,216 @@
+"""Unit tests for the recorder: it observes, it never mutates, and it degrades instead of raising."""
+
+from __future__ import annotations
+
+import json
+
+import numpy as np
+import pytest
+
+from archx.container.reader import Reader
+from archx.container.schema import BlockType
+from archx.formats.registry import TensorRegistry
+from archx.policy import Decision, PhasePolicy
+from archx.recorder import Recorder
+
+
+class FakeModel:
+    """Minimal stand-in for a model's parameters, with a step that moves them."""
+
+    def __init__(self, seed: int = 0, size: int = 64) -> None:
+        rng = np.random.default_rng(seed)
+        self.params = {
+            "w1": rng.normal(0, 0.1, (size, size)).astype(np.float32),
+            "b1": np.zeros(size, dtype=np.float32),
+        }
+
+    def read(self, key: str) -> np.ndarray:
+        return self.params[key]
+
+    def registry(self) -> TensorRegistry:
+        reg = TensorRegistry()
+        for key, array in self.params.items():
+            reg.add(key, array, pointer=array.ctypes.data)
+        return reg
+
+    def step(self, rng: np.random.Generator, scale: float = 1e-3) -> None:
+        for key, array in self.params.items():
+            array += rng.normal(0, scale, array.shape).astype(np.float32)
+
+
+def run_training(tmp_path, steps=30, policy=None, seed=0):
+    model = FakeModel(seed=seed)
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "run.archx.mdl"),
+                        policy=policy or PhasePolicy(total_steps=steps, min_warmup_steps=2))
+    rng = np.random.default_rng(seed)
+    for step in range(steps):
+        model.step(rng)
+        recorder.step(step, loss=1.0 / (step + 1))
+    recorder.close()
+    return model, recorder, tmp_path / "run.archx.mdl"
+
+
+def test_recording_writes_a_readable_file_with_meta_and_registry(tmp_path):
+    _, _, path = run_training(tmp_path)
+    reader = Reader(path)
+    assert reader.container.footer is not None
+    meta = reader.meta()
+    assert meta["attribution"] == "observational"
+    assert meta["tensors"] == 2
+    assert list(reader.blocks(BlockType.TENSOR_REGISTRY))
+
+
+def test_recording_never_changes_the_weights(tmp_path):
+    model = FakeModel(seed=5)
+    rng_a = np.random.default_rng(9)
+    for _ in range(20):
+        model.step(rng_a)
+    without = {k: v.copy() for k, v in model.params.items()}
+
+    model_b = FakeModel(seed=5)
+    recorder = Recorder(model_b.registry(), model_b.read, str(tmp_path / "b.archx.mdl"),
+                        policy=PhasePolicy(total_steps=20))
+    rng_b = np.random.default_rng(9)
+    for step in range(20):
+        model_b.step(rng_b)
+        recorder.step(step, loss=1.0)
+    recorder.close()
+
+    for key in without:
+        assert np.array_equal(without[key], model_b.params[key]), \
+            "recording must not alter a single weight"
+
+
+def test_a_recorder_fault_degrades_instead_of_breaking_training(tmp_path):
+    model = FakeModel()
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "faulty.archx.mdl"),
+                        policy=PhasePolicy(total_steps=5))
+
+    def broken_read(key):
+        raise RuntimeError("simulated read failure")
+
+    recorder._read = broken_read
+    decision = recorder.step(0)
+    assert decision is Decision.SKIP
+    assert recorder.stats.failed >= 1
+    with pytest.raises(RuntimeError):  # the fault is remembered, not hidden
+        recorder.close()
+
+
+def test_backpressure_drops_detail_instead_of_blocking(tmp_path):
+    model = FakeModel()
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "busy.archx.mdl"),
+                        policy=PhasePolicy(total_steps=10, min_warmup_steps=10), queue_size=1)
+    for step in range(10):
+        recorder.step(step, loss=1.0)  # every step stores; queue is size 1
+    recorder.close()
+    assert recorder.stats.steps_seen == 10
+    assert recorder.stats.failed >= 1, "a full queue must be counted, not hidden"
+
+
+def test_annotations_land_in_the_event_stream(tmp_path):
+    model = FakeModel()
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "notes.archx.mdl"),
+                        policy=PhasePolicy(total_steps=3))
+    recorder.step(0, loss=1.0)
+    recorder.annotate(1, "stage2_start", "unfroze the language model")
+    recorder.close()
+
+    reader = Reader(tmp_path / "notes.archx.mdl")
+    events = [json.loads(b.payload) for b in reader.blocks(BlockType.EVENT)]
+    assert any(e.get("event") == "stage2_start" for e in events)
+
+
+def test_stored_delta_covers_every_skipped_step(tmp_path):
+    """A skipped step must be absorbed by the next stored delta, or history loses motion."""
+    model = FakeModel(seed=1, size=256)
+    policy = PhasePolicy(total_steps=1_000_000, warmup_fraction=0.0, min_warmup_steps=0,
+                         heartbeat_steps=1_000_000)
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "acc.archx.mdl"),
+                        policy=policy)
+    rng = np.random.default_rng(4)
+
+    model.step(rng, scale=1e-2)
+    recorder.step(0, loss=1.0)                      # step 0 is an anchor
+    before = {k: v.copy() for k, v in model.params.items()}
+
+    decisions = []
+    for step in range(1, 6):                        # middle phase, no triggers -> skipped
+        model.step(rng, scale=1e-2)
+        decisions.append(recorder.step(step, loss=1.0))
+    decision = recorder.step(6, loss=1.0, event=True)   # a stage change forces a store
+    recorder.close()
+
+    assert decisions == [Decision.SKIP] * 5, "the middle phase must skip uneventful steps"
+
+    # Reconstruct step 6 from the file alone and compare with the live weights: the delta
+    # must equal the sum of six steps of movement, not the last one.
+    reader = Reader(tmp_path / "acc.archx.mdl")
+    anchor = reader.blocks(BlockType.ANCHOR).__next__().payload
+    deltas = [b for b in reader.blocks(BlockType.DELTA)]
+    assert len(anchor) > 0 and len(deltas) >= 1
+    stored_movement = 0.0
+    for block in deltas:
+        body = block.payload
+        count = int(np.frombuffer(body[8:12], dtype=np.uint32)[0])
+        offset = 12
+        for _ in range(count):
+            index = int(np.frombuffer(body[offset:offset + 4], dtype=np.uint32)[0])
+            encoding = int(body[offset + 4])
+            dtype_id = int(body[offset + 5])
+            length = int(np.frombuffer(body[offset + 6:offset + 10], dtype=np.uint32)[0])
+            payload = body[offset + 10:offset + 10 + length]
+            offset += 10 + length
+            if index == 0:  # w1
+                decoder = {1: _Decoders.sparse, 2: _Decoders.dense, 3: _Decoders.lowrank,
+                           4: _Decoders.raw}.get(int(encoding))
+                if decoder is not None:
+                    stored_movement += float(np.linalg.norm(
+                        decoder(payload, model.params["w1"].shape)))
+    live_movement = float(np.linalg.norm(model.params["w1"] - before["w1"]))
+    assert stored_movement > 0
+    assert live_movement / 2 < stored_movement < live_movement * 2, (
+        "the stored delta must cover the whole skipped run, not one step: "
+        f"stored={stored_movement:.4f} live={live_movement:.4f}")
+
+
+class _Decoders:
+    """Decode a delta body for the accumulation test."""
+
+    @staticmethod
+    def sparse(body, shape):
+        from archx.encoders import Sparse
+
+        return Sparse().decode(body, shape, "f32", 0)
+
+    @staticmethod
+    def dense(body, shape):
+        from archx.encoders import DenseQuant
+
+        return DenseQuant(bits=8).decode(body, shape, "i8", 0)
+
+    @staticmethod
+    def lowrank(body, shape):
+        from archx.encoders import LowRank
+
+        return LowRank().decode(body, shape, "f32", 0)
+
+    @staticmethod
+    def raw(body, shape):
+        from archx.encoders import DenseRaw
+
+        return DenseRaw().decode(body, shape, "f32", 0)
+
+
+def test_close_reports_the_failure_it_swallowed(tmp_path):
+    model = FakeModel()
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "x.archx.mdl"),
+                        policy=PhasePolicy(total_steps=2))
+
+    def broken(key):
+        raise ValueError("boom")
+
+    recorder._read = broken
+    recorder.step(0)
+    with pytest.raises(RuntimeError):
+        recorder.close()
