@@ -365,7 +365,7 @@
         "sdist/wheel",
         "console script"
       ],
-      "handles": "Version lives in archx/version.py too; both are kept in step by hand at release."
+      "handles": "Version is duplicated in archx/version.py by design (build backend needs it statically); both move together at release."
     },
     "LICENSE": {
       "purpose": "MIT license text.",
@@ -521,7 +521,7 @@
       "outputs": [
         "Actions/out/test-runs/<label>.json"
       ],
-      "handles": "Captures exit code, summary line, versions, commit and output tails."
+      "handles": "Captures exit code, counts (parsed from the dot line), versions, commit and output tails; writes one JSON per runner."
     },
     "Tests/unit/container/test_schema.py": {
       "purpose": "Unit tests for struct sizes and CRC placement.",

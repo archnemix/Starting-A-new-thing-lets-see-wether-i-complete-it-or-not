@@ -30,7 +30,20 @@ No code yet. This stage produced documentation only:
 - Naming decided: PyPI distribution `archx.mdl` (normalises to `archx-mdl`), import and CLI
   stay `archx`, npm `archx` reserved as a signpost package. No cap on stored data by default.
 
-## v0.1.0 - not released
+## v0.1.0 - not released yet (Phase 0 and Phase 1 complete on the branch)
 
-Planned contents: docs scaffold, CI spine, packaging skeleton, test-record system
-(Roadmap Phase 0).
+Shipped on the branch:
+
+- Packaging: distribution `archx.mdl`, import `archx`, CLI `archx`, MIT, Python >= 3.10.
+- Container format 1.0: 40-byte header, 28-byte block prefix (step inside), JSON/binary
+  payloads, zstd or zlib per block, INDEX block, 56-byte footer, CRC everywhere.
+- Append-only `Writer` with batched fsync and CLOSED flag.
+- Validating `Reader`: refuses foreign files, newer majors, absurd lengths, bad CRCs; skips
+  unknown block types; reports torn tails.
+- `archx recover`: keeps whole blocks, truncates the tail, rebuilds the index from prefixes
+  (no decompression), writes a footer, sets RECOVERED.
+- `archx info` and `archx recover` commands, human and `--json` output.
+- 31 tests (unit + integration + property), green on Linux, Windows and macOS.
+- CI writes machine-readable run records into `Actions/out/test-runs/`.
+
+Planned for the same version: delta encoders and the compression benchmarks (Phase 2).

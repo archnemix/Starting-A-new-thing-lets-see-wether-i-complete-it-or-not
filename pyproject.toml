@@ -32,4 +32,4 @@ packages = ["archx"]
 [tool.pytest.ini_options]
 testpaths = ["Tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q -ra"

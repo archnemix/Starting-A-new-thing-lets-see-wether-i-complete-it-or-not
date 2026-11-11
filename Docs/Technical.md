@@ -15,7 +15,7 @@
 | Optional numeric | numpy only (SVD via `numpy.linalg.svd`) | avoid a scipy dependency for v1 |
 | Data capture | content-addressed shards, per-shard codec, zstd dictionaries trained per run | one copy per unique unit of data; dedup is what keeps epochs free |
 | Framework glue | torch >= 2.0/2.1, transformers >= 4.46 (soft), lightning 2.x | public hooks verified by reading source at tags |
-| Tests | pytest, run on GitHub Actions (ubuntu / windows / macos) | cross-runner requirement |
+| Tests | pytest, run on GitHub Actions (ubuntu / windows / macos) | cross-runner requirement; 31 tests green on all three |
 | Packaging | pyproject.toml + hatchling | simple, no build backend trickery |
 | CLI | `archx` console script + `python -m archx` | two access paths, one code path |
 
@@ -67,10 +67,21 @@ lists the *what*.
 | `Open_Questions.md` | decisions waiting on the user, with recommendations |
 | `Origin_Chat.md` | what the original conversation asked for, and how it maps to v1 |
 
-### archx/ (planned, not created yet)
+### archx/ (container layer and CLI are live)
 
-See Architecture section 9 for the package tree. Rule: one file per responsibility,
-purpose line at the top of each.
+| File | Role |
+|---|---|
+| `archx/version.py` | version and format constants, the only place they are defined |
+| `archx/errors.py` | typed exceptions (format, corruption, truncation, version, dependency) |
+| `archx/container/schema.py` | the only file with byte offsets: structs, ids, flags, CRC helpers |
+| `archx/container/compress.py` | per-block codec, zstd -> zlib -> none fallback |
+| `archx/container/writer.py` | append-only writing, batched fsync, index, footer, closed flag |
+| `archx/container/reader.py` | validation and decoding, hostile-file refusal |
+| `archx/container/recovery.py` | prefix scan, truncate, rebuild index, re-close |
+| `archx/cli/main.py` | argparse and dispatch |
+| `archx/cli/info.py`, `recover.py` | one command each |
+
+Rule: one file per responsibility, purpose line at the top of each.
 
 ## 4. Terms (so the docs stay short)
 

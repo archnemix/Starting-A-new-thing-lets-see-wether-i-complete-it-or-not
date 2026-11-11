@@ -23,20 +23,18 @@ def main(argv: list[str]) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     started = datetime.now(timezone.utc)
-    cmd = [sys.executable, "-m", "pytest", "Tests", "-q", "--tb=short"]
+    cmd = [sys.executable, "-m", "pytest", "Tests", "-q", "-ra", "--tb=short"]
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     finished = datetime.now(timezone.utc)
 
-    lines = [line for line in (proc.stdout or "").splitlines() if line.strip()]
-    summary = next((line.strip() for line in reversed(lines)
-                    if "passed" in line or "failed" in line or "error" in line), "")
-    summary = summary.strip("= ")
+    summary, counts = _summarise(proc.stdout or "")
     record = {
         "purpose": "test run record written by Actions/scripts/run_tests.py",
         "label": label,
         "command": " ".join(cmd),
         "exit_code": proc.returncode,
         "summary_line": summary,
+        "counts": counts,
         "started_utc": started.isoformat(),
         "duration_s": round((finished - started).total_seconds(), 3),
         "runner": {
@@ -55,6 +53,32 @@ def main(argv: list[str]) -> int:
     print(proc.stderr, file=sys.stderr)
     print(f"record: {target.relative_to(ROOT)}")
     return proc.returncode
+
+
+def _summarise(stdout: str) -> tuple[str, dict[str, int]]:
+    """Best-effort summary of a pytest run.
+
+    pytest -q prints only dots when everything passes, so the dot line is parsed instead
+    of invented: len(dots) is the number of tests that ran.
+    """
+    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    summary = ""
+    for raw in stdout.splitlines():
+        line = raw.strip()
+        for key, needle in (("passed", " passed"), ("failed", " failed"),
+                            ("errors", " error"), ("skipped", " skipped")):
+            if needle in line and any(ch.isdigit() for ch in line):
+                summary = line.strip("= ")
+        stripped = "".join(line.split("[")[0].split()).rstrip("%0123456789 ")
+        if stripped and set(stripped) <= set(".sFEx") and len(stripped) > 3:
+            counts["passed"] += stripped.count(".")
+            counts["skipped"] += stripped.count("s")
+            counts["failed"] += stripped.count("F")
+            counts["errors"] += stripped.count("E")
+    if not summary:
+        summary = (f"{counts['passed']} passed, {counts['failed']} failed, "
+                   f"{counts['errors']} errors, {counts['skipped']} skipped")
+    return summary, counts
 
 
 if __name__ == "__main__":

@@ -275,6 +275,27 @@
         "pyproject.toml",
         "npm/archx/"
       ]
+    },
+    {
+      "id": "container-layout-implementation",
+      "question": "What did implementing the container teach that the spec did not say?",
+      "sources": [
+        "https://docs.python.org/3/library/struct.html",
+        "https://github.com/python/cpython/blob/main/Lib/compression/zstd/__init__.py"
+      ],
+      "findings": [
+        "struct.Struct with '<' uses standard sizes and no alignment: '<HBBQIIII' is exactly 28 bytes, not 32.",
+        "argparse's --version action raises SystemExit(0) instead of returning, so callers/tests must expect it.",
+        "A footer shares the byte space a block prefix would occupy, so readers must test the END magic before any size-based branch.",
+        "The step must live in the block prefix (8 bytes) for recovery to rebuild an index without decompressing payloads.",
+        "pytest -q prints only dots when everything passes; the counts have to be derived from the dot line, not from a summary sentence."
+      ],
+      "verdict": "Block prefix is 28 bytes with the step inside; reader checks END magic first; test records parse dots into counts.",
+      "affects": [
+        "Plan/Format_Spec.md",
+        "archx/container/*",
+        "Actions/scripts/run_tests.py"
+      ]
     }
   ]
 }

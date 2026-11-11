@@ -186,3 +186,57 @@ would leave a file that looks complete but has a broken join.
 **Not decided here:** whether the npm package gets published now or after v1 (roadmap step
 0.5 says built when ready, published on your word), and the npm account name (uncheckable
 without auth).
+
+## Round 5 - 2026-11-11 - Phase 0.3 and Phase 1: the container exists
+
+**Built:** packaging (`archx.mdl` distribution, `archx` import, `archx` CLI, MIT, py>=3.10),
+container schema/writer/reader/recovery, `archx info`, `archx recover`, 31 tests, and a CI
+matrix that runs them on Linux, Windows and macOS and commits the records.
+
+**Problems met, and how each was solved**
+
+1. *The reader parsed the footer as a block.* Symptom: every closed file failed with "block
+   prefix CRC mismatch at offset 181". Cause: I checked "fewer than a block prefix left"
+   before checking for the END magic, and a footer is bigger than a prefix - so once the
+   index block was read, the footer looked like a corrupt block. Fix: check for END magic
+   before any size check, and treat an incomplete footer as a torn tail, not as corruption.
+   This is a real bug that only appears with a multi-block file, which is why the first
+   roundtrip test failed.
+2. *Recovery could not rebuild the index.* The step only existed inside the compressed
+   payload, so `archx recover` would have had to decompress every block to know where steps
+   were - slow, and it made the index of a recovered file wrong (the first attempt produced
+   step `25063509241869608`). Fix: moved the step into the block prefix (8 bytes). The
+   prefix grew from 24 to 28 bytes and the spec was updated in the same commit. This is the
+   one place where implementation changed the format, and it changed it for a good reason:
+   recovery is a headline promise, so it must be a prefix scan, not a decompression pass.
+3. *The 28-byte struct was miscounted twice.* `struct.Struct.size` is padding-free, so
+   `"<HBBQIIII"` is 28, not 32, and a CRC constant copied from the old layout made the
+   prefix 28 bytes while the code asserted 32. Fix: derive `BLOCK_SIZE` from the struct,
+   assert it once in the schema test, and let the constant be checked rather than typed.
+4. *`argparse` exits instead of returning.* `--version` raises `SystemExit`, so the test had
+   to expect it; the CLI contract is "return an int for commands, exit for argparse flags",
+   now written down in the test.
+5. *A tear can land inside an uncompressed block's prefix.* Random truncation at a
+   payload boundary can leave a short payload that still passes its CRC (2^-32). Not
+   realistically reachable, but not impossible; recorded as a documented limitation in the
+   spec (6a) with three options, and left to step 1.6 rather than hidden.
+6. *The test record had an empty summary.* `pytest -q` prints only dots when everything
+   passes, so parsing for "N passed" found nothing. Fix: parse the dot line into counts and
+   only fall back to parsing words. The record now says `31 passed, 0 failed`.
+
+**Verified, not assumed**
+
+- CI run 43060156597: 3/3 runners green on the first real matrix.
+- CI run 43060440992: 3/3 green again after the closed-flag change, and each runner
+  committed its own `Actions/out/test-runs/<os>.json`.
+- Local: 31 tests, 0 failures, 0 skips, including a real `SIGKILL` of a writer subprocess
+  and an 8-seed tear-point property test.
+
+**Deliberate choices**
+
+- `Reader` loads the whole file. v1 files are small; a streaming path belongs with the
+  recorder, not before it.
+- Unknown block types are skipped; unknown codecs are errors. Skipping unknown data is safe,
+  silently mis-decoding it is not.
+- The property test uses fixed seeds instead of hypothesis: a failure is then reproducible
+  from the test id alone, which matters more than input variety at this stage.

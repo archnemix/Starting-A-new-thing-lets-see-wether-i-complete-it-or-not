@@ -6,3 +6,5 @@ trigger 1: bootstrap - prove three runners can commit results into the repositor
 trigger 2: first real test matrix - container format, CLI, recovery on 3 runners
 
 trigger 3: phase 1 complete - property test, closed-flag fix, test-record summary
+
+trigger 4: record counts fix - test records now say 31 passed
