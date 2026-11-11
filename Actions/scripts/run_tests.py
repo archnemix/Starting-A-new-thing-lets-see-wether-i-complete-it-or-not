@@ -1,7 +1,8 @@
 """Run the test suite and write a machine-readable record of the run.
 
-The record is what makes a test run evidence rather than an opinion: exact test ids,
-inputs, outputs, versions, and the commit. Written to Actions/out/test-runs/.
+The record is what makes a run evidence rather than an opinion, so it does not parse
+pytest's console output: pytest writes JUnit XML and this reads it, which gives exact counts
+and the name of every test that ran.
 """
 
 from __future__ import annotations
@@ -11,23 +12,58 @@ import os
 import platform
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _parse_junit(path: Path) -> dict:
+    """Exact counts and per-test outcomes from the JUnit XML pytest wrote."""
+    if not path.is_file():
+        return {"available": False}
+    root = ET.parse(path).getroot()
+    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total": 0}
+    failures = []
+    names = []
+    for suite in suites:
+        for case in suite.findall("testcase"):
+            counts["total"] += 1
+            name = f"{case.get('classname', '')}::{case.get('name', '')}"
+            names.append(name)
+            if case.find("failure") is not None:
+                counts["failed"] += 1
+                failures.append({"test": name, "detail": (case.findtext("failure") or "")[:800]})
+            elif case.find("error") is not None:
+                counts["errors"] += 1
+                failures.append({"test": name, "detail": (case.findtext("error") or "")[:800]})
+            elif case.find("skipped") is not None:
+                counts["skipped"] += 1
+            else:
+                counts["passed"] += 1
+    return {"available": True, "counts": counts, "failures": failures, "tests": names}
+
+
 def main(argv: list[str]) -> int:
-    label = argv[1] if len(argv) > 1 else f"{os.environ.get('RUNNER_OS', 'local')}"
+    label = argv[1] if len(argv) > 1 else os.environ.get("RUNNER_OS", "local")
     out_dir = ROOT / "Actions" / "out" / "test-runs"
     out_dir.mkdir(parents=True, exist_ok=True)
+    junit = out_dir / f"{label}.junit.xml"
 
     started = datetime.now(timezone.utc)
-    cmd = [sys.executable, "-m", "pytest", "Tests", "-q", "-ra", "--tb=short"]
+    cmd = [sys.executable, "-m", "pytest", "Tests", "-q", "-ra", "--tb=short",
+           f"--junitxml={junit}"]
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     finished = datetime.now(timezone.utc)
 
-    summary, counts = _summarise(proc.stdout or "")
+    parsed = _parse_junit(junit)
+    counts = parsed.get("counts", {})
+    summary = (f"{counts.get('total', 0)} tests: {counts.get('passed', 0)} passed, "
+               f"{counts.get('failed', 0)} failed, {counts.get('errors', 0)} errors, "
+               f"{counts.get('skipped', 0)} skipped")
+
     record = {
         "purpose": "test run record written by Actions/scripts/run_tests.py",
         "label": label,
@@ -35,6 +71,8 @@ def main(argv: list[str]) -> int:
         "exit_code": proc.returncode,
         "summary_line": summary,
         "counts": counts,
+        "failures": parsed.get("failures", []),
+        "tests": parsed.get("tests", []),
         "started_utc": started.isoformat(),
         "duration_s": round((finished - started).total_seconds(), 3),
         "runner": {
@@ -42,6 +80,7 @@ def main(argv: list[str]) -> int:
             "github_os": os.environ.get("RUNNER_OS", "local"),
             "github_arch": os.environ.get("RUNNER_ARCH", ""),
             "python": platform.python_version(),
+            "pytest": _pytest_version(),
             "github_sha": os.environ.get("GITHUB_SHA", ""),
         },
         "stdout_tail": (proc.stdout or "").strip().splitlines()[-40:],
@@ -51,34 +90,17 @@ def main(argv: list[str]) -> int:
     target.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(proc.stdout)
     print(proc.stderr, file=sys.stderr)
-    print(f"record: {target.relative_to(ROOT)}")
+    print(f"record: {target.relative_to(ROOT)}  ({summary})")
     return proc.returncode
 
 
-def _summarise(stdout: str) -> tuple[str, dict[str, int]]:
-    """Best-effort summary of a pytest run.
+def _pytest_version() -> str:
+    try:
+        import pytest
 
-    pytest -q prints only dots when everything passes, so the dot line is parsed instead
-    of invented: len(dots) is the number of tests that ran.
-    """
-    counts = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0}
-    summary = ""
-    for raw in stdout.splitlines():
-        line = raw.strip()
-        for key, needle in (("passed", " passed"), ("failed", " failed"),
-                            ("errors", " error"), ("skipped", " skipped")):
-            if needle in line and any(ch.isdigit() for ch in line):
-                summary = line.strip("= ")
-        stripped = "".join(line.split("[")[0].split()).rstrip("%0123456789 ")
-        if stripped and set(stripped) <= set(".sFEx") and len(stripped) > 3:
-            counts["passed"] += stripped.count(".")
-            counts["skipped"] += stripped.count("s")
-            counts["failed"] += stripped.count("F")
-            counts["errors"] += stripped.count("E")
-    if not summary:
-        summary = (f"{counts['passed']} passed, {counts['failed']} failed, "
-                   f"{counts['errors']} errors, {counts['skipped']} skipped")
-    return summary, counts
+        return pytest.__version__
+    except ImportError:  # pragma: no cover
+        return "unknown"
 
 
 if __name__ == "__main__":
