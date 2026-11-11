@@ -349,6 +349,16 @@
         "questions Q17-Q19"
       ],
       "handles": "Replaces the raw chat as a reference; the raw chat is never committed."
+    },
+    "internels/chat/README.md": {
+      "purpose": "Folder README for local-only chat exports: the rule, why they are kept, what is in here.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "States that the README is committed while the chat files are gitignored."
     }
   },
   "_generated": {
