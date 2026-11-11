@@ -4,16 +4,25 @@
   "schema": {
     "id": "short stable slug",
     "question": "what was being decided",
-    "sources": ["exact URLs actually read"],
-    "findings": ["facts, with version/tag attached"],
+    "sources": [
+      "exact URLs actually read"
+    ],
+    "findings": [
+      "facts, with version/tag attached"
+    ],
     "verdict": "what we do because of it",
-    "affects": ["docs or future files"]
+    "affects": [
+      "docs or future files"
+    ]
   },
   "entries": [
     {
       "id": "env-python-baseline",
       "question": "What Python and libraries exist in the build sandbox, and can pip install?",
-      "sources": ["https://pypi.org/pypi/zstandard/json", "https://pypi.org/pypi/torch/json"],
+      "sources": [
+        "https://pypi.org/pypi/zstandard/json",
+        "https://pypi.org/pypi/torch/json"
+      ],
       "findings": [
         "Python 3.11.2, pip 23.0.1, 2 vCPU, 3.6 GiB RAM, no swap, ~20 GB disk.",
         "Nothing preinstalled: no numpy, zstandard, torch, lightning, transformers, pytest, maturin.",
@@ -22,7 +31,10 @@
         "torch wheels exist for cp311-cp314 plus free-threaded cp314t."
       ],
       "verdict": "Pure-Python archx is buildable and testable here; torch integration tests are local-possible but heavy (514 MiB download) so full matrices go to CI.",
-      "affects": ["Docs/Technical.md", "Plan/Architecture.md"]
+      "affects": [
+        "Docs/Technical.md",
+        "Plan/Architecture.md"
+      ]
     },
     {
       "id": "env-network-allowlist",
@@ -43,7 +55,11 @@
         "github.com release-asset URLs answer 302 but the redirect target is blocked."
       ],
       "verdict": "No Rust toolchain can be installed here, ever. GitHub file content must be read through the API (contents endpoint), not raw. Docs must be written from API-read sources.",
-      "affects": ["Docs/Rules.md", "Plan/Architecture.md", "Docs/Workaround.md"]
+      "affects": [
+        "Docs/Rules.md",
+        "Plan/Architecture.md",
+        "Docs/Workaround.md"
+      ]
     },
     {
       "id": "env-token-permissions",
@@ -60,7 +76,11 @@
         "contents: 200 read. X-Oauth-Scopes header empty; fine-grained token style permissions."
       ],
       "verdict": "We can create commits and read workflow metadata, but never logs, artifacts, secrets or variables. Therefore every workflow must commit its results into the repo, which is exactly the user's stated workaround.",
-      "affects": ["Docs/Rules.md", "Docs/Workaround.md", "Actions/"]
+      "affects": [
+        "Docs/Rules.md",
+        "Docs/Workaround.md",
+        "Actions/"
+      ]
     },
     {
       "id": "torch-optimizer-step-hooks",
@@ -77,7 +97,10 @@
         "profile_hook_step patches the optimizer CLASS lazily on first step (_patch_step_function), so the first step pays a one-time patch cost."
       ],
       "verdict": "attach() uses optimizer.register_step_post_hook; minimum torch is 2.0 for attach(), 2.1 for the accumulate-grad hook. Deltas therefore come from a shadow copy of the previous step (Architecture section 4).",
-      "affects": ["archx/adapters/torch.py", "Plan/Architecture.md"]
+      "affects": [
+        "archx/adapters/torch.py",
+        "Plan/Architecture.md"
+      ]
     },
     {
       "id": "torch-post-accumulate-grad-hook",
@@ -94,7 +117,9 @@
         "The hook fires right after the gradient for that tensor has accumulated, before zero_grad."
       ],
       "verdict": "Preferred gradient-norm path on torch >= 2.1: one hook per tracked parameter, no full backward hook. Fallback: read param.grad in the optimizer pre-step hook.",
-      "affects": ["archx/adapters/torch.py"]
+      "affects": [
+        "archx/adapters/torch.py"
+      ]
     },
     {
       "id": "hf-trainer-callback-surface",
@@ -112,7 +137,10 @@
         "Inner loop order in current trainer.py: optimizer.step() -> model.zero_grad() -> global_step += 1 -> on_step_end, so gradients are zero by on_step_end."
       ],
       "verdict": "Default gradient capture is an optimizer post-hook on trainer.optimizer (version independent). on_pre_optimizer_step is used when >= 4.46. Minimum supported transformers for Tier 2 is 4.46, with a silent fallback below it.",
-      "affects": ["archx/adapters/hf.py", "Plan/Architecture.md"]
+      "affects": [
+        "archx/adapters/hf.py",
+        "Plan/Architecture.md"
+      ]
     },
     {
       "id": "hf-accelerate-wrapping",
@@ -126,7 +154,9 @@
         "In the DDP case every rank holds identical full parameters; in FSDP/ZeRO cases it does not."
       ],
       "verdict": "Names come from accelerator.unwrap_model(model); the observed optimizer is the wrapped one; only the main process writes to the file. Sharded setups are detected and degraded (Architecture 5.4).",
-      "affects": ["archx/adapters/hf.py"]
+      "affects": [
+        "archx/adapters/hf.py"
+      ]
     },
     {
       "id": "trl-axolotl-trainer-subclassing",
@@ -142,7 +172,10 @@
         "DPO-style trainers run more than one backward per optimizer step (policy and reference)."
       ],
       "verdict": "No separate adapters: one ArchxCallback covers all three. Step accounting must key on optimizer steps, not backward passes.",
-      "affects": ["archx/adapters/hf.py", "Plan/Roadmap.md"]
+      "affects": [
+        "archx/adapters/hf.py",
+        "Plan/Roadmap.md"
+      ]
     },
     {
       "id": "lightning-callback-surface",
@@ -157,7 +190,10 @@
         "Lightning can call optimizer.step() itself or via the closure, so one step per batch cannot be assumed."
       ],
       "verdict": "Use on_before_optimizer_step (post-clipping gradients) as the default capture point, plus an optimizer post-hook for deltas; count steps from loop state. on_after_backward is available for pre-clipping norms.",
-      "affects": ["archx/adapters/lightning.py", "Plan/Architecture.md"]
+      "affects": [
+        "archx/adapters/lightning.py",
+        "Plan/Architecture.md"
+      ]
     },
     {
       "id": "zstd-python-bindings",
@@ -172,7 +208,10 @@
         "lz4 exists but trades ratio for speed; not needed for a background writer."
       ],
       "verdict": "Use zstandard, with a stdlib compression.zstd path on Python >= 3.14 and a pure-fallback 'no compression' mode when neither is importable.",
-      "affects": ["archx/container/writer.py", "pyproject.toml"]
+      "affects": [
+        "archx/container/writer.py",
+        "pyproject.toml"
+      ]
     },
     {
       "id": "rust-in-sandbox",
@@ -188,7 +227,31 @@
         "Only GitHub, PyPI and npm are reachable."
       ],
       "verdict": "A Rust core can never be compiled or unit-tested locally. The v1 core is Python; a native accelerator is an optional later add-on built only on CI. Recorded as a decision for the user in Open_Questions Q4.",
-      "affects": ["Docs/Workaround.md", "Plan/Architecture.md"]
+      "affects": [
+        "Docs/Workaround.md",
+        "Plan/Architecture.md"
+      ]
+    },
+    {
+      "id": "ci-loop-verified",
+      "question": "Does the trigger-file workflow work, can all three runners commit results back, and what hardware do they give us?",
+      "sources": [
+        "https://api.github.com/repos/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/runs/43052619656",
+        "https://apps.github.io/github-actions-hosted-runners-docs/reference/ubuntu/"
+      ],
+      "findings": [
+        "Push touching Actions/triggers/tests.txt started workflow 'tests' automatically (run 43052619656).",
+        "3 of 3 matrix jobs succeeded: ubuntu-latest, windows-latest, macos-latest.",
+        "Each runner committed its own file (three separate bot commits, no conflicts) - the rebase-retry script works.",
+        "Measured cpu_count=4 on Linux x86_64, Windows X64; macOS-26.7.2 arm64. Python 3.11.18 / 3.11.9.",
+        "gathered local pulls worked as the only way to read results (Actions logs remain unreadable)."
+      ],
+      "verdict": "The CI spine is proven and is the transport for everything heavy. 4 vCPU per runner is 2x the sandbox, which confirms the 'heavy work goes to Actions' rule.",
+      "affects": [
+        "Actions/",
+        "Docs/Workaround.md",
+        "Plan/Roadmap.md"
+      ]
     }
   ]
 }

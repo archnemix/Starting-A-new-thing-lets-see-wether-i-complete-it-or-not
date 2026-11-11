@@ -95,7 +95,18 @@ purpose line at the top of each.
 - Token: contents read/write and actions metadata read; no secrets, variables, logs
   or artifacts. Consequence: CI writes results into the repo.
 
-## 6. Data safety rules baked into the format
+## 6. CI runners (measured 2026-11-11, run 43052619656)
+
+| Runner | CPU | Arch | Python |
+|---|---|---|---|
+| ubuntu-latest | 4 vCPU | x86_64 (`Linux-7.0.0-1017-azure`) | 3.11.18 |
+| windows-latest | 4 vCPU | X64 (`Windows-10.0.26100`) | 3.11.x |
+| macos-latest | (arm64) | `macOS-26.7.2-arm64` | 3.11.9 |
+
+Each runner is ~2x the sandbox CPU. Results are readable only as commits into
+`Actions/out/`, never through the Actions UI - verified for this repository.
+
+## 7. Data safety rules baked into the format
 
 - No pickle, no code loading, no executable section: only fixed-width numbers, bytes
   and UTF-8 JSON.

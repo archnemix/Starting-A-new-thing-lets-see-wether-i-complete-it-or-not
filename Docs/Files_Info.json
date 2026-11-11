@@ -339,5 +339,9 @@
       ],
       "handles": "Points each kind of document at its home folder."
     }
+  },
+  "_generated": {
+    "Actions/out/latest-env/<OS>-<ARCH>.json": "runner environment record written by env_probe.py during a workflow run; replaced on every run.",
+    "Actions/out/latest-env/<OS>-<ARCH>.log": "echoed trigger intent plus runner versions from the same run."
   }
 }

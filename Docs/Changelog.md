@@ -16,6 +16,8 @@ No code yet. This stage produced documentation only:
 - Added the full doc set (`Docs/`, `Plan/`), repository skeleton, folder READMEs.
 - Added research log with verified hook/API facts (`Docs/Research.json`).
 - Added CI spine: trigger-file-driven workflow that commits results into the repo.
+  Verified end to end: GitHub run `43052619656`, three runners (ubuntu, windows,
+  macos) green, each committing `Actions/out/latest-env/<os>.json` back to the branch.
 - Decided: Python core instead of a Rust core (no Rust toolchain reachable; the
   brief's requirement was "must work in Python").
 
