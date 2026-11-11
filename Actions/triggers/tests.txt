@@ -2,3 +2,5 @@ Editing this file triggers .github/workflows/tests.yml (Linux, Windows, macOS ru
 The last line is echoed into the run log, so write the intent here.
 
 trigger 1: bootstrap - prove three runners can commit results into the repository
+
+trigger 2: first real test matrix - container format, CLI, recovery on 3 runners
