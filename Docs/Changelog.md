@@ -97,6 +97,14 @@ Fixed:
 - **A gradient spike was invisible when the gradient history was flat**, because the z-score
   was guarded by `std > 0` - the exact case the trigger exists for. A threshold of `inf` still
   switches the trigger off.
+- **Region movement grew with the tensor count**: it was the sum of each tensor's relative
+  movement, so a 14-tensor region reported 0.20 for a step in which every tensor moved 1.7%,
+  and every step of a real transformer run was stored. It is now `||delta||/||weights||` over
+  the region.
+- **The capability block understated the run**: `resolve()` discarded fields the run had
+  recorded when another field in their tier was absent, so a loop that handed over gradient
+  norms but no loss was told gradient norms were missing. `capabilities_present` now states
+  the inventory separately from the tier, and `offer()` clears an earlier denial.
 - The recorder computed loss and gradient norms and never wrote them.
 - Every anchor copied the whole model twice (+17% overhead, now 0.6%).
 - The batch was hashed and compressed inside the training step (+81% on a 19 ms step).
@@ -131,4 +139,15 @@ accuracy win: on a single-jump stationary run a fixed interval of the same size 
 more accurate, because the adaptive policy spends its bytes on the dense warmup and cooldown.
 Both results are in `Docs/Research.json`.
 
-Tests: 106 local, 0 failures, 0 errors, 0 skips.
+Tests: 117 local, 0 failures, 0 errors, 0 skips. CI run `43203926136`: 110 tests on each of
+Linux, Windows and macOS, 0 failures, 0 errors, 3 skips (the three torch modules, on runners
+without torch), identical test-name lists on all three.
+
+Also in this version (Phase 4.5, 4.6, 5.1, 5.4):
+
+- Architecture sweep: transformer, CNN, LSTM, state-space, mixture-of-experts and multi-tower
+  models all record through one adapter and reach tier 2 (`Bench/claim_arch_sweep.py`).
+- Claim 7 measured: a bare optimizer hook reaches tier 0 with gradient norms on every stored
+  step; one `log()` call reaches tier 2 (`Bench/claim07_hook_reach.py`).
+- `archx info` reports the capability inventory, what was skipped, and why; a newer minor
+  version is read with a warning and a different major is refused with both versions named.

@@ -468,3 +468,28 @@ actually recorded are now left alone, and a new `capabilities_present` list stat
 inventory separately from the tier, which is a threshold rather than a description. Separately,
 `deny()` then `offer()` left a field both present and listed as missing; offering now clears the
 denial.
+
+---
+
+## Forward compatibility: the rule was written, then tested
+
+The format spec's rule is one line - refuse a different major, accept any minor, skip unknown
+block types - and the reader was only half-implemented against it. Unknown block types *were*
+skipped, because `block_type` is a plain integer and every accessor filters by type. Nothing
+said so, and a reader that quietly drops a block looks exactly like a reader that understood
+everything, which is the same class of problem as the capability block claiming fields it did
+not have.
+
+`Reader.read_report()` now names the skips, the newer minor, a torn tail and an unclosed file;
+`archx info` prints them as warnings and `--json` carries them. The tests forge the file with
+`struct` - a header claiming 1.9, a block type 200 this build has never heard of - because a
+test of forward compatibility that uses this build's own writer is not testing forward
+compatibility.
+
+The first forgery was wrong in an instructive way: it changed the version fields and left the
+old header CRC, so every reader rejected it with "header CRC mismatch". The reader was right.
+The CRC covers the fields being changed, so it has to be computed after them.
+
+`archx info` also reads the capability facts from the file now instead of recomputing them. A
+tier belongs to the run that produced it; working it out again at read time would be a second
+opinion presented as a record.
