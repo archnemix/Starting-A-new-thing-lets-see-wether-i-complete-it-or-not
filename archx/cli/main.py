@@ -38,6 +38,13 @@ def build_parser() -> argparse.ArgumentParser:
     events.add_argument("file", help="path to the recording")
     events.add_argument("--json", action="store_true", help="machine-readable output")
 
+    diff = sub.add_parser("diff", help="compare two steps, or two recordings")
+    diff.add_argument("file", help="path to the recording")
+    diff.add_argument("--other", help="a second recording to compare against")
+    diff.add_argument("--step", type=int, help="first step (default: the second-to-last)")
+    diff.add_argument("--step-b", type=int, help="second step (default: the last)")
+    diff.add_argument("--json", action="store_true", help="machine-readable output")
+
     return parser
 
 
@@ -69,6 +76,12 @@ def main(argv: list[str] | None = None) -> int:
         from .events import run_events
 
         return run_events(args.file, as_json=args.json)
+
+    if args.command == "diff":
+        from .diff import run_diff
+
+        return run_diff(args.file, other=args.other, step=args.step, step_b=args.step_b,
+                        as_json=args.json)
 
     parser.error(f"unknown command {args.command!r}")
     return 2

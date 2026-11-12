@@ -127,3 +127,76 @@ def test_events_lists_the_annotation_and_the_segment(tmp_path, capsys):
     assert any(e.get("event") == "stage2_start" for e in payload["annotations"])
     assert payload["segments"]
     assert payload["observations"], "a stored step must show up as an observation"
+
+
+def _record_two(tmp_path, *, lr=1e-3, seed=0, name="run.archx.mdl"):
+    """A torch run, or None when torch is not installed."""
+    torch = pytest.importorskip("torch", reason="torch is not installed on this runner")
+    import archx
+
+    torch.manual_seed(seed)
+    model = torch.nn.Sequential(torch.nn.Linear(8, 16), torch.nn.ReLU(), torch.nn.Linear(16, 3))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    criterion = torch.nn.CrossEntropyLoss()
+    generator = torch.Generator().manual_seed(3)
+    x = torch.randn(4, 8, generator=generator)
+    y = torch.randint(0, 3, (4,), generator=generator)
+    path = tmp_path / name
+    recorder = archx.attach(model, optimizer, path=str(path))
+    for _ in range(12):
+        optimizer.zero_grad()
+        loss = criterion(model(x), y)
+        loss.backward()
+        recorder.log(loss=float(loss.item()), data=x)
+        optimizer.step()
+    recorder.close()
+    return path
+
+
+def test_diff_between_two_steps_names_the_tensors_that_moved(tmp_path, capsys):
+    from archx.cli.main import main
+
+    path = _record_two(tmp_path)
+    assert main(["diff", str(path)]) == 0
+    printed = capsys.readouterr().out
+    assert "comparing" in printed and "relative" in printed
+    assert "weight" in printed, "the tensors are named, not summarised away"
+
+    assert main(["diff", str(path), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["step_a"] < payload["step_b"]
+    assert payload["tensors"] and payload["tensors"][0]["moved"] > 0
+    assert payload["total_moved"] > 0
+
+
+def test_diff_refuses_a_step_the_file_does_not_have(tmp_path, capsys):
+    from archx.cli.main import main
+
+    path = _record_two(tmp_path)
+    assert main(["diff", str(path), "--step", "10000"]) == 1
+    message = capsys.readouterr().err
+    assert "not stored" in message
+    assert "cannot be rebuilt" in message
+
+
+def test_two_identical_runs_diff_as_identical(tmp_path, capsys):
+    """The strongest thing `diff` can say, and it must be able to say it."""
+    from archx.cli.main import main
+
+    first = _record_two(tmp_path, name="a.archx.mdl")
+    second = _record_two(tmp_path, name="b.archx.mdl")
+    assert main(["diff", str(first), "--other", str(second)]) == 0
+    assert "identical at every common step" in capsys.readouterr().out
+
+
+def test_diff_between_two_runs_finds_the_first_disagreement(tmp_path, capsys):
+    from archx.cli.main import main
+
+    first = _record_two(tmp_path, name="slow.archx.mdl", lr=1e-3)
+    second = _record_two(tmp_path, name="fast.archx.mdl", lr=5e-2)
+    assert main(["diff", str(first), "--other", str(second), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["first_difference"] is not None
+    # The learning rate changes the very first update, and step 0's anchor is written after
+    # that update, so the disagreement is at step 0 - not "somewhere later".
+    assert payload["first_difference"]["step"] == payload["differences"][0]["step"]

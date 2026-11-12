@@ -151,3 +151,6 @@ Also in this version (Phase 4.5, 4.6, 5.1, 5.4):
   step; one `log()` call reaches tier 2 (`Bench/claim07_hook_reach.py`).
 - `archx info` reports the capability inventory, what was skipped, and why; a newer minor
   version is read with a warning and a different major is refused with both versions named.
+- `archx diff`: two steps of one run (which tensors moved, by how much, absolute and relative
+  to their own size, and in which region) or two recordings (shared steps, exclusive steps,
+  and the first step where they disagree). Two identical runs report as identical.
