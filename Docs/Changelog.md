@@ -46,6 +46,30 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## The CI record for the Phase 2 work: run 43259502790
+
+Three runners, python 3.11, torch + transformers + lightning installed on all three:
+
+| runner | result | skipped |
+|---|---|---|
+| ubuntu-latest | 245 passed, 0 failed, 0 errors | 0 |
+| windows-latest | 245 passed, 0 failed, 0 errors | 0 |
+| macos-latest | 245 passed, 0 failed, 0 errors | 0 |
+
+The three junit files hold an **identical set of 245 test names**, verified programmatically,
+at the same commit `81bc8ff`. The npm signpost suite is green on Linux/Windows/macOS at node
+18 and 20 (`npm-signpost` run `43251525556`).
+
+Getting there took four CI iterations, and every one of them found a real defect rather than
+a flake to re-run:
+
+| run | what it caught |
+|---|---|
+| 43251129935 | the Windows *record-commit* step failed after its 241 tests passed - two workflows racing for one branch |
+| 43251525614 | `subprocess.run(["npm", ...])` -> `WinError 2` on Windows (`npm` is a `.cmd` shim) |
+| 43253521609 | macOS: asserted the literal `# fail 0`, but node 22 prints `ℹ fail 0` |
+| 43256908848 | a 20% overhead *ratio* on a 1% effect - passed one run, failed the next |
+
 ## v1.0.1 - not released yet (Phase 2 complete: codecs and data capture measured)
 
 Two roadmap rows finished, five silent defects found, four of them in code that was
