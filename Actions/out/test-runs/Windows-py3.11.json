@@ -3,16 +3,17 @@
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "100 tests: 99 passed, 0 failed, 0 errors, 1 skipped",
+  "summary_line": "102 tests: 100 passed, 0 failed, 0 errors, 2 skipped",
   "counts": {
-    "passed": 99,
+    "passed": 100,
     "failed": 0,
     "errors": 0,
-    "skipped": 1,
-    "total": 100
+    "skipped": 2,
+    "total": 102
   },
   "failures": [],
   "tests": [
+    "::Tests.integration.test_arch_sweep",
     "::Tests.integration.test_torch_adapter",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
     "Tests.integration.test_container_end_to_end::test_process_killed_mid_run_leaves_a_recoverable_file",
@@ -101,6 +102,7 @@
     "Tests.unit.test_policy::test_a_region_move_observed_after_a_store_triggers_the_next_step",
     "Tests.unit.test_policy::test_region_movement_is_a_fraction_of_the_tensor_not_an_absolute_norm",
     "Tests.unit.test_policy::test_a_zero_initialised_tensor_does_not_report_permanent_movement",
+    "Tests.unit.test_policy::test_region_movement_does_not_grow_with_the_number_of_tensors",
     "Tests.unit.test_recorder::test_recording_writes_a_readable_file_with_meta_and_registry",
     "Tests.unit.test_recorder::test_recording_never_changes_the_weights",
     "Tests.unit.test_recorder::test_a_recorder_fault_degrades_instead_of_breaking_training",
@@ -114,20 +116,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T10:42:32.132860+00:00",
-  "duration_s": 6.196,
+  "started_utc": "2026-11-12T10:47:28.333143+00:00",
+  "duration_s": 5.372,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "57db661b1f6f1218844d41acaafeaa673eac3a68"
+    "github_sha": "19889a9522446c501ce1b4cbb9c4063a62b650cb"
   },
   "stdout_tail": [
     "........................................................................ [ 72%]",
-    "...........................                                              [100%]",
+    "............................                                             [100%]",
     "=========================== short test summary info ===========================",
+    "SKIPPED [1] Tests\\integration\\test_arch_sweep.py:20: torch is not installed on this runner",
     "SKIPPED [1] Tests\\integration\\test_torch_adapter.py:23: torch is not installed on this runner"
   ],
   "stderr_tail": []
