@@ -110,6 +110,18 @@ Reaches tier 0: steps and deltas only. No loss, gradients, data or parameter nam
 ## 3. `ArchxCallback(...)` - Lightning
 
 ```
+on_fit_start            -> unwrap to pl_module, build the registry, open the recorder
+on_train_batch_end      -> THE store point: weights are new here, and
+                           trainer.global_step advanced by one only on a real update
+on_before_optimizer_step-> cache the gradient norm and the lr (weights are still OLD here)
+on_fit_end              -> close
+```
+
+Measured on lightning 2.6.6: `on_before_optimizer_step` fires *before* the step, so storing
+there records one update behind. The loss needs no user code - `outputs["loss"]` arrives with
+the batch end. Tier 1 with one line.
+
+```
 Trainer.fit()
   ├─ on_fit_start -> resolve pl_module + trainer.optimizers, register optimizer post-hook
   ├─ on_before_optimizer_step -> gradient norms (post-clipping, what the optimizer sees)

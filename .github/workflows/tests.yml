@@ -54,9 +54,9 @@ jobs:
           else
             python -m pip install torch
           fi
-          python -m pip install "transformers>=4.46" "accelerate>=1.1"
+          python -m pip install "transformers>=4.46" "accelerate>=1.1" "lightning>=2.0"
           python -c "import pytest, sys; print('pytest', pytest.__version__, 'python', sys.version)"
-          python -c "import torch, transformers, accelerate; print('torch', torch.__version__, 'transformers', transformers.__version__, 'accelerate', accelerate.__version__)"
+          python -c "import torch, transformers, accelerate, lightning; print('torch', torch.__version__, 'transformers', transformers.__version__, 'accelerate', accelerate.__version__, 'lightning', lightning.__version__)"
 
       - name: Run tests and record the result
         shell: bash

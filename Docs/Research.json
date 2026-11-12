@@ -609,6 +609,28 @@
         "Tests/integration/test_launcher.py",
         "Docs/Logic.md"
       ]
+    },
+    {
+      "id": "lightning-callback-order",
+      "question": "Where in a Lightning callback is the optimizer step actually complete, and what does the loss cost?",
+      "sources": [
+        "lightning 2.6.6: Callback hook signatures and docstrings (on_after_backward, on_before_optimizer_step, on_train_batch_end)",
+        "measured: Tests/integration/test_lightning_adapter.py on lightning 2.6.6 / torch 2.15.0"
+      ],
+      "findings": [
+        "Measured hook order on an update: on_after_backward (gradients alive, weights old) -> on_before_optimizer_step (gradients alive, weights OLD, optimizer holds this lr) -> optimizer.step() -> on_train_batch_end (weights NEW, gradients gone, outputs carries the loss) -> trainer.global_step incremented.",
+        "Storing at on_before_optimizer_step is off by one update, and it does not look wrong: the step numbers, the losses and the count are all plausible. The error was caught by comparing each reconstructed step against the weights observed at the matching batch end.",
+        "trainer.global_step advances by exactly one when a batch end completed an update and not at all on an accumulation micro-batch. With accumulate_grad_batches=2 there were two batch ends at gs=1 and one on_before_optimizer_step, so global_step is the update signal and a backward count is not.",
+        "The loss needs no user code: on_train_batch_end receives outputs, and outputs['loss'] is the training loss (a dict in 2.x). With accumulation the recorded loss is the mean over the micro-batches, which matches what the mean gradient drove.",
+        "The gradient norm read at on_before_optimizer_step is the UNCLIPPED one, unlike the Hugging Face Trainer where clipping runs first: Lightning's own clipping component runs inside that hook, after a callback registered earlier in the list."
+      ],
+      "verdict": "Store at on_train_batch_end keyed on trainer.global_step, with gradient norm and lr cached at on_before_optimizer_step. This adapter reaches tier 1 with no user code, which the HF adapter cannot.",
+      "affects": [
+        "archx/adapters/lightning.py",
+        "Tests/integration/test_lightning_adapter.py",
+        "Docs/Logic.md",
+        "Plan/Roadmap.md"
+      ]
     }
   ]
 }

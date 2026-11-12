@@ -1043,9 +1043,36 @@
         "10 tests"
       ],
       "handles": "Runs real subprocesses; pins the three silent failures (torch not importable, AdamW has no step, a broken sitecustomize is ignored)."
+    },
+    "archx/adapters/lightning.py": {
+      "purpose": "PyTorch Lightning: one callback, tier 1 with no user code.",
+      "inputs": [
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "queue_size",
+        "max_rel_error",
+        "meta"
+      ],
+      "outputs": [
+        "ArchxCallback",
+        "LightningRecorder"
+      ],
+      "handles": "Stores at on_train_batch_end (weights are new there) keyed on trainer.global_step, which advances only on a real update; gradient norm and lr are cached at on_before_optimizer_step, where the weights are still old. Loss comes free from outputs['loss']."
+    },
+    "Tests/integration/test_lightning_adapter.py": {
+      "purpose": "Proves the Lightning adapter against a real pl.Trainer.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "9 tests"
+      ],
+      "handles": "Compares every reconstructed step against the weights observed at the matching batch end, which is what caught the off-by-one-update store point."
     }
   },
-  "_generated": "2026-11-12 - Phase 6 and 7: HF callback, zero-code launcher, 158 tests",
+  "_generated": "2026-11-12 - Phases 6-8: HF callback, launcher, Lightning callback, 167 tests",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },

@@ -46,6 +46,38 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v0.9.0 - not released yet (Phase 8 complete on the branch)
+
+The PyTorch Lightning adapter: one callback, and the loss costs the user nothing.
+
+```python
+from archx.adapters.lightning import ArchxCallback
+trainer = pl.Trainer(..., callbacks=[ArchxCallback("run.archx.mdl")])
+trainer.fit(model)
+```
+
+Added:
+
+- `ArchxCallback` for `pl.Trainer.fit()`, 9 tests against lightning 2.6.6 / torch 2.15.0.
+- Tier 1 with no user code: Lightning passes `outputs` to `on_train_batch_end`, so the loss is
+  recorded for every update where the Hugging Face adapter needs `loss_hook`.
+
+Fixed / corrected:
+
+- **The store point was one update behind, and looked right.** `on_before_optimizer_step`
+  fires *before* `optimizer.step()`, so the weights there are still old. Every count, loss and
+  step number looked plausible; the error was only visible by comparing each reconstructed
+  step against the weights observed at the matching batch end. The store point is
+  `on_train_batch_end`, with the gradient norm and lr cached just before the update.
+- Gradient accumulation: `on_train_batch_end` fires per micro-batch while
+  `trainer.global_step` does not move, so recording unconditionally wrote two store points
+  for one update, both with the same step number. The step counter is the signal.
+
+Limits, stated: the recorded gradient norm is the *unclipped* one (Lightning clips inside the
+hook, after a callback registered earlier in the list) and the metadata says so. Manual
+optimisation is covered by the hook contract rather than a dedicated test. Tier 3 is not
+reached by any adapter yet.
+
 ## v0.8.0 - not released yet (Phase 7 investigation complete on the branch)
 
 `archx run -- python train.py`: record a script without editing it.

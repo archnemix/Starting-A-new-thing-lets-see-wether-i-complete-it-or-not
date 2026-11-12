@@ -17,3 +17,4 @@ trigger 7: authoritative test counts via junit xml
 trigger 2026-11-12T09:17:41Z phase3 torch adapter
 2026-11-12T13:53:51Z phase6 hf trainer adapter
 2026-11-12T14:00:18Z phase7 launcher + windows /tmp fix
+2026-11-12T14:08:17Z phase8 lightning adapter

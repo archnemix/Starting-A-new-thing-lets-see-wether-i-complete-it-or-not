@@ -97,9 +97,9 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 8.1 | `ArchxCallback` with `on_after_backward` / `on_before_optimizer_step` | Integration test | todo |
-| 8.2 | Manual optimization support (step counting from loop state) | Integration test | todo |
-| 8.3 | Tier 3 with validation metrics | Integration test | todo |
+| 8.1 | `ArchxCallback` with `on_after_backward` / `on_before_optimizer_step` | Integration test | done, with the hooks corrected - `archx/adapters/lightning.py`, 9 tests against lightning 2.6.6. Measured: at `on_before_optimizer_step` the weights are still **old** (the step has not run), so storing there recorded one update behind while the counts and losses all looked right; the store point is `on_train_batch_end`, where the weights are new, with the gradient norm and learning rate cached just before the update. `trainer.global_step` advances by exactly one per update and not at all on an accumulation micro-batch, which is how the two are told apart |
+| 8.2 | Manual optimization support (step counting from loop state) | Integration test | done by construction, not by a separate path: manual optimisation still fires `on_before_optimizer_step` and `on_train_batch_end`, and the step number comes from `trainer.global_step`, not from a backward count. **Not covered by a dedicated test** - the step-counter logic is shared with 8.1, but "manual optimisation works" is asserted from the hook contract rather than measured, and is listed here as a gap rather than claimed |
+| 8.3 | Tier 3 with validation metrics | Integration test | not reached - the adapter records loss, gradients and learning rate (tier 1) and `data_level` is refused when the batch is unavailable, so tier 2-3 are reported as missing with reasons. Tier 3 needs the activation-statistics work that does not exist yet in any adapter |
 
 ## Phase 9 - End-to-end proof (v1.0)
 
