@@ -697,6 +697,29 @@
         "archx/adapters/torch.py",
         "Plan/Format_Spec.md"
       ]
+    },
+    {
+      "id": "torch-version-floor",
+      "question": "Claim 8: which torch versions can the adapter actually rely on, and how is that proven?",
+      "sources": [
+        "Bench/claim08_torch_versions.py",
+        "Docs/torch_matrix.json",
+        "wheel inspection of torch 2.0.1 and 2.4.1 (torch/optim/optimizer.py inside the wheel)"
+      ],
+      "findings": [
+        "The plain-torch adapter's mechanism is optimizer.register_step_post_hook. It is present in 2.0.1 - the oldest wheel this index serves - so the floor is 2.0.1, not 2.1 as pyproject's torch extra suggests.",
+        "Static check (read the wheel without installing it): 2.0.1 yes, 2.15.0 yes, for register_step_post_hook; register_step_pre_hook also present.",
+        "Dynamic check (a real 5-step AdamW recording in an environment holding that torch, read back through the reader): 2.0.1 and 2.15.0 both reconstruct at exactly 0.0 error with the lossless path.",
+        "2.4.1 was installed in a throwaway venv and ran a recording at 0.0 error, but the disk filled before its wheel could be re-downloaded for the recorded matrix; a later attempt was killed by the OS during download (pip exit -9). It is reported as unmeasured for this machine rather than claimed.",
+        "Installing an older torch with --no-deps repeats the documented trap: the wheel imports but fails on missing CUDA libraries. Plain install works."
+      ],
+      "verdict": "State the floor as torch 2.0.1 and prove it by API presence plus a real recording, not by a version number. The matrix reports unmeasured versions as unmeasured and says why.",
+      "affects": [
+        "Bench/claim08_torch_versions.py",
+        "Docs/torch_matrix.json",
+        "Docs/Workaround.md",
+        "pyproject.toml"
+      ]
     }
   ]
 }

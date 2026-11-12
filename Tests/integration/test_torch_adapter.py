@@ -309,3 +309,47 @@ def test_data_of_every_shape_reaches_the_file_as_bytes():
     assert as_bytes([torch.tensor([1.0]), torch.tensor([2.0])]) == as_bytes(
         torch.tensor([1.0])) + as_bytes(torch.tensor([2.0]))
     assert as_bytes({"not": "supported"}) is None, "an unknown type must not be guessed at"
+
+
+def test_the_adapter_only_uses_api_that_exists_at_the_claimed_floor():
+    """Claim 8: the adapter must not depend on a torch newer than it says.
+
+    The floor is `optimizer.register_step_post_hook`. Rather than assert a version number,
+    the *API* is checked - a version number would pass while the attribute was renamed. The
+    full matrix, including older wheels read without installing them, is
+    `Bench/claim08_torch_versions.py`; this test is the part that runs on every runner.
+    """
+    assert hasattr(torch.optim.Optimizer, "register_step_post_hook"), (
+        "the adapter's whole mechanism is this hook; without it the plain-torch adapter has "
+        "no way to see a step")
+    # And the signature the adapter calls it with.
+    import inspect
+
+    signature = inspect.signature(torch.optim.Optimizer.register_step_post_hook)
+    assert list(signature.parameters) == ["self", "hook"], (
+        f"register_step_post_hook changed shape: {signature}")
+
+
+def test_the_post_hook_fires_after_the_weights_have_changed():
+    """The adapter stores *after* the update; the hook is what makes that true."""
+    observed = []
+
+    torch.manual_seed(0)
+    layer = torch.nn.Linear(3, 2)
+    optimizer = torch.optim.SGD(layer.parameters(), lr=0.5)
+
+    def hook(_optimizer, _args, _kwargs):
+        observed.append(layer.weight.detach().clone())
+
+    handle = optimizer.register_step_post_hook(hook)
+    try:
+        before = layer.weight.detach().clone()
+        optimizer.zero_grad()
+        layer(torch.randn(4, 3)).sum().backward()
+        optimizer.step()
+    finally:
+        handle.remove()
+
+    assert observed, "the hook did not fire"
+    assert not torch.equal(observed[0], before), (
+        "the hook fired before the update: a recorder built on it would store stale weights")
