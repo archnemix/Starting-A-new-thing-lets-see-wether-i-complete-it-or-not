@@ -148,6 +148,21 @@ $ npx archx train.py
 - **Not published.** Publishing needs the user's npm account; the package is built, tested
   and ready.
 
+### CI: a record commit must not be reported as a test failure
+
+Adding the npm workflow made six runners commit records into one branch. Run `43251129935`
+showed what that costs: Linux and macOS green, Windows *red* - and the failed step was
+`Commit records into the repository`, which ran **after** its 241 tests had passed. The run
+list cannot tell that apart from a real failure.
+
+- `commit_results.sh`: five lockstep attempts -> eight with jittered backoff and an explicit
+  `fetch` + `rebase`, because six racing runners retried in time with each other.
+- Both workflows: the record-commit step is `continue-on-error`. Bookkeeping failing is not
+  the product failing.
+- Note: the Actions log for that step was unreadable (blob storage returned `EOF` three
+  times), so the diagnosis came from the records that did land - which show every one of the
+  three runners passing 241 tests.
+
 Tests: **245 passed** locally (241 python + 4 signpost), including 21 codec tests, 5 join
 round-trip tests and the npm package's own 8.
 

@@ -65,6 +65,7 @@ jobs:
 
       - name: Commit records into the repository
         if: always()
+        continue-on-error: true
         shell: bash
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}

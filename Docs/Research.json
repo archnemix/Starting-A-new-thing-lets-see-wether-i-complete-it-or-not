@@ -796,6 +796,28 @@
         "Tests/integration/test_npm_signpost.py",
         "Plan/Roadmap.md"
       ]
+    },
+    {
+      "id": "ci-record-commit-race",
+      "question": "Two workflows now commit their records into the branch the CI run is testing. How do six racing runners avoid turning a green run red?",
+      "sources": [
+        "Actions/scripts/commit_results.sh",
+        ".github/workflows/tests.yml",
+        ".github/workflows/npm.yml",
+        "run 43251129935 (Windows job failed on 'Commit records into the repository')"
+      ],
+      "findings": [
+        "After adding the npm-signpost workflow there are up to six writers to one branch: three test runners and three npm runners, each committing a record file at the end of its job.",
+        "Run 43251129935 shows the failure mode exactly: Linux and macOS succeeded, Windows failed - and the failed step was 'Commit records into the repository', after all 241 of its tests had passed. The run list says 'failure', which reads like a failing test and is not one.",
+        "The original push retry had five attempts with no backoff, so runners retried in lockstep and the loser exhausted its attempts while another held the branch.",
+        "The GitHub Actions job log for that step could not be downloaded (blob storage returned EOF on three attempts), so the failure was diagnosed from what did land: the records themselves prove every test passed."
+      ],
+      "verdict": "Eight attempts with jittered backoff and an explicit fetch+rebase, plus `continue-on-error` on the record-commit step: a lost race must not be reported as a test failure. A record commit is bookkeeping, and bookkeeping failing is not a product failing.",
+      "affects": [
+        "Actions/scripts/commit_results.sh",
+        ".github/workflows/tests.yml",
+        ".github/workflows/npm.yml"
+      ]
     }
   ]
 }

@@ -239,15 +239,16 @@
       "handles": "Reads GITHUB_* environment variables; writes nothing else."
     },
     "Actions/scripts/commit_results.sh": {
-      "purpose": "Commits Actions/out and Actions/triggers changes back to the branch with rebase retries.",
+      "purpose": "Commits Actions/out/ and Actions/triggers/ back into the branch from a workflow runner.",
       "inputs": [
-        "commit message argument",
-        "GITHUB_REF_NAME"
+        "a commit message",
+        "GITHUB_REF_NAME",
+        "whatever the job wrote under Actions/out"
       ],
       "outputs": [
-        "a pushed commit on the branch"
+        "a commit on the branch, or nothing when there is nothing to commit"
       ],
-      "handles": "Race between matrix runners; bot identity; no-op when nothing changed."
+      "handles": "Up to six runners share one branch since the npm workflow exists, so this retries eight times with jittered backoff and rebases explicitly. Safe to rebase because the only thing a job changes here is its own record file."
     },
     "Actions/triggers/README.md": {
       "purpose": "How trigger files start workflows, and why.",

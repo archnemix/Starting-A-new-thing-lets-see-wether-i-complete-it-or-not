@@ -85,8 +85,12 @@ jobs:
             *) echo "FAIL: the signpost did not name the real install"; exit 1 ;;
           esac
 
+      # `continue-on-error`: a rejected push is not a test failure. Without this, a runner
+      # that lost the race to commit its record (six runners share one branch) turned a
+      # fully green run red, and the only way to tell was to read the per-job steps.
       - name: Record the result
         if: always()
+        continue-on-error: true
         shell: bash
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
