@@ -63,7 +63,7 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 4.2 | `recorder.log(loss=, data=, lr=)` and `annotate()` | Tier 1-2 reached, data fingerprints stored | done |
 | 4.3 | Numerics guard: same seed, recorder off vs on, bit-identical final weights (claim 9) | Passing on all 3 runners, recorded | done locally (identical loss curve + `torch.equal` weights); CI record pending |
 | 4.4 | Overhead guard: median step time delta < 5% (claim 5) | Numbers recorded per architecture | done locally - 0.6% weights, 0.7% with data, charged and printed (see Technical 5b); per-architecture sweep is 4.5 |
-| 4.5 | Architecture sweep: transformer, CNN, RNN, SSM-like, MoE-ish, multimodal-style custom stack | Tier 0/1 on all, no model-specific code | todo |
+| 4.5 | Architecture sweep: transformer, CNN, RNN, SSM-like, MoE-ish, multimodal-style custom stack | Tier 0/1 on all, no model-specific code | done - all six reach tier 2 through `archx.attach` unchanged (`Bench/claim_arch_sweep.py`, `Tests/integration/test_arch_sweep.py`). Found and fixed a real bug: region movement summed per-tensor fractions, so a 14-tensor region reported 0.20 for a step in which each tensor moved 1.7% and every step of a real run was stored |
 | 4.6 | Claim 7 measured: optimizer-hook only vs richer hooking - what is lost | Written comparison | todo |
 
 ## Phase 5 - Reader and CLI (v0.6)

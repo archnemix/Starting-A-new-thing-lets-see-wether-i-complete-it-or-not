@@ -499,30 +499,38 @@ def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray
     number a reader gets to compare between runs and between steps. Untouched tensors are
     skipped without a copy.
     """
-    totals: dict[str, float] = {}
+    # Accumulate squared norms per region, then divide once. The region's movement is
+    # ||delta|| / ||weights|| over the whole region, not the sum of its tensors' fractions.
+    #
+    # Summing the fractions was a real bug and a quiet one: a transformer region holding 14
+    # tensors, each moving 1.7% in a step, reported 0.20 against a 0.02 threshold, so every
+    # step of every run looked like an event. The number grew with the tensor count, which is
+    # the opposite of the design goal - the threshold exists so that regions with different
+    # dynamics are judged against themselves, not so that bigger models store more.
+    squared: dict[str, list[float]] = {}
     for entry in registry.primary_entries:
         before = previous.get(entry.key)
         after = current.get(entry.key)
         if before is None or after is None:
             continue
-        diff = after - before
-        delta = float(np.sqrt(np.dot(diff.ravel(), diff.ravel())))
-        size = float(np.sqrt(np.dot(before.ravel(), before.ravel())))
-        # Relative to the tensor's own magnitude before the step. An absolute norm is not
-        # comparable between layers, let alone between architectures, and a threshold named
-        # `region_move_fraction` cannot meaningfully be compared against one: a 256x256
-        # layer drifts by an absolute ~2.7 every step at 1e-2 noise, which would read as
-        # "moved a lot" no matter how small that is for the layer.
-        #
+        diff = (after - before).ravel()
+        delta = float(np.dot(diff, diff))
+        size = float(np.dot(before.ravel(), before.ravel()))
+        if not delta:
+            continue
         # A tensor that was all zeros has no baseline to be a fraction of, and this is not a
         # corner case: biases are usually zero-initialised. Measuring against its own new
         # magnitude instead reports 100% movement on the first step and then decays as
         # 1/sqrt(step) - above any sane threshold for thousands of steps, so the trigger
-        # would quietly store every step. Such tensors are left out of the fraction; their
+        # would quietly store every step. Its squared norm is counted on neither side; its
         # movement is still in the delta, and the heartbeat bounds the gap.
-        if delta and size:
-            totals[entry.region] = totals.get(entry.region, 0.0) + delta / size
-    return totals
+        if not size:
+            continue
+        bucket = squared.setdefault(entry.region, [0.0, 0.0])
+        bucket[0] += delta
+        bucket[1] += size
+    return {region: (delta ** 0.5) / (size ** 0.5)
+            for region, (delta, size) in squared.items() if size > 0}
 
 
 def _dtype_id(name: str) -> int:

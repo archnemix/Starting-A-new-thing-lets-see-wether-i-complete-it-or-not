@@ -438,6 +438,29 @@
         "Docs/Technical.md",
         "Plan/Roadmap.md"
       ]
+    },
+    {
+      "id": "architecture-sweep-one-recorder",
+      "question": "Does the torch adapter and recorder work on architectures other than a small MLP without model-specific code?",
+      "sources": [
+        "Bench/claim_arch_sweep.py (measured locally, torch 2.15.0)",
+        "Tests/integration/test_arch_sweep.py"
+      ],
+      "findings": [
+        "Six stacks - transformer encoder, CNN, LSTM, an elementwise gated state-space block, a 4-expert mixture with a router, and a two-tower model with a tied matrix and a frozen embedding - all go through archx.attach unchanged.",
+        "All six reach capability tier 2 (loss, gradient norms, data) and report activations as the one missing field, with a reason. No architecture is treated specially and no adapter code branches on model type.",
+        "300 steps each, seeded: 132-144 of 300 steps stored, worst per-skipped-step reconstruction error 5.6e-04 to 3.2e-03, and the loss fell on all six.",
+        "A tied matrix (text_out and shared are one storage unit) and a frozen embedding (requires_grad=False) both record and reconstruct correctly without special handling.",
+        "The sweep exposed a real trigger bug: per-region movement was the sum of each tensor's relative movement, so a transformer region of 14 tensors reported 0.20 against a 0.02 threshold when each tensor had moved 1.7%. Every step of every real run was therefore stored.",
+        "The per-region number is now ||delta||/||weights|| over the whole region, computed from accumulated squared norms, so it does not grow with the tensor count."
+      ],
+      "verdict": "One recorder covers every architecture tested. Region movement is a ratio over the region, not a sum over its tensors; the threshold is now comparable between models with 4 tensors and models with 400.",
+      "affects": [
+        "archx/recorder.py",
+        "Bench/claim_arch_sweep.py",
+        "Tests/integration/test_arch_sweep.py",
+        "Docs/Technical.md"
+      ]
     }
   ]
 }

@@ -133,12 +133,10 @@ def test_region_movement_is_a_fraction_of_the_tensor_not_an_absolute_norm():
     # Every tensor in this fake model sits in one region. `w1` has a magnitude to be a
     # fraction of; `b1` is all zeros, so it has no baseline and must be left out rather than
     # reported as 100% movement.
-    expected = 0.0
-    for key in ("w1",):
-        delta = np.full(before[key].shape, 0.01, dtype=np.float32)
-        expected += float(np.linalg.norm(delta)) / float(np.linalg.norm(before[key]))
+    delta = np.full(before["w1"].shape, 0.01, dtype=np.float32)
+    expected = float(np.linalg.norm(delta)) / float(np.linalg.norm(before["w1"]))
     assert sum(movement.values()) == pytest.approx(expected, rel=1e-5), (
-        "movement must be reported relative to each tensor's own magnitude")
+        "movement must be reported relative to the region's own magnitude")
     assert sum(movement.values()) < 1.0
 
 
@@ -158,3 +156,34 @@ def test_a_zero_initialised_tensor_does_not_report_permanent_movement():
     assert _movement_by_region(registry, before, after), "w1 still moved"
     assert _movement_by_region(registry, before, {**before, "b1": before["b1"]}) == {}, (
         "an unchanged model reports nothing")
+
+
+def test_region_movement_does_not_grow_with_the_number_of_tensors():
+    """A region of one tensor and a region of ten must report the same movement when each
+    tensor moves by the same fraction. Summing the fractions made a 14-tensor region report
+    0.20 for a step in which every tensor moved 1.7%, so every step of a real run was stored.
+
+    Each tensor is scaled to unit Frobenius norm so the per-tensor fraction is exactly equal,
+    which makes the expected region ratio exact rather than approximate.
+    """
+    from archx.formats.registry import TensorRegistry
+    from archx.recorder import _movement_by_region
+
+    rng = np.random.default_rng(0)
+    reported = []
+    for count in (1, 3, 10):
+        registry = TensorRegistry()
+        before, after = {}, {}
+        for index in range(count):
+            key = f"layer{index}.weight"
+            values = rng.normal(0, 0.1, (16, 16)).astype(np.float32)
+            values /= np.linalg.norm(values)                      # unit Frobenius norm
+            registry.add(key, values, pointer=values.ctypes.data, region="one")
+            before[key] = values
+            after[key] = values + 0.01                            # the same move for each
+        movement = _movement_by_region(registry, before, after)
+        per_tensor = 0.01 * np.sqrt(256)
+        assert movement["one"] == pytest.approx(per_tensor, rel=1e-5)
+        reported.append(movement["one"])
+    assert reported == pytest.approx([reported[0]] * 3, rel=1e-5), (
+        f"the ratio must not depend on the tensor count, got {reported}")

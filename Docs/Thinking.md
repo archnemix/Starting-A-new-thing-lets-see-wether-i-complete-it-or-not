@@ -404,3 +404,37 @@ situation the trigger exists for.
 **Verified:** 106 tests, 0 failures, 0 errors, 0 skips locally, including new tests for the
 lost-step path, the anchor being step 0, the flat-history spike, the disabled-trigger sentinel,
 and the movement fraction (which is what found the zero-bias problem).
+
+---
+
+## Phase 4.5: six architectures, and the trigger that fired on everything
+
+The sweep's purpose is narrow: prove nothing in the adapter or the recorder knows what the
+model is. Six stacks - transformer encoder, CNN, LSTM, a gated state-space block, a 4-expert
+mixture with a router, and two towers sharing one tied matrix with a frozen embedding - all go
+through `archx.attach` unchanged and all reach tier 2, reporting activations as the only
+missing field. Ties and frozen parameters needed no special handling, which is the point of
+having detected them in the registry rather than in the adapter.
+
+**The sweep found a bug the unit tests could not.** On the transformer, every step was stored.
+The usual explanation - "gradients are large, so the triggers fire" - was wrong: the gradient
+z-score never reached 4. The movement trigger fired on all 130 middle-phase steps, at 0.12 to
+0.41 against a 0.02 threshold.
+
+The cause was in how a region's movement was computed. Each tensor contributed its own
+`||delta|| / ||weights||`, and those fractions were **summed** per region. A transformer region
+holds 14 tensors; each of them moved 1.5-2.2% in a step, which individually is unremarkable,
+and the sum came to 0.20. The number grew with the tensor count, so a bigger model crossed the
+threshold sooner and the "per-region threshold" quietly became a per-tensor-count threshold.
+
+The fix is to accumulate squared norms per region and divide once, so the region reports
+`||delta|| / ||weights||` over all of its tensors - the same 1.7% the tensors actually moved.
+A test pins the property directly: one tensor, three tensors and ten tensors, each moving by
+the same fraction, must report the same number.
+
+After the fix the six stacks store 132-144 of 300 steps, with per-skipped-step reconstruction
+error between 5.6e-04 and 3.2e-03. Two smaller things were fixed on the way: the models were
+built before the seed was set, so the table changed between runs (82 stored steps, then 54,
+then 66 for the same model), and the multimodal stack needed 300 steps rather than 150 for its
+loss to fall - it does learn, at 400 steps the loss reaches 0.01, and lengthening the run is
+honest where lowering the bar would not have been.
