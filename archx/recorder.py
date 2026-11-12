@@ -113,6 +113,10 @@ class Recorder:
         self._last_loss: float | None = None
         self._shards_written: set[str] = set()
         self._logged: dict[str, Any] = {}
+        #: Segment ids observed since the last store point; attributed together when it lands.
+        self._span_segments: list[str] = []
+        #: The step of the previous store point, so a span knows how long it was.
+        self._span_start: int | None = None
         self._thread = threading.Thread(target=self._run, name="archx-writer", daemon=True)
         self._stop = threading.Event()
         self._error: BaseException | None = None
@@ -202,6 +206,13 @@ class Recorder:
             segment = None
             if data is not None:
                 segment = self.data.observe(data, step, segment_id=segment_id, source=source)
+                if segment is not None:
+                    # The data observed since the previous store point is what this store
+                    # point's movement is *caused by*. Remembering it here is what lets the
+                    # effect be attributed to a batch that arrived on a skipped step: the
+                    # weights moved because of every batch in the span, not only the last.
+                    if segment.segment_id not in self._span_segments:
+                        self._span_segments.append(segment.segment_id)
             context = {"loss": loss, "grad_norm": grad_norm, "lr": lr,
                        "segment_id": segment.segment_id if segment else ""}
             if decision is Decision.SKIP:
@@ -230,8 +241,10 @@ class Recorder:
                                        context=context, movement=movement))
             self.stats.steps_stored += 1
             self._last_loss = loss
-            if segment is not None:
-                self._attribute(segment.segment_id, movement, grad_norm, loss)
+            if self._span_segments:
+                self._attribute(list(self._span_segments), movement, grad_norm, loss, step)
+                self._span_segments = []
+            self._span_start = step
             self.policy.observe(loss=loss, grad_norm=grad_norm, region_movement=movement)
             return decision
         except Exception as exc:  # noqa: BLE001 - a recorder fault must not stop training
@@ -243,15 +256,32 @@ class Recorder:
         self._enqueue(_Pending("annotate", step, {},
                                context={"event": event, "detail": detail}))
 
-    def _attribute(self, segment_id: str, movement: dict[str, float],
-                   grad_norm: float | None, loss: float | None) -> None:
-        """Say what the weights did while this segment was on screen (Architecture 6.9)."""
+    def _attribute(self, segment_ids: list[str], movement: dict[str, float],
+                   grad_norm: float | None, loss: float | None, step: int) -> None:
+        """Say what the weights did while these segments were on screen (Architecture 6.9).
+
+        Every batch observed since the previous store point is attributed, not just the one
+        that happened to arrive last. Measured before this change: with the default policy a
+        20-step run stored 4-5 steps, and 17 of the 20 batches sat in the file with an empty
+        effect map while the file claimed tier 2 - a data half that could not answer the only
+        question it exists to answer.
+
+        The movement is shared by the span rather than divided between its batches: the
+        recorder cannot know how much of each step's movement came from which batch, and
+        inventing a split would be worse than saying so. `span_steps` records how many steps
+        and `span_segments` how many batches share it, so a reader can tell "this batch moved
+        the weights by X" from "these four batches together moved them by X".
+        """
         loss_delta = None
         if loss is not None and self._last_loss is not None:
             loss_delta = loss - self._last_loss
-        for region, delta_norm in movement.items():
-            self.data.record_effects(segment_id, region=region, delta_norm=delta_norm,
-                                     grad_norm=grad_norm, loss_delta=loss_delta)
+        span_steps = 1 if self._span_start is None else max(1, step - self._span_start)
+        for segment_id in segment_ids:
+            for region, delta_norm in movement.items():
+                self.data.record_effects(
+                    segment_id, region=region, delta_norm=delta_norm,
+                    grad_norm=grad_norm, loss_delta=loss_delta,
+                    span_segments=len(segment_ids), span_steps=span_steps)
 
     def close(self) -> None:
         """Flush the queue, write the footer and stop the thread.

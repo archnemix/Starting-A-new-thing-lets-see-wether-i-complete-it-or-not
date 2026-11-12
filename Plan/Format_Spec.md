@@ -170,7 +170,7 @@ per entry:
 Reconstruction: `w_t = w_anchor + sum(delta_i)`, then compare against the recorded
 float32 reference; the format itself never claims exactness beyond the dtype stored.
 
-### 5.2.1 `DATA_SHARD`
+### 5.2.1 `DATA_SHARD` *(JSON header line, then the raw payload bytes)*
 
 ```
 str  shard_id            (its content hash, so the id is the dedup key)
@@ -184,23 +184,86 @@ u32  content_crc         (CRC-32 of the *uncompressed* content, so identity surv
 f32  reconstruction_error (0.0 for lossless; measured value if a lossy codec was used)
 ```
 
+The block payload is a JSON object on one line (`shard_id`, `codec`, `raw_len`,
+`content_crc32`, `reconstruction_error`), then `\n`, then the stored bytes. The compression is
+zstd, which keeps the content hash meaningful and lets a reader verify identity without
+decompressing twice.
+
 A shard is written once per run. Seeing the same content again never writes it again; the
 segment that mentions it just points at the existing shard id.
 
-### 5.2.2 `DATA_SEGMENT`
+### 5.2.2 `DATA_SEGMENT` *(actually shipped as UTF-8 JSON, not a packed layout)*
 
+The earlier version of this section described a packed structure. The implementation writes a
+JSON object, and the specification now says what the code does - a spec that disagrees with
+the writer is worse than no spec, because it is the thing a second implementation would trust.
+
+```json
+{
+  "segment_id": "data-1",
+  "shard_id": "...",              // content hash, or "" when the shard is a DATA_POINTER
+  "source": "...",                // path, URL or hub id; may be empty
+  "fingerprint": "...",           // hash of the shard content
+  "characteristics": {},          // language, domain, complexity, counts, dedup ratio
+  "first_step": 0, "last_step": 0,
+  "times_seen": 1,
+  "region_effects": {},           // region -> {delta_norm, grad_norm_max, loss_delta}
+  "component_mask": 0,
+  "delta_reconstruction_error": 0.0,
+  "span_segments": 1,             // how many batches share this effect measurement
+  "span_steps": 1                 // how many steps it was measured across
+}
 ```
-str  segment_id
-str  shard_id            (or "" when the shard is a DATA_POINTER)
-str  source              (path, URL or hub id; may be empty)
-str  fingerprint         (hash of the shard set + order)
-json characteristics     (language, domain, complexity, counts, dedup ratio, ...)
-u64  first_step, u64 last_step
-u32  times_seen
-json region_effects      (region -> {delta_norm, grad_norm, loss_trend, steps})
-u32  component_mask
-f32  delta_reconstruction_error
+
+`span_segments` and `span_steps` exist because a batch observed on a *skipped* step has no
+movement of its own: the weights did not change on that step. Such a batch is attributed with
+everything observed since the previous store point, and these two fields say how many batches
+and steps that was. Without them an empty `region_effects` is ambiguous - it could mean "this
+batch caused nothing", which is a claim the recorder is not entitled to make.
+
+A segment is **re-stated** rather than rewritten: the file is append-only, so a growing segment
+is written again with its new `last_step`, and the last statement about an id is the true one.
+
+### 5.2.3 `EVENT` *(JSON)*
+
+```json
+{"step": 3, "loss": 1.23, "grad_norm": 4.5, "lr": 0.01,
+ "regions": {"body": 0.0235}, "segment_id": "data-4", "seconds": 1700000000.0}
 ```
+
+Written for every **stored** step. `loss`, `grad_norm` and `lr` are `null` when the adapter
+could not see them - never a substitute value. `regions` holds per-region relative movement,
+which is what the policy's event trigger and the segment join both use.
+
+### 5.2.4 `ANNOT` *(JSON)*
+
+```json
+{"event": "stage_2", "detail": "unfroze the encoder"}
+```
+
+A user annotation: a stage boundary, an unfreeze, a curriculum change. Separate from `EVENT` on
+purpose, so a user's note can never be mistaken for a measurement.
+
+### 5.2.5 `INFO` *(JSON)*
+
+Two kinds, both `{"event": ...}`:
+
+```json
+{"event": "capabilities", "capability_tier": 2, "capabilities": [...],
+ "capabilities_missing": {"activations": "not provided by this adapter"}}
+{"event": "recorder_fault", "error": "...", "steps_stored": 12}
+```
+
+The capability block is written **last**, at close, because a tier is what the run turned out
+to be able to see rather than what was asked for at the start. A reader that finds a claimed
+field with no data reports a corrupt file rather than trusting the claim.
+
+### 5.2.6 `META` *(JSON)*
+
+Free-form, but with required keys: `library`, `format`, `adapter`, `data_level`, `tensors`,
+`ties`. Adapters add what only they know - `torch`, `transformers`, `lightning`, `parallel`,
+`parameters_complete`, `grad_norm_clipped`, `model_class`, `recording_rank`. A reader must
+tolerate unknown keys: a newer minor version may add them.
 
 ### 5.3 `ANCHOR`
 

@@ -631,6 +631,72 @@
         "Docs/Logic.md",
         "Plan/Roadmap.md"
       ]
+    },
+    {
+      "id": "end-to-end-proof-three-tasks",
+      "question": "Does the product deliver its promise on real training, or only on benchmarks shaped like it?",
+      "sources": [
+        "Bench/phase09_end_to_end.py",
+        "Docs/phase09_results.json",
+        "Tests/integration/test_end_to_end_proof.py"
+      ],
+      "findings": [
+        "Three tasks, 60 steps each, CPU, fixed seeds, datasets built in-script: a 2-layer 2-head causal transformer (18,128 params), a convnet on rendered digits (1,954), an LSTM classifying by last token (4,274).",
+        "All three reach tier 2, and recording is bit-identical: the final loss matches the unrecorded run exactly (2.8351049423, 2.0702810287, 0.0918574706 in the 20-step check; exact equality asserted for every task).",
+        "Anchor reconstruction is exact (0.0) on all three; worst chained error after an anchor is 3.7e-09 (transformer), 3.0e-08 (cnn), 1.2e-07 (rnn) - float32 summation, nothing else.",
+        "Storage at matched resolution (a checkpoint after every stored step): recording 761,022 vs 981,768 (transformer), 267,473 vs 400,254 (cnn), 671,096 vs 896,985 (rnn) weight bytes - 1.29x to 1.50x smaller.",
+        "At one save per 10 steps a checkpoint is far smaller (490,884 / 42,132 / ... bytes). The recording's claim is resolution, not file size, and the benchmark prints both numbers.",
+        "Weight bytes must be compared, not whole-file bytes: a checkpoint holds weights only. Counting the data half once made the cnn recording (62% data) look larger than the checkpoint.",
+        "Recorder cost charged from its own timers: 1.85-4.51 ms per stored step on these tiny models; the cost is per STORED step, and a sparse policy stores 12 of 60 steps on the transformer."
+      ],
+      "verdict": "The v1 claim holds end-to-end on real optimisation: same result, exact anchors, ~1e-9 chained error, and smaller than a checkpoint at matched resolution. The honest limit is that a coarse checkpoint is much smaller, and the docs say so.",
+      "affects": [
+        "Bench/phase09_end_to_end.py",
+        "Docs/phase09_results.json",
+        "Docs/Technical.md",
+        "Plan/Roadmap.md"
+      ]
+    },
+    {
+      "id": "segment-effects-across-skipped-steps",
+      "question": "A batch is observed on a step the policy skipped. What effect can be attributed to it?",
+      "sources": [
+        "measured: cnn task, 20 steps, default PhasePolicy",
+        "archx/recorder.py _attribute",
+        "archx/data/capture.py record_effects"
+      ],
+      "findings": [
+        "Before the fix, 17 of 20 batches sat in a tier-2 file with an EMPTY region_effects map, while the file claimed tier 2. The data half could not answer the only question it exists to answer.",
+        "Cause: effects were attributed only to the segment observed on the step that was stored, and with a sparse policy that is a small minority of batches.",
+        "A batch observed on a skipped step has no movement of its own - the weights did not change on that step - so dividing the span's movement between batches would be an invented number.",
+        "Attributing the span's movement to every segment in the span is correct and honest, provided the file says how many batches and steps share it: span_segments and span_steps are now written per segment."
+      ],
+      "verdict": "Attribute the movement since the last store point to every batch observed in that span, and record span_segments/span_steps so an empty effect map can no longer be confused with a measured zero.",
+      "affects": [
+        "archx/recorder.py",
+        "archx/data/capture.py",
+        "Plan/Format_Spec.md"
+      ]
+    },
+    {
+      "id": "sharded-model-detection",
+      "question": "What can be recorded when the parameters are split across ranks (FSDP, ZeRO-2/3)?",
+      "sources": [
+        "archx/parallel.py",
+        "Tests/unit/test_parallel_detection.py"
+      ],
+      "findings": [
+        "FSDP/ZeRO shard each parameter across ranks: no rank holds a whole tensor, so a file recorded from one rank rebuilds weights that never existed, and it opens cleanly.",
+        "The tier system cannot catch this: a tier describes which FIELDS were seen, not whether the values were whole.",
+        "Detection by class name and by parameter shape works without importing deepspeed or torch.distributed: nested wrappers (compile(FSDP(model))), parameters absent outside a forward pass (ZeRO-3), and parameters on the meta device are all recognised.",
+        "DDP is the opposite case: every rank holds everything, so recording is valid but exactly one rank may write."
+      ],
+      "verdict": "Refuse to attach to a sharded model, before opening a file, naming allow_partial as the way out; with allow_partial the file states parameters_complete: false and names the wrapper.",
+      "affects": [
+        "archx/parallel.py",
+        "archx/adapters/torch.py",
+        "Plan/Format_Spec.md"
+      ]
     }
   ]
 }

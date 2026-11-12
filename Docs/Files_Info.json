@@ -1070,9 +1070,64 @@
         "9 tests"
       ],
       "handles": "Compares every reconstructed step against the weights observed at the matching batch end, which is what caught the off-by-one-update store point."
+    },
+    "archx/parallel.py": {
+      "purpose": "Recognise FSDP/ZeRO/TP wrappers and refuse to record a sharded model.",
+      "inputs": [
+        "model"
+      ],
+      "outputs": [
+        "Detection(kind, evidence)"
+      ],
+      "handles": "Class-name and parameter-shape detection that needs no deepspeed import and never raises; attach() refuses before opening a file unless allow_partial=True."
+    },
+    "Bench/phase09_end_to_end.py": {
+      "purpose": "The v1.0 end-to-end proof: a transformer, a CNN and an RNN trained, recorded and measured.",
+      "inputs": [
+        "--steps",
+        "--out",
+        "--keep"
+      ],
+      "outputs": [
+        "fidelity table",
+        "storage table",
+        "A/B table",
+        "JSON"
+      ],
+      "handles": "Anchors exact, chained error, weight-bytes-vs-checkpoint at matched resolution, and a same-seed A/B that proves recording changes nothing."
+    },
+    "Tests/integration/test_end_to_end_proof.py": {
+      "purpose": "Pins the v1.0 promises on three real trainings.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "12 tests"
+      ],
+      "handles": "Bit-identical results, exact anchors, tier 2 with gaps named, unstored steps answerable, data joined to the weights it moved."
+    },
+    "Tests/integration/test_format_spec_matches_code.py": {
+      "purpose": "Parses real files against Plan/Format_Spec.md so the spec cannot drift.",
+      "inputs": [
+        "a real recording"
+      ],
+      "outputs": [
+        "12 tests"
+      ],
+      "handles": "Registry byte layout, anchor body, delta prefix, every JSON block's documented keys, and a rebuild using the spec alone."
+    },
+    "Tests/unit/test_parallel_detection.py": {
+      "purpose": "Sharded models are recognised and refused, on stubbed engines.",
+      "inputs": [
+        "fake wrappers"
+      ],
+      "outputs": [
+        "18 tests"
+      ],
+      "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself."
     }
   },
-  "_generated": "2026-11-12 - Phases 6-8: HF callback, launcher, Lightning callback, 167 tests",
+  "_generated": "2026-11-12 - Phases 6-9: HF, launcher, Lightning, end-to-end proof, spec conformance, 209 tests",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },

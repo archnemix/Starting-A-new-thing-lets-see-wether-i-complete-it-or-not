@@ -46,6 +46,51 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v1.0.0 - not released yet (Phase 9 complete on the branch)
+
+The end-to-end proof, and a format spec that is checked against the code.
+
+Added:
+
+- `Bench/phase09_end_to_end.py`: a 2-layer 2-head causal transformer, a convnet on rendered
+  digits, and an LSTM classifying by last token, each trained on a dataset the script builds.
+  Numbers committed in `Docs/phase09_results.json`.
+- `archx/parallel.py`: FSDP/ZeRO/tensor-parallel detection. `archx.attach` now **refuses** a
+  sharded model before opening a file; `allow_partial=True` records anyway and writes
+  `parameters_complete: false` naming the wrapper.
+- 12 tests in `Tests/integration/test_format_spec_matches_code.py` that parse real files
+  against the published byte layouts.
+
+Results, 60 steps per task, CPU:
+
+| task | tier | stored | anchor error | worst chained | weight bytes | checkpoint at same resolution |
+|---|---|---|---|---|---|---|
+| transformer | 2 | 12/60 | 0 (exact) | 3.7e-09 | 761,022 | 981,768 |
+| cnn | 2 | 38/60 | 0 (exact) | 3.0e-08 | 267,473 | 400,254 |
+| rnn | 2 | 45/60 | 0 (exact) | 1.2e-07 | 671,096 | 896,985 |
+
+Recording is bit-identical on all three tasks: the final loss matches the unrecorded run
+exactly.
+
+Fixed:
+
+- **A tier-2 file could not answer its own question.** With the default policy, 17 of 20
+  batches in a 20-step run sat in the file with an empty `region_effects` map: effects were
+  attributed only to the batch on the stored step. Movement since the previous store point is
+  now attributed to every batch in the span, and `span_segments` / `span_steps` say how many
+  share it - so an empty map can no longer be mistaken for a measured zero.
+- **`Plan/Format_Spec.md` described a file that was never written.** It documented a packed
+  `DATA_SEGMENT` layout (the writer emits JSON) and had no entry for `EVENT`, `ANNOT`, `INFO`
+  or `META`. §5 now matches the code and is verified by tests.
+- **Storage was compared unfairly.** The recording's whole file (weights + captured data) was
+  measured against a checkpoint (weights only), which made a data-heavy recording look larger
+  than the checkpoint at the same resolution. Only weight bytes are compared now, with the
+  data half reported separately.
+
+Still open, stated rather than hidden: claim 8 (reliability across torch versions) is not
+measured; the launcher ship/drop decision awaits the user; claims 11-14 (data-type codecs) and
+the npm signpost package are not built.
+
 ## v0.9.0 - not released yet (Phase 8 complete on the branch)
 
 The PyTorch Lightning adapter: one callback, and the loss costs the user nothing.

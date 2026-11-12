@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 
 from ..formats.registry import TensorRegistry
+from ..parallel import detect
 from ..policy import PhasePolicy
 from ..recorder import Recorder
 
@@ -82,6 +83,10 @@ def as_bytes(data: Any) -> bytes | None:
     return None
 
 
+class ShardedModelError(RuntimeError):
+    """Raised when a model is sharded across ranks, so one rank cannot record it whole."""
+
+
 class TorchRecorder(Recorder):
     """A recorder that also understands the things a torch loop naturally has to hand.
 
@@ -107,6 +112,7 @@ def attach(
     data_level: str = "segments",
     queue_size: int = 8,
     max_rel_error: float = 1e-3,
+    allow_partial: bool = False,
     meta: dict[str, Any] | None = None,
 ) -> Recorder:
     """Attach a recorder and return it. The training loop stays exactly as it was.
@@ -117,7 +123,20 @@ def attach(
     `max_rel_error` is the reconstruction budget per delta. The default (1e-3) is what makes
     a run small; `0.0` restricts every delta to a lossless encoder and makes every stored step
     rebuild exactly.
+
+    Under FSDP or ZeRO-3, no rank holds a whole parameter, so a file recorded from one rank
+    would rebuild weights that never existed. attach() therefore refuses, rather than writing
+    a plausible-looking file; pass `allow_partial=True` to record anyway, and the file will
+    say `parameters_complete: false` and name the wrapper.
     """
+    parallel = detect(model)
+    if parallel.is_sharded and not allow_partial:
+        raise ShardedModelError(
+            f"this model is sharded ({parallel.describe()}).\n"
+            f"  A recording made from one rank would hold part of each parameter, so every\n"
+            f"  step would rebuild weights that never existed. Nothing was opened.\n"
+            f"  Either record on an unsharded run, or pass allow_partial=True and the file\n"
+            f"  will state that its parameters are incomplete.")
     parameters = dict(_named_parameters(model))
     registry = _build_registry(parameters, regions=regions, components=components)
 
@@ -128,7 +147,12 @@ def attach(
                         queue_size=queue_size,
                         max_rel_error=max_rel_error,
                         data_level=data_level,
-                        meta={"adapter": "torch", "torch": _torch_version(), **(meta or {})})
+                        meta={"adapter": "torch", "torch": _torch_version(),
+                              "parallel": parallel.kind,
+                              "parameters_complete": not parallel.is_sharded,
+                              **({"parallel_evidence": parallel.describe()}
+                                 if parallel.is_sharded else {}),
+                              **(meta or {})})
     recorder._archx_parameters = parameters        # type: ignore[attr-defined]
     handle = optimizer.register_step_post_hook(_make_step_hook(recorder, parameters))
     recorder._archx_handle = handle                # type: ignore[attr-defined]

@@ -1,0 +1,100 @@
+{
+  "results": [
+    {
+      "task": "transformer",
+      "steps": 60,
+      "parameters": 18128,
+      "first_loss": 3.003488302230835,
+      "last_loss": 2.777118444442749,
+      "median_step_ms": 3.9264760002879484,
+      "recorded_ms_per_call": 4.50750256665439,
+      "bytes": 803264,
+      "weights_bytes": 761022,
+      "data_bytes": 35254,
+      "stored_steps": 12,
+      "stored_fraction": 0.2,
+      "reconstruct_seconds": 0.0026749160001600103,
+      "anchor_max_error": 0.0,
+      "worst_delta_error": 3.725290298461914e-09,
+      "tier": 2,
+      "missing": [
+        "activations"
+      ],
+      "one_checkpoint_bytes": 81814,
+      "checkpoint_at_same_steps_bytes": 981768,
+      "checkpoint_at_1_in_10_bytes": 490884
+    },
+    {
+      "task": "cnn",
+      "steps": 60,
+      "parameters": 1954,
+      "first_loss": 2.3079028129577637,
+      "last_loss": 0.20264238119125366,
+      "median_step_ms": 3.328028999931121,
+      "recorded_ms_per_call": 1.850646083319892,
+      "bytes": 768810,
+      "weights_bytes": 267473,
+      "data_bytes": 488777,
+      "stored_steps": 38,
+      "stored_fraction": 0.6333333333333333,
+      "reconstruct_seconds": 0.0027171360002284928,
+      "anchor_max_error": 0.0,
+      "worst_delta_error": 2.9802322387695312e-08,
+      "tier": 2,
+      "missing": [
+        "activations"
+      ],
+      "one_checkpoint_bytes": 10533,
+      "checkpoint_at_same_steps_bytes": 400254,
+      "checkpoint_at_1_in_10_bytes": 63198
+    },
+    {
+      "task": "rnn",
+      "steps": 60,
+      "parameters": 4274,
+      "first_loss": 0.6767863035202026,
+      "last_loss": 0.0009340090909972787,
+      "median_step_ms": 4.435373999967851,
+      "recorded_ms_per_call": 3.5242739999527353,
+      "bytes": 721092,
+      "weights_bytes": 671096,
+      "data_bytes": 35932,
+      "stored_steps": 45,
+      "stored_fraction": 0.75,
+      "reconstruct_seconds": 0.0049970240002039645,
+      "anchor_max_error": 0.0,
+      "worst_delta_error": 1.1920928955078125e-07,
+      "tier": 2,
+      "missing": [
+        "activations"
+      ],
+      "one_checkpoint_bytes": 19933,
+      "checkpoint_at_same_steps_bytes": 896985,
+      "checkpoint_at_1_in_10_bytes": 119598
+    }
+  ],
+  "ab": [
+    {
+      "task": "transformer",
+      "loss_identical": true,
+      "plain_last_loss": 2.777118444442749,
+      "recorded_last_loss": 2.777118444442749,
+      "difference": 0.0
+    },
+    {
+      "task": "cnn",
+      "loss_identical": true,
+      "plain_last_loss": 0.20264238119125366,
+      "recorded_last_loss": 0.20264238119125366,
+      "difference": 0.0
+    },
+    {
+      "task": "rnn",
+      "loss_identical": true,
+      "plain_last_loss": 0.0009340090909972787,
+      "recorded_last_loss": 0.0009340090909972787,
+      "difference": 0.0
+    }
+  ],
+  "steps": 60
+}

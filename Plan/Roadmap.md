@@ -105,11 +105,11 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 9.1 | Tiny transformer, CNN and RNN trained on small CPU datasets, recorded | Three `.archx.mdl` files, reproducible seeds | todo |
-| 9.2 | Storage comparison vs naive checkpointing; overhead table per adapter | Numbers in `Docs/Research.json` | todo |
-| 9.3 | Reconstruction fidelity report (anchor-exact, delta-chained error) | Report committed | todo |
-| 9.4 | Format spec v1 published in-repo, `Changelog.md` v1.0 entry | Docs complete | todo |
-| 9.5 | DeepSpeed/FSDP detection warnings proven on a stubbed engine | Unit test with fake engine types | todo |
+| 9.1 | Tiny transformer, CNN and RNN trained on small CPU datasets, recorded | Three `.archx.mdl` files, reproducible seeds | done - `Bench/phase09_end_to_end.py`, 6 tests in `Tests/integration/test_end_to_end_proof.py`. A 2-layer 2-head causal transformer, a convnet on rendered digits, and an LSTM whose label depends on the last token: all three reach **tier 2**, and recording is **bit-identical** (final loss equal to the last digit) on every task. Datasets are built in-script so a claim cannot die when a download moves |
+| 9.2 | Storage comparison vs naive checkpointing; overhead table per adapter | Numbers in `Docs/Research.json` | done, with both answers published - `Docs/phase09_results.json` (60 steps: recording 761,022-671,096 weight bytes; a checkpoint at the same resolution 400,254-981,768). At matched resolution the recording wins on all three tasks (1.29-1.50x); at one save per 10 steps a checkpoint is much smaller and the recording does not claim otherwise. Weight bytes only, because a checkpoint holds weights and nothing else - counting the data half once made a recording look bigger than a checkpoint |
+| 9.3 | Reconstruction fidelity report (anchor-exact, delta-chained error) | Report committed | done - anchor error **0.0 (exact)** on all three tasks; worst chained error 3.7e-09 to 1.2e-07, i.e. float32 summation and nothing else. `Tests/integration/test_end_to_end_proof.py` fails if either number moves |
+| 9.4 | Format spec v1 published in-repo, `Changelog.md` v1.0 entry | Docs complete | done - `Plan/Format_Spec.md` §5 rewritten to describe what the writer actually produces: it had documented a packed `DATA_SEGMENT` layout that never existed (segments are JSON) and had no entry at all for `EVENT`, `ANNOT`, `INFO` or `META`. 12 tests in `Tests/integration/test_format_spec_matches_code.py` parse real files against the spec's own byte layouts, so the spec cannot drift from the code again |
+| 9.5 | DeepSpeed/FSDP detection warnings proven on a stubbed engine | Unit test with fake engine types | done - `archx/parallel.py`, 18 tests. Nested wrappers, ZeRO-3's missing-parameter signature and meta-device parameters are all recognised. `archx.attach` **refuses** a sharded model before opening a file, because a file recorded from one rank would rebuild weights that never existed; `allow_partial=True` records anyway and writes `parameters_complete: false` with the wrapper named. A hostile object that throws on attribute access reports "plain" rather than breaking a run |
 
 ---
 

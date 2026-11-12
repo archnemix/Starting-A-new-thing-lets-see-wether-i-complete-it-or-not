@@ -47,6 +47,13 @@ class Segment:
     region_effects: dict = field(default_factory=dict)
     component_mask: int = 0
     delta_reconstruction_error: float = 0.0
+    #: How many batches and how many steps share this segment's effect measurement.
+    #: A batch observed on a skipped step cannot have its own movement measured - the weights
+    #: did not move on that step - so it is attributed with everything else in the span since
+    #: the previous store point. These two numbers are what makes that shareable fact readable
+    #: instead of a batch that looks like it did nothing.
+    span_segments: int = 1
+    span_steps: int = 1
     #: Bytes waiting for the writer thread. Never written unless a shard is made from it.
     content: bytes | None = field(default=None, repr=False, compare=False)
     sensitive: bool = field(default=False, repr=False, compare=False)
@@ -78,6 +85,8 @@ class Segment:
             "region_effects": self.region_effects,
             "component_mask": self.component_mask,
             "delta_reconstruction_error": self.delta_reconstruction_error,
+            "span_segments": self.span_segments,
+            "span_steps": self.span_steps,
         }
 
 
@@ -275,11 +284,22 @@ class DataCapture:
         self.segments.pop(segment.segment_id, None)
 
     def record_effects(self, segment_id: str, *, region: str, delta_norm: float,
-                       grad_norm: float | None, loss_delta: float | None) -> None:
-        """Attach what the weights did while this segment was being trained on."""
+                       grad_norm: float | None, loss_delta: float | None,
+                       span_segments: int = 1, span_steps: int = 1) -> None:
+        """Attach what the weights did while this segment was being trained on.
+
+        `span_segments` and `span_steps` say how many batches and steps share the measurement,
+        so a batch that was observed on a skipped step is not mistaken for one that caused
+        nothing. They are recorded rather than inferred, because the recorder is the only
+        place that knows.
+        """
         segment = self.segments.get(segment_id)
         if segment is None:
             return
+        segment.span_segments = max(segment.span_segments if segment.region_effects else 1,
+                                    span_segments)
+        segment.span_steps = max(segment.span_steps if segment.region_effects else 1,
+                                 span_steps)
         entry = segment.region_effects.setdefault(
             region, {"delta_norm": 0.0, "grad_norm_max": 0.0, "loss_delta": 0.0}
         )
