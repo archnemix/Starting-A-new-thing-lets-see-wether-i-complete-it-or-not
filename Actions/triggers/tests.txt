@@ -14,3 +14,4 @@ trigger 5: phase 2 - encoders + measured claims, 41 tests
 trigger 6: phase 3 - recorder + data capture + join
 
 trigger 7: authoritative test counts via junit xml
+trigger 2026-11-12T09:17:41Z phase3 torch adapter
