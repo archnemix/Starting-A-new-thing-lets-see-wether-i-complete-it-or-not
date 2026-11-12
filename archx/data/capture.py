@@ -2,7 +2,8 @@
 
 Three levels, chosen by the user, recorded in the file:
 
-- ``none``     hash and count only. The cheapest, and it cannot show the data.
+- ``none``     hash and count only, one row per unique shard, plus the step span and the
+              region effects. The cheapest, and it cannot show the data.
 - ``pointers`` hash plus where to find it. The data must still exist and must not change.
 - ``segments`` (default) one compressed copy per unique shard, plus characteristics.
 - ``full``     every batch exactly as fed, no deduplication.
@@ -161,9 +162,14 @@ class DataCapture:
 
         Cheap by design. Same bytes under the same id is a pointer come back; a new segment is
         recorded with its content left unhashed until `seal` runs off the training thread.
+
+        `none` still returns a segment. It used to return None, which contradicted both this
+        module's own summary ("hash and count only") and Architecture 6.8 ("the fingerprint is
+        always present at every level, so a `none`/`pointers` run is still analysable"): a
+        `none` recording held no evidence that any particular batch had been seen, only a
+        total. What it keeps is the hash, the characteristics and the step span - never the
+        content - and deduplication still collapses an epoch into one row per unique shard.
         """
-        if self.level is DataLevel.NONE:
-            return None
         with self._lock:
             return self._observe(data, step, segment_id, source, sensitive)
 

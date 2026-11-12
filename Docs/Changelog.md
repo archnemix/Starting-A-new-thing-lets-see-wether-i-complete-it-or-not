@@ -48,7 +48,7 @@ Shipped on the branch:
 
 ## v1.0.1 - not released yet (Phase 2 complete: codecs and data capture measured)
 
-Two roadmap rows finished, four silent defects found, three of them in code that was
+Two roadmap rows finished, five silent defects found, four of them in code that was
 documented as working.
 
 ### Claims 13-14: capture cost and the join round-trip
@@ -71,7 +71,7 @@ batch 256x128, 18,128-parameter model, 5 repeats, charged to `log()` + `step()`:
 - The bench's first version timed `optimizer.step()` and reported a *negative* overhead for
   `pointers`. It was measuring AdamW; the optimizer is now outside the timed region.
 
-### Fixed: four defects that were silently wrong
+### Fixed: five defects that were silently wrong
 
 1. **`full` was never implemented.** Documented since the first design ("every batch exactly
    as fed, no dedup"), it wrote the same deduplicated file as `segments` - 4 bytes apart on
@@ -88,6 +88,11 @@ batch 256x128, 18,128-parameter model, 5 repeats, charged to `log()` + `step()`:
    store point at which the movement was measured, `-1` when there is none): 24/60 -> 60/60.
 4. **Data logged after the final optimizer step vanished.** 20 observations, 19 in the file,
    no warning. It is now stored and an `unsynced_log` block says it was never trained on.
+5. **`none` recorded no fingerprints.** Both its own module summary ("hash and count only")
+   and Architecture 6.8 ("the fingerprint is always present at every level") promised the
+   hash; the code returned early and wrote nothing, so a `none` run could say how many batches
+   it saw but not which. It now writes one fingerprinted row per unique shard, with no content
+   and no shard block.
 
 ### Added, both documented since the first design and never emitted
 

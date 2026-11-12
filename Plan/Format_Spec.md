@@ -127,6 +127,12 @@ agree with the blocks present: `segments`/`full` require at least one `DATA_SHAR
 `pointers` requires `DATA_POINTER` blocks and no shards, `none` requires neither. A reader
 that finds a mismatch reports a corrupt header rather than guessing.
 
+`none` may still write `DATA_SEGMENT` blocks. It writes one row per unique shard with its
+content hash in `fingerprint`, its characteristics, its step span and its region effects -
+never the content, and never a `DATA_SHARD`. Three levels therefore answer the weight half of
+the record completely and differ only in how much of the data half they can show; a reader
+must not assume `data_level: none` means "no data blocks".
+
 `segments` and `full` differ in one measurable way: `segments` deduplicates by content hash,
 so an epoch over the same data costs pointers (`times_seen` > 1), and two *named* segments
 over identical bytes share one shard. `full` stores one shard per observation, with no

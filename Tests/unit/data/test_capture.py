@@ -53,10 +53,27 @@ def test_an_epoch_over_the_same_data_costs_pointers_not_copies():
     assert len(capture.shards) == 10
 
 
-def test_level_none_keeps_nothing_but_still_reports():
+def test_level_none_keeps_the_hash_and_count_but_no_content():
+    """Architecture 6.8: "the fingerprint is always present at every level".
+
+    `none` returned None from `observe` instead, so a `none` recording held no evidence that
+    any particular batch had been seen - only a total - while the docs promised a hash and a
+    count per batch. It now keeps both and never the content.
+    """
     capture = DataCapture(DataLevel.NONE)
-    assert capture.observe(b"anything", step=0) is None
-    assert capture.bytes_stored == 0
+    segment = capture.observe(b"the same batch\n" * 8, step=0, source="train.jsonl")
+    assert segment is not None, "a `none` run must still say which batches it saw"
+
+    again = capture.observe(b"the same batch\n" * 8, step=1)   # same object, dedup
+    assert again is segment and again.times_seen == 2
+
+    capture.seal()
+    assert capture.bytes_stored == 0, "no content is ever stored at `none`"
+    assert segment.fingerprint, "the content hash is the point of this level"
+    assert segment.shard_id == segment.fingerprint
+    assert segment.characteristics["kind"] == "text"
+    assert capture.shards == {}, "no shard may be written"
+    assert segment.content is None
 
 
 def test_level_pointers_keeps_no_content_but_records_characteristics():

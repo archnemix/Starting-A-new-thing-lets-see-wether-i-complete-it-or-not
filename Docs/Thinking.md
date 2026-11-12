@@ -740,6 +740,13 @@ negative overhead, an ordering that contradicted the code, and a zero. A benchma
 results are believable is not checked; implausibility is the last line of defence, which is why
 the bench now also prints its spread and its catch-up count.
 
+**The one level that promised the least did nothing.** `none` returned early from `observe`,
+so it wrote no data block at all - while its module docstring said "hash and count only" and
+Architecture 6.8 said the fingerprint is present "at every level". It was the cheapest level,
+the one nobody would check, and it was the one that kept none of the evidence it advertised.
+Found by opening a `none` recording and asking it which batches it had seen: it could not
+answer, and it was not supposed to have to guess.
+
 The common thread with the eight defects above: none of them crashed, none of them turned a
 test red, and every one of them produced output that a careful reader would have accepted. The
 difference this time is that the suspicious numbers were *impossible* rather than merely
