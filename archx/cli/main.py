@@ -45,13 +45,34 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--step-b", type=int, help="second step (default: the last)")
     diff.add_argument("--json", action="store_true", help="machine-readable output")
 
+    # `archx run` takes everything after `--` verbatim, which is why it must not be
+    # parsed by argparse beyond the recording path: argparse would eat the training
+    # script's own flags, including `--help`.
+    launch = sub.add_parser(
+        "run", help="record a training script without editing it",
+        description="Record any command that steps a torch optimizer, without touching its "
+                    "code. Everything after `--` is the command.")
+    launch.add_argument("--recording", default="run.archx.mdl",
+                        help="where to write the recording (default: run.archx.mdl)")
+    # Deliberately no positional for the command: see `main`, which splits the argv itself.
+    # `argparse.REMAINDER` looks like the right tool and is not - inside a subparser it
+    # swallows the subcommand name, so `archx run -- python x.py` parsed `run` as the
+    # command. The training script's own `--help` would also have been consumed by archx.
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run one command and return a process exit code."""
+    argv = list(argv if argv is not None else sys.argv[1:])
+
+    # `archx run` is split off before argparse runs, so the command after `--` reaches the
+    # child untouched - including flags archx itself defines, and `--help`.
+    if argv and argv[0] == "run":
+        return _run_launcher(argv[1:])
+
     parser = build_parser()
-    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+    args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
@@ -85,3 +106,37 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error(f"unknown command {args.command!r}")
     return 2
+
+
+def _run_launcher(argv: list[str]) -> int:
+    """Split `archx run [--recording PATH] -- command...` and hand it to the launcher."""
+    from ..launcher import main as run_launcher
+
+    recording = "run.archx.mdl"
+    rest: list[str] = []
+    index = 0
+    while index < len(argv):
+        item = argv[index]
+        if item == "--":
+            rest = argv[index + 1:]
+            break
+        if item == "--recording":
+            if index + 1 >= len(argv):
+                print("archx: --recording needs a path", file=sys.stderr)
+                return 2
+            recording = argv[index + 1]
+            index += 2
+            continue
+        if item.startswith("--recording="):
+            recording = item.split("=", 1)[1]
+            index += 1
+            continue
+        if item in ("-h", "--help"):
+            print("usage: archx run [--recording PATH] -- <command> [args...]\n\n"
+                  "Records any command that steps a torch optimizer, without editing it.\n"
+                  "Everything after `--` is run unchanged.")
+            return 0
+        print(f"archx: unexpected argument {item!r}; put the command after `--`",
+              file=sys.stderr)
+        return 2
+    return run_launcher(rest, recording=recording)

@@ -1010,9 +1010,42 @@
         "16 tests"
       ],
       "handles": "Skips with a stated reason when transformers/accelerate are absent; the CI workflow installs them so the tests run rather than skip."
+    },
+    "archx/launcher.py": {
+      "purpose": "`archx run -- <command>`: record a training script without editing it.",
+      "inputs": [
+        "command",
+        "recording path",
+        "environment"
+      ],
+      "outputs": [
+        "a .archx.mdl recording",
+        "non-zero exit when nothing was captured"
+      ],
+      "handles": "Copies _launcher_hook.py into a temp dir as sitecustomize.py, prepends it to PYTHONPATH, runs the command, then verifies the file really contains steps. Never leaves an empty recording behind."
+    },
+    "archx/_launcher_hook.py": {
+      "purpose": "The injected sitecustomize: patches torch optimizers once torch.optim loads.",
+      "inputs": [
+        "ARCHX_LAUNCHER_PATH"
+      ],
+      "outputs": [
+        "a tier-0 recording named param[group][position]"
+      ],
+      "handles": "Installed via sys.meta_path because torch is not importable at start-up; wraps every optimizer class that defines its own step because AdamW does not define one; never raises into the user's training job."
+    },
+    "Tests/integration/test_launcher.py": {
+      "purpose": "Proves the launcher records a real script and fails loudly when it cannot.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "10 tests"
+      ],
+      "handles": "Runs real subprocesses; pins the three silent failures (torch not importable, AdamW has no step, a broken sitecustomize is ignored)."
     }
   },
-  "_generated": "2026-11-12 - Phase 6: Hugging Face Trainer adapter, 16 integration tests",
+  "_generated": "2026-11-12 - Phase 6 and 7: HF callback, zero-code launcher, 158 tests",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },

@@ -200,3 +200,27 @@ def test_diff_between_two_runs_finds_the_first_disagreement(tmp_path, capsys):
     # The learning rate changes the very first update, and step 0's anchor is written after
     # that update, so the disagreement is at step 0 - not "somewhere later".
     assert payload["first_difference"]["step"] == payload["differences"][0]["step"]
+
+
+def test_run_says_how_to_use_it_without_running_anything(capsys):
+    """`archx run --help` must not fall through to the child: there is no child."""
+    from archx.cli.main import main
+
+    assert main(["run", "--help"]) == 0
+    output = capsys.readouterr().out
+    assert "<command>" in output
+    assert "--recording" in output
+
+
+def test_run_refuses_a_stray_argument_instead_of_guessing():
+    """Anything not after `--` is archx's own flag; guessing would run the wrong command."""
+    from archx.cli.main import main
+
+    assert main(["run", "python", "train.py"]) == 2
+
+
+def test_run_needs_a_command():
+    """`archx run --record x --` with nothing after it is an error, not a silent no-op."""
+    from archx.cli.main import main
+
+    assert main(["run", "--"]) == 2

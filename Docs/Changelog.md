@@ -46,6 +46,37 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v0.8.0 - not released yet (Phase 7 investigation complete on the branch)
+
+`archx run -- python train.py`: record a script without editing it.
+
+Added:
+
+- `archx/launcher.py`, `archx/_launcher_hook.py` and the `archx run` command. The hook is
+  injected through `PYTHONPATH` as `sitecustomize.py`, installs itself from a `sys.meta_path`
+  finder when `torch.optim` loads, and wraps every optimizer class that defines its own
+  `step`. 10 tests in `Tests/integration/test_launcher.py` run real subprocesses.
+- The launcher **verifies its own result**: if no optimizer step was recorded, the file is
+  deleted and the command exits 2 with instructions. It never leaves an empty recording.
+
+Fixed / corrected - three silent failures, each of which recorded nothing while the script
+ran fine:
+
+- A `sitecustomize` that did `import torch` inside `try/except` patched nothing, because torch
+  is not importable at interpreter start-up.
+- Patching `Optimizer.step` alone counts **zero** `AdamW` steps: `AdamW` defines no `step`
+  and resolves to `Adam.step`.
+- A `sitecustomize` with a syntax error makes CPython print "Error in sitecustomize" and carry
+  on. The injected file is now compiled before it is written.
+- `Tests/integration/test_torch_adapter.py` wrote its overhead recordings to `/tmp`, which
+  does not exist on Windows. Found by CI once the runners started installing torch; the test
+  now uses a real temporary directory.
+
+Limits, stated: the launcher reaches tier 0 only - no loss, no gradients, no parameter names
+(an optimizer holds tensors, not a model), recorded as `param[group][position]`. For a Hugging
+Face Trainer or a plain torch loop, `ArchxCallback` and `archx.attach` are strictly better. The
+roadmap decision to ship or drop the launcher is open, pending the user.
+
 ## v0.7.0 - not released yet (Phase 6 complete on the branch)
 
 The Hugging Face `Trainer` adapter: one callback, no fork of the training loop.

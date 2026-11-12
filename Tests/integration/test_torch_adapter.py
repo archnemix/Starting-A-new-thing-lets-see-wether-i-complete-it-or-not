@@ -15,7 +15,9 @@ hide a broken adapter behind a green run.
 from __future__ import annotations
 
 import json
+import tempfile
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -224,8 +226,13 @@ def _median_step_ms(*, hidden: int, batch: int, data_level: str | None,
     targets = torch.randn(steps, batch, hidden // 2, generator=generator)
     recorder = None
     if data_level is not None:
+        # A real temporary directory, not "/tmp": on Windows that path does not exist, and
+        # the recorder's writer thread failed with FileNotFoundError while the test itself
+        # looked correct. Only CI (which now installs torch) could see it.
         recorder = archx.attach(
-            model, optimizer, f"/tmp/archx-overhead-{hidden}-{batch}-{data_level}.archx.mdl",
+            model, optimizer,
+            str(Path(tempfile.mkdtemp(prefix="archx-overhead-"))
+                / f"{hidden}-{batch}-{data_level}.archx.mdl"),
             policy=PhasePolicy(total_steps=steps, min_warmup_steps=1, heartbeat_steps=steps),
             data_level=data_level, max_rel_error=1e-3)
 

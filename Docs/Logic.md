@@ -90,6 +90,23 @@ The loss is *not* taken from `on_log`: that fires after the step has been record
 window mean. `loss_hook(trainer)` observes `compute_loss` instead, or the caller passes
 `callback.log(loss=...)`. With neither, the file reports tier 0 and names the way out.
 
+## 2b. `archx run -- python train.py` - zero-code launcher
+
+```
+sitecustomize (injected via PYTHONPATH)
+  ├─ start-up  -> torch not importable yet: register a sys.meta_path finder for torch.optim
+  ├─ torch.optim loads -> wrap every optimizer class that defines its own step
+  │                       (AdamW does NOT: it resolves to Adam.step)
+  ├─ first step -> build the registry from optimizer.param_groups (no names available:
+  │                keys are param[group][position]), open the recorder
+  ├─ every step -> recorder.step(...)
+  └─ atexit     -> close: footer + capability block
+launcher (parent)
+  └─ after exit -> count the steps in the file; 0 means delete it and exit 2 with instructions
+```
+
+Reaches tier 0: steps and deltas only. No loss, gradients, data or parameter names.
+
 ## 3. `ArchxCallback(...)` - Lightning
 
 ```

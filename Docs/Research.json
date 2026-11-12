@@ -583,6 +583,32 @@
         "Docs/Logic.md",
         "Plan/Architecture.md"
       ]
+    },
+    {
+      "id": "sitecustomize-launcher-mechanics",
+      "question": "Can a training script be recorded without editing it, and what does that injection actually capture?",
+      "sources": [
+        "CPython 3.11 site.py: sitecustomize is imported during interpreter start-up, PYTHONPATH is searched before site-packages",
+        "measured: archx/launcher.py + archx/_launcher_hook.py, Tests/integration/test_launcher.py",
+        "torch 2.15.0: 'step' in torch.optim.AdamW.__dict__ is False; AdamW.step resolves to Adam.step"
+      ],
+      "findings": [
+        "A sitecustomize placed on PYTHONPATH does run before the target script. Verified by printing on import.",
+        "torch is NOT importable at sitecustomize time in this environment (it is a site-package, and site-packages is appended after PYTHONPATH). A prototype that did `import torch` inside try/except silently patched nothing and the training script ran to completion unrecorded.",
+        "Installing the patch from a sys.meta_path finder that wraps exec_module for 'torch.optim' works: all 15 optimizer classes with their own step were wrapped.",
+        "Patching only torch.optim.Optimizer.step counts ZERO calls for AdamW: AdamW defines no step of its own and resolves to Adam.step. Measured three AdamW steps, 0 counted. Every class that defines its own step must be wrapped.",
+        "A sitecustomize with a SyntaxError does not stop the interpreter: CPython prints 'Error in sitecustomize; set PYTHONVERBOSE for traceback' to stderr and runs the script anyway. A non-comment marker line caused exactly this. The generated file must be compiled before it is written.",
+        "An optimizer gives access to param_groups only: no model, no names, no loss, no batch, no gradients before the step. A launcher recording is therefore tier 0 with tensors named param[group][position].",
+        "atexit fires in the child, so the recording is closed and the capability block written on a normal exit."
+      ],
+      "verdict": "Ship the launcher as `archx run -- <command>`, as a fallback for code that cannot be edited. It installs the patch via a meta_path finder, wraps every optimizer class that defines step, compiles the injected file before writing it, and then VERIFIES the result: zero recorded steps means the file is deleted and the process exits 2 with instructions. It never claims more than tier 0.",
+      "affects": [
+        "archx/launcher.py",
+        "archx/_launcher_hook.py",
+        "archx/cli/main.py",
+        "Tests/integration/test_launcher.py",
+        "Docs/Logic.md"
+      ]
     }
   ]
 }

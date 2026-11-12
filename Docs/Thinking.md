@@ -614,3 +614,49 @@ With none of that in place, the file says tier 0 and names the way out - `loss_h
 `callback.log(loss=...)` - instead of writing a plausible-looking average under the wrong step
 number. A recorder whose selling point is "you can see why the weights moved" cannot afford to be
 the thing that is vague about what it actually saw.
+
+---
+
+## Zero-code injection fails quietly, in three different ways
+
+`archx run -- python train.py` looked like the easiest item on the roadmap: put a
+`sitecustomize.py` on `PYTHONPATH`, patch `Optimizer.step`, done. It took three separate
+silent failures before a single step was recorded, and every one of them left a script that
+ran perfectly and produced nothing.
+
+**Torch does not exist yet.** `sitecustomize` is imported by `site.py` at interpreter
+start-up, before the user's script has imported anything. The first prototype did
+`import torch` inside `try/except ImportError: pass` - so on a machine where torch is a
+*site-package* (which it is, for the venv this project uses), the import failed, the except
+swallowed it, and the patch was never installed. Nothing printed. The fix is a
+`sys.meta_path` finder that installs the patch when `torch.optim` finishes loading, and a
+real `import torch.optim` first in case the hook runs late.
+
+**`AdamW` has no `step`.** With the finder in place, steps were still not counted. Patching
+`torch.optim.Optimizer.step` captures subclasses that *inherit* it - and `AdamW` does not:
+`'step' in AdamW.__dict__` is `False`, and `AdamW.step` resolves to `Adam.step`. The most
+common optimizer in the world, silently invisible. The hook now walks every class in
+`torch.optim` and wraps each one that defines its own `step`, marking them so a second
+import cannot double-count.
+
+**A broken `sitecustomize` is ignored.** The launcher prepends a marker line to the copied
+hook. The first marker was `archx: injected by archx run` - a syntax error. CPython's
+response to an exception in `sitecustomize` is to print
+`Error in sitecustomize; set PYTHONVERBOSE for traceback` to stderr and then run the script
+anyway. The script worked, the launcher reported "no optimizer step was observed", and the
+real cause was never mentioned. The injected file is now compiled before it is written, and
+`test_the_injected_hook_always_compiles` asserts the marker is a comment.
+
+The design principle that came out of it: **the launcher checks its own result.** It does not
+trust that injection worked - it opens the file afterwards and counts the steps. Zero steps
+means the file is deleted and the command exits 2 with instructions. A launcher that leaves
+an empty recording behind is worse than one that fails, because the empty one gets read by
+`archx info` and looks like a run that never moved.
+
+The last thing this measured is uncomfortable for the feature itself: for a Hugging Face
+Trainer, the launcher is strictly worse than the callback. It records the steps (tier 0) but
+the loss, the gradients, the learning rate and the parameter *names* are all out of reach -
+an optimizer holds tensors, not a model, so tensors come out as `param[0][3]`. `ArchxCallback`
+reads the same optimizer steps plus everything else, for one line of code. The launcher's
+justification is the case where the code cannot be edited at all, and its honesty about tier 0
+is what keeps it from being a trap.

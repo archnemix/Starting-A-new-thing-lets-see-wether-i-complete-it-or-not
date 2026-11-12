@@ -88,10 +88,10 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 7.1 | Prototype `sitecustomize` + `Optimizer.step` patch; measure what it captures for plain torch | Working recording, honest report | todo |
-| 7.2 | Same for HF Trainer and Lightning | Report per framework | todo |
-| 7.3 | Claim 8 measured: reliability across torch versions (matrix of 2-3 versions) | Version matrix table | todo |
-| 7.4 | Decision: ship launcher or drop it | Written decision + user approval | todo |
+| 7.1 | Prototype `sitecustomize` + `Optimizer.step` patch; measure what it captures for plain torch | Working recording, honest report | done - `archx run -- python train.py` records a script it never touched (`archx/launcher.py`, `archx/_launcher_hook.py`, 10 tests). Three measured findings changed the mechanism: (a) `import torch` at `sitecustomize` time fails, so the first prototype patched nothing in silence - the patch now installs from a `sys.meta_path` finder when `torch.optim` loads; (b) patching `Optimizer.step` alone counts **zero** `AdamW` steps, because `AdamW` defines no `step` and resolves to `Adam.step` - every optimizer class with its own `step` is wrapped; (c) a `sitecustomize` with a syntax error makes CPython print "Error in sitecustomize" and carry on, so the injected file is compiled before it is written. The launcher deletes the file and exits 2 when nothing was recorded |
+| 7.2 | Same for HF Trainer and Lightning | Report per framework | done for HF, with a correction to the plan: a launcher *cannot* reach a framework trainer usefully. It sees `optimizer.step` and nothing else - no loss, no batch, and no parameter names (an optimizer holds tensors, not a model), so the file is tier 0 and records `param[group][position]`. That is honest but it is strictly worse than `ArchxCallback`, which reads the same steps *plus* the gradients, the learning rate and the loss. Measured on a real Trainer, the launcher path records the steps and reports tier 0 with all four gaps named. Lightning is not installed and is not claimed |
+| 7.3 | Claim 8 measured: reliability across torch versions (matrix of 2-3 versions) | Version matrix table | todo - the mechanism no longer depends on a torch version (it wraps whatever `torch.optim` loads), but "no longer depends" is a claim, and claims are measured here. Needs a 3-version matrix in CI |
+| 7.4 | Decision: ship launcher or drop it | Written decision + user approval | **awaiting the user** - the evidence says: ship it as a *fallback*, not a headline. It works, it never lies about what it could not see, and its honest report is the reason it is safe; but for HF it is strictly worse than the one-line callback, and for plain torch `archx.attach` gives names, loss and tier 1-2 for the same effort |
 
 ## Phase 8 - Lightning adapter (v0.9)
 
