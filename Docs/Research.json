@@ -461,6 +461,31 @@
         "Tests/integration/test_arch_sweep.py",
         "Docs/Technical.md"
       ]
+    },
+    {
+      "id": "what-an-optimizer-hook-can-reach",
+      "question": "Claim 7: if the optimizer post-hook is the only integration point, what is lost, and what does one line of help buy?",
+      "sources": [
+        "Bench/claim07_hook_reach.py (measured locally, torch 2.15.0, 200 steps)",
+        "Tests/integration/test_hook_reach.py",
+        "torch.optim.Optimizer.register_step_post_hook documentation"
+      ],
+      "findings": [
+        "Inside the step post-hook the gradients are still alive: the caller's zero_grad() comes after. So gradient norms need no help at all - 100% of stored steps carry one with the bare hook.",
+        "The loss and the batch are locals that die with the iteration. A bare hook records neither: tier 0, with loss, data_segments and activations all reported missing.",
+        "One recorder.log(loss=..., data=x) call before optimizer.step() moves the file to tier 2 (loss 100%, gradient 100%, data 100%) with no other change to the loop.",
+        "The hook cannot see the learning rate either, unless log() passes it; the optimizer's param group is reachable from the hook but was not read.",
+        "Help is not only about tiers: hook only stored 21 of 200 steps, hook plus log stored 44. Without a loss the policy cannot fire its loss trigger, so it falls back to phases and the heartbeat and records half as much.",
+        "Charged cost on the training thread, 200 steps on a 3-layer MLP: 0.415 ms/step hook only, 0.700 ms/step with log(). The delta is the loss conversion and the batch copy, which is what the caller asked for.",
+        "Denying a field and later offering it left both a reason and the field in the file; offering now clears the denial. Fields the run actually recorded are no longer reported missing because another field in their tier was absent."
+      ],
+      "verdict": "Attach in one line is honest: tier 0 with real gradient norms and real weight deltas. Tier 2 costs exactly one logging call, and the file states the difference itself rather than leaving the user to discover it. The README and the file both name what is missing and why.",
+      "affects": [
+        "Bench/claim07_hook_reach.py",
+        "archx/capabilities.py",
+        "Docs/Technical.md",
+        "README.md"
+      ]
     }
   ]
 }

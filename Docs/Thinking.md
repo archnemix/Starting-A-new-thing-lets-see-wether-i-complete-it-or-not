@@ -438,3 +438,33 @@ built before the seed was set, so the table changed between runs (82 stored step
 then 66 for the same model), and the multimodal stack needed 300 steps rather than 150 for its
 loss to fall - it does learn, at 400 steps the loss reaches 0.01, and lengthening the run is
 honest where lowering the bar would not have been.
+
+---
+
+## Claim 7: what one line buys
+
+The claim is "attach in one line", and the useful thing to measure is where that line stops.
+Inside the optimizer's step post-hook the gradients are still alive - the caller's `zero_grad()`
+runs afterwards - so a bare `archx.attach` records a gradient norm on **every** stored step.
+The loss and the batch are locals that died with the iteration, and no hook can recover them.
+
+So the file from a bare hook is tier 0, and it says so: loss, data and activations all listed
+missing with a reason. One `recorder.log(loss=..., data=x)` before `optimizer.step()` makes it
+tier 2. Measured on 200 steps of a 3-layer MLP: 0.415 ms/step charged to us with the bare hook,
+0.700 ms/step with the logging call - the difference is the loss conversion and the batch copy,
+which is exactly what the caller asked us to do.
+
+**The finding I did not expect: help is not only about tiers.** The bare hook stored 21 of the
+200 steps; with a log call it stored 44. Without a loss the policy's loss trigger can never
+fire, so it falls back on phases and the heartbeat and records half as much history. A user who
+attaches and never logs gets a file that is honest and thin, and the capability block is how
+they find that out.
+
+**Two contradictions in the honesty block itself, found while testing this.** The module exists
+to stop the file from overstating what it recorded, and it was *understating*: `resolve()`
+discarded every field of an unreached tier, so a run that recorded gradient norms but no loss
+reported `grad_norms` as missing - the file told a reader to ignore data it had. Fields the run
+actually recorded are now left alone, and a new `capabilities_present` list states the
+inventory separately from the tier, which is a threshold rather than a description. Separately,
+`deny()` then `offer()` left a field both present and listed as missing; offering now clears the
+denial.

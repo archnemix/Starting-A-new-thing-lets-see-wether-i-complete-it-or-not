@@ -37,8 +37,13 @@ class Capabilities:
         return name in self.available
 
     def offer(self, name: str, reason: str = "") -> None:
-        """Mark a field available. An offered field is never silently dropped later."""
+        """Mark a field available. An offered field is never silently dropped later.
+
+        The earlier denial is cleared, not left behind: a field listed as both present and
+        missing is a file that contradicts itself.
+        """
         self.available.add(name)
+        self.missing.pop(name, None)
 
     def deny(self, name: str, reason: str) -> None:
         """Say that a field is unavailable, and why - the reason goes into the file."""
@@ -56,14 +61,20 @@ class Capabilities:
         """
         for tier in sorted(TIER_FIELDS):
             fields = TIER_FIELDS[tier]
-            if all(name in self.available for name in fields):
-                continue
             blocked = [lower for lower in TIER_FIELDS if lower < tier
                        and not all(f in self.available for f in TIER_FIELDS[lower])]
-            reason = (f"requires tier {min(blocked)}, which this run did not reach"
-                      if blocked else "not provided by this adapter")
             for name in fields:
-                self.available.discard(name)
+                if name in self.available:
+                    # A field the run really did record is never taken away because a
+                    # different field in its tier is missing. It used to be: a loop that
+                    # handed over gradient norms but no loss produced a file saying gradient
+                    # norms were unavailable, which is the one thing this module exists to
+                    # get right - the file would have understated what it recorded.
+                    continue
+                if blocked:
+                    reason = f"requires tier {min(blocked)}, which this run did not reach"
+                else:
+                    reason = "not provided by this adapter"
                 self.missing.setdefault(name, reason)
         return self
 
@@ -84,4 +95,8 @@ class Capabilities:
             "capability_tier": self.tier,
             "capabilities_missing": dict(sorted(self.missing.items())),
             "capability_detail": TIER_MEANING[self.tier],
+            # What is actually in the file, listed separately from the tier. A tier is a
+            # threshold; this is the inventory, and it is what lets a reader see that a run
+            # below tier 2 still has gradient norms for every step.
+            "capabilities_present": sorted(self.available),
         }
