@@ -148,6 +148,23 @@ $ npx archx train.py
 - **Not published.** Publishing needs the user's npm account; the package is built, tested
   and ready.
 
+### CI caught a real Windows defect in the npm tests
+
+Run `43251525614`: Linux 245 passed, Windows **244 passed, 1 failed**. The failing test was
+the one added with the signpost package:
+
+```
+subprocess.run(["npm", "test"]) -> FileNotFoundError: [WinError 2]
+```
+
+On Windows `npm` is `npm.cmd`, a batch shim that `CreateProcess` cannot execute without a
+shell. The test now runs `node --test <file>` - `node` is a real executable everywhere - and
+the npm workflow runs both forms so a contributor's `npm test` cannot rot unnoticed. No
+platform conditional, no `shell=True`.
+
+This is the third time the three-runner matrix has caught a defect that a single-platform
+green suite hid (after `/tmp` in the launcher test and the skipped Hugging Face tests).
+
 ### CI: a record commit must not be reported as a test failure
 
 Adding the npm workflow made six runners commit records into one branch. Run `43251129935`

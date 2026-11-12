@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "npm" / "archx"
 CLI = PACKAGE / "bin" / "archx.js"
 
+#: Resolved once. `node` is a real executable on every platform; `npm` is a `.cmd` shim on
+#: Windows and is deliberately not used here - see `test_the_node_suite_itself_passes`.
 node = shutil.which("node")
 pytestmark = pytest.mark.skipif(node is None, reason="node is not installed")
 
@@ -58,10 +60,17 @@ def test_asking_about_the_package_succeeds():
 
 
 def test_the_node_suite_itself_passes():
-    """`npm test` is the package's own gate; running it here keeps one command honest."""
-    if shutil.which("npm") is None:
-        pytest.skip("npm is not installed")
-    result = subprocess.run(["npm", "test", "--silent"], cwd=PACKAGE, capture_output=True,
-                            text=True, timeout=300, check=False)
-    assert result.returncode == 0, f"npm test failed:\n{result.stdout}\n{result.stderr}"
+    """The package's own gate, run directly.
+
+    `node --test`, not `npm test`: on Windows `npm` is a `.cmd` shim that `subprocess` cannot
+    execute without a shell, and the first version of this test failed there with
+    `FileNotFoundError: [WinError 2]` while passing on Linux and macOS. Shelling out for the
+    privilege of resolving a script name is not worth a platform conditional - the same file
+    runs either way, and the package manifest and CI still use `npm test` for users.
+    """
+    test_file = PACKAGE / "test" / "cli.test.js"
+    assert test_file.exists()
+    result = subprocess.run([node, "--test", str(test_file)], cwd=PACKAGE,
+                            capture_output=True, text=True, timeout=300, check=False)
+    assert result.returncode == 0, f"node --test failed:\n{result.stdout}\n{result.stderr}"
     assert "# fail 0" in result.stdout, result.stdout

@@ -22,3 +22,4 @@ trigger 2026-11-12T09:17:41Z phase3 torch adapter
 2026-11-12T15:20:42Z claim 8 torch version matrix
 2026-11-12T15:41:41Z claims 11-14 codecs and capture levels, four data-layer fixes
 2026-11-12T15:58:08Z ci: record-commit race - backoff + continue-on-error
+2026-11-12T16:06:32Z fix: npm.cmd is not executable from subprocess on Windows

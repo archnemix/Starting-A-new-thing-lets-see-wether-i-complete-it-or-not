@@ -818,6 +818,26 @@
         ".github/workflows/tests.yml",
         ".github/workflows/npm.yml"
       ]
+    },
+    {
+      "id": "windows-npm-cmd-shim",
+      "question": "Why did the npm signpost tests fail on Windows and macOS CI while passing locally, and what is the right way to invoke a node test suite from pytest?",
+      "sources": [
+        "run 43251525614 (Windows: 244 passed, 1 failed)",
+        "Actions/out/test-runs/Windows-py3.11.json",
+        "Tests/integration/test_npm_signpost.py"
+      ],
+      "findings": [
+        "The failure was `subprocess.run([\"npm\", \"test\"])` -> `FileNotFoundError: [WinError 2] The system cannot find the file specified`. On Windows `npm` is `npm.cmd`, a batch shim, and CreateProcess cannot execute it without `shell=True`.",
+        "Linux and macOS passed, so this was a platform-only defect found by CI and by nothing else - exactly the class of bug the three-runner matrix exists for.",
+        "The fix is not `shell=True`: that would make the test depend on command-line quoting on three shells for no gain. It runs `node --test <file>` instead, because `node` is a real executable everywhere.",
+        "Detected wrinkle worth recording: the macOS record in that run still showed 241 tests rather than 245, because it had committed its record before the npm tests existed in that job's checkout. The run list therefore mixed two different suites; the file's own `github_sha` is what separates them."
+      ],
+      "verdict": "Invoke `node --test` directly from pytest; never shell out to `npm` from a cross-platform test. The CI workflow runs both forms so a contributor's `npm test` cannot rot unnoticed.",
+      "affects": [
+        "Tests/integration/test_npm_signpost.py",
+        ".github/workflows/npm.yml"
+      ]
     }
   ]
 }
