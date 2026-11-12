@@ -139,7 +139,7 @@ accuracy win: on a single-jump stationary run a fixed interval of the same size 
 more accurate, because the adaptive policy spends its bytes on the dense warmup and cooldown.
 Both results are in `Docs/Research.json`.
 
-Tests: 126 local, 0 failures, 0 errors, 0 skips. CI run `43204316653`: 114 tests on each of
+Tests: 126 local, 0 failures, 0 errors, 0 skips. CI run `43205460181`: 119 tests on each of
 Linux, Windows and macOS, 0 failures, 0 errors, 7 skips (the torch-dependent modules, on runners
 without torch), identical test-name lists on all three.
 
