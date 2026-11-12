@@ -79,7 +79,21 @@ lists the *what*.
 | `archx/container/reader.py` | validation and decoding, hostile-file refusal |
 | `archx/container/recovery.py` | prefix scan, truncate, rebuild index, re-close |
 | `archx/cli/main.py` | argparse and dispatch |
-| `archx/cli/info.py`, `recover.py` | one command each |
+| `archx/cli/info.py`, `recover.py`, `reconstruct.py`, `events.py` | one command each |
+
+| File | Role | State |
+|---|---|---|
+| `archx/formats/dtype.py` | numpy/torch dtype -> the 9 wire dtype ids | live |
+| `archx/formats/registry.py` | tensor registry: stable indices, tied weights by `data_ptr`, regions, components | live |
+| `archx/encoders/base.py` | the encoder contract and `choose_encoder` (smallest body inside the error budget) | live |
+| `archx/encoders/{unchanged,sparse,dense,dense_raw,lowrank}.py` | encodings 0-4, one file each | live |
+| `archx/policy.py` | phase (warmup/middle/cool-down) plus event triggers -> store / skip / anchor | live |
+| `archx/recorder.py` | the hook surface, the shadow copy, the bounded queue, the writer thread | live |
+| `archx/data/codecs.py` | content id, per-shard codec choice (text / tokens / zstd), lossless round-trip | live |
+| `archx/data/capture.py` | data levels, two-phase capture (observe cheap, seal off-thread), dedup, effects | live |
+| `archx/capabilities.py` | what the run could actually see: the tier and every missing field | live |
+| `archx/container/values.py` | blocks -> meaning: registry, anchor, delta, `Timeline` | live |
+| `archx/adapters/torch.py` | `archx.attach(model, optimizer, path)` via `register_step_post_hook` | live |
 
 Rule: one file per responsibility, purpose line at the top of each.
 
@@ -96,6 +110,9 @@ Rule: one file per responsibility, purpose line at the top of each.
 | tier | capability tier 0-3, recorded in the file as a fact |
 | block | the self-describing unit of storage; the file is a sequence of blocks |
 | phase | warmup / middle / cool-down, controlling recording density |
+| observation (`EVENT`) | what the run measured at one stored step: loss, gradient norm, learning rate, movement per region |
+| annotation (`ANNOT`) | what the user declared happened: a stage boundary, an unfreeze, a curriculum change |
+| sealed | a segment or shard whose hash and compressed form are final; done on the writer thread |
 | capability block | header section listing what could not be observed and why |
 
 ## 5. Environment facts that constrain the design
@@ -120,10 +137,63 @@ training loop
                  per-region effects, gradient norms, loss trend)
 ```
 
-Levels: `none | pointers | segments (default) | full`. Everything is written on the writer
-thread; the training loop only hands over a reference. A `sensitive` shard keeps hash and
-characteristics and drops content, which is the only allowed fidelity exception and is
-recorded per shard.
+Levels: `none | pointers | segments (default) | full`. A `sensitive` shard keeps hash and
+characteristics and drops content, which is the only allowed fidelity exception, and it is
+recorded per shard in a `DATA_POINTER` block.
+
+**The capture is split in two, and the split is a measured decision.** `observe()` runs on the
+training thread and does only what costs nothing: an identity check against the previous batch,
+and a dictionary insert. `seal()` runs on the writer thread and does the expensive half.
+Measured on this sandbox (2 vCPU):
+
+| Operation | Cost | Where it runs |
+|---|---|---|
+| `observe()` of a new 128 KiB batch | ~0.3 us | training thread |
+| content hash of 128 KiB | ~210 us | writer thread |
+| content hash of a 2 MiB batch | ~3.4 ms | writer thread |
+| compress+encode 128 KiB | ~530 us | writer thread |
+| `detach().cpu().numpy().tobytes()` of a 2 MiB tensor | ~150 us | training thread |
+
+The last row is the only unavoidable cost on the training thread, because the loader may reuse
+the buffer as soon as the step returns. That is why `data_level` has the escape hatch it has.
+
+**Data reaches the disk during the run, not at close.** Before, a killed process kept its
+deltas and lost every batch - the "cause" half of the product vanished exactly when someone
+needed to investigate. Now, after each stored step, the writer seals and appends the new shards
+and segments. Two orderings are enforced:
+
+- a shard is written before the segment that points at it;
+- movement is written before the data that explains it, and no segment may name a step the
+  file has not reached yet.
+
+The second rule is why a segment can be stated more than once with a wider span: the file is
+append-only, so the segment grows by re-statement, and `Timeline.segments()` resolves the
+statements to the newest one per id.
+
+## 5b. What a recording costs (measured, not claimed)
+
+The overhead budget in the brief is <5%. It holds for the weight half and not for the data
+half, and the difference is reported rather than hidden.
+
+Method: `Tests/integration/test_torch_adapter.py` wraps the recorder's own `step` and `log`
+and sums their wall time, so the number is the work added, not the difference between two
+noisy runs of a whole loop (on this sandbox the same loop varies by +/-8% between runs, which
+is bigger than the effect being measured). Step size 512-wide MLP, batch 1024, 25 steps,
+median.
+
+| Recorded | Charged per step | Share of a 19.2 ms step |
+|---|---|---|
+| weights only (`data_level=none`) | 0.119 ms | 0.6% |
+| weights + data (`segments`, default) | 0.140 ms | 0.7% |
+
+Two older measurements, kept because they show where the money went: the same run cost
+**+17%** when the snapshot was taken twice per anchor, and **+81%** when the batch was hashed
+and compressed on the training thread. Both are now writer-thread work.
+
+On a tiny model the same code is a much larger share - a 0.3 ms step is dominated by framework
+dispatch, so a fixed 5% budget is not meaningful there. The honest statement, and the one the
+docs use: **recording weights costs under 1% of a real training step; recording the data adds
+one buffer copy and the documented levels exist to stop paying it.**
 
 ## 6. CI runners (measured 2026-11-11, run 43052619656)
 
@@ -145,3 +215,10 @@ Each runner is ~2x the sandbox CPU. Results are readable only as commits into
   append), so a truncated file is always readable up to the last whole block.
 - Format version in the header from day one; unknown block types are skipped, unknown
   major version is refused.
+- The writer thread never dies silently. A fault is counted, remembered, written into the
+  file as an `INFO` block naming the error, and re-raised by `close()` so a partial recording
+  cannot be mistaken for a complete one. This was found by the crash test: a merge bug killed
+  the thread at step 22 and the run continued for four thousand more steps with nothing
+  recorded.
+- Every file states the tier it reached (`INFO` `capabilities`) and names each field it could
+  not see, with the reason. A tier is a measured fact about one run, never a request.

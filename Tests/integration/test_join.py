@@ -11,6 +11,7 @@ import json
 import numpy as np
 
 from archx.container.reader import Reader
+from archx.container.values import Timeline
 from archx.container.schema import BlockType
 from archx.data.capture import DataLevel
 from archx.formats.registry import TensorRegistry
@@ -68,7 +69,7 @@ def test_a_file_answers_which_data_moved_which_weights_at_which_step(tmp_path):
     # 1. the data is in the file, once per unique shard
     shards = list(reader.blocks(BlockType.DATA_SHARD))
     assert len(shards) == 2, f"two unique batches must mean two shards, got {len(shards)}"
-    segments = [json.loads(b.payload) for b in reader.blocks(BlockType.DATA_SEGMENT)]
+    segments = Timeline(reader).segments()   # one entry per id: restatements resolved
     assert {s["segment_id"] for s in segments} >= {"seg-0", "seg-1"}
 
     # 2. segments carry characteristics, so data can be compared across runs later
@@ -85,9 +86,9 @@ def test_a_file_answers_which_data_moved_which_weights_at_which_step(tmp_path):
     assert {s["first_step"] for s in segments} == {0, 1, 2, 3}
 
     # 5. dedup, seen through the file: steps 0 and 3 used the same bytes under different
-    # segment ids, so they must point at one shard id.
+    # segment ids, so they must point at one shard id - and only one shard may exist for it.
     python_steps = [s for s in segments if s["first_step"] in (0, 3)]
-    assert len({s["shard_id"] for s in python_steps}) == 1
+    assert len(python_steps) == 2 and len({s["shard_id"] for s in python_steps}) == 1
 
     # 6. the shard payload is genuinely the data, byte for byte
     first_shard = json.loads(shards[0].payload.split(b"\n", 1)[0])
@@ -110,8 +111,9 @@ def test_reader_can_join_segment_to_movement_without_the_recorder(tmp_path):
     recorder.close()
 
     reader = Reader(path)
-    segments = [json.loads(b.payload) for b in reader.blocks(BlockType.DATA_SEGMENT)]
     deltas = list(reader.blocks(BlockType.DELTA))
+    segments = Timeline(reader).segments()
     assert len(segments) == 1, "two steps on the same batch is one segment"
     assert segments[0]["times_seen"] == 2
+    assert (segments[0]["first_step"], segments[0]["last_step"]) == (0, 1)
     assert deltas, "the movement is recorded even though the data did not change"

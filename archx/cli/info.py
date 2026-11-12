@@ -12,7 +12,9 @@ from ..errors import ArchxError
 def run_info(path: str, *, as_json: bool = False) -> int:
     """Print a summary of one recording. Returns a shell exit code."""
     try:
-        reader = Reader(path)
+        # A crashed recording is exactly when someone runs `archx info`, so a torn tail is
+        # read, not refused: the CLI says the file is unclosed and points at `archx recover`.
+        reader = Reader(path, allow_torn=True)
     except ArchxError as exc:
         print(f"archx: cannot read {path}: {exc}", file=sys.stderr)
         return 1
@@ -26,7 +28,8 @@ def run_info(path: str, *, as_json: bool = False) -> int:
     print(f"file           {info['path']}")
     print(f"format         {info['format']}")
     print(f"size           {info['size_bytes']} bytes")
-    print(f"closed         {info['closed']}" + ("  (crashed: run `archx recover`)" if not info["closed"] else ""))
+    state = "yes" if info["closed"] else "no  (crashed: run `archx recover`)"
+    print(f"closed         {state}")
     print(f"recovered      {info['recovered']}")
     print(f"blocks         {info['blocks']}  types={info['block_types']}")
     if meta:

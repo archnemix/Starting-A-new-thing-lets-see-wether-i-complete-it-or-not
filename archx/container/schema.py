@@ -42,6 +42,7 @@ class BlockType(IntEnum):
     ANCHOR = 3
     DELTA = 4
     EVENT = 5
+    ANNOT = 7
     DATA_SEGMENT = 17
     DATA_SHARD = 20
     DATA_POINTER = 21

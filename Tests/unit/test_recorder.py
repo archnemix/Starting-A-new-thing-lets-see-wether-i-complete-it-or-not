@@ -108,7 +108,8 @@ def test_backpressure_drops_detail_instead_of_blocking(tmp_path):
     assert recorder.stats.failed >= 1, "a full queue must be counted, not hidden"
 
 
-def test_annotations_land_in_the_event_stream(tmp_path):
+def test_annotations_stay_out_of_the_step_observations(tmp_path):
+    """ANNOT is the user's word; EVENT is what the run measured. Mixing them loses the join."""
     model = FakeModel()
     recorder = Recorder(model.registry(), model.read, str(tmp_path / "notes.archx.mdl"),
                         policy=PhasePolicy(total_steps=3))
@@ -117,8 +118,65 @@ def test_annotations_land_in_the_event_stream(tmp_path):
     recorder.close()
 
     reader = Reader(tmp_path / "notes.archx.mdl")
-    events = [json.loads(b.payload) for b in reader.blocks(BlockType.EVENT)]
-    assert any(e.get("event") == "stage2_start" for e in events)
+    notes = [json.loads(b.payload) for b in reader.blocks(BlockType.ANNOT)]
+    assert notes == [{"step": 1, "event": "stage2_start",
+                      "detail": "unfroze the language model"}]
+    observations = [json.loads(b.payload) for b in reader.blocks(BlockType.EVENT)]
+    assert observations and not any("event" in o for o in observations)
+
+
+def test_a_stored_step_keeps_the_loss_the_gradient_norm_and_the_movement(tmp_path):
+    """Tier 1 is data the loop already had. Dropping it would make the file poorer than the run."""
+    model = FakeModel(seed=2, size=16)
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "obs.archx.mdl"),
+                        policy=PhasePolicy(total_steps=3, min_warmup_steps=3))
+    rng = np.random.default_rng(7)
+    for step in range(2):
+        model.step(rng)
+        recorder.step(step, loss=1.0 / (step + 1), grad_norm=0.5)
+    recorder.close()
+
+    observations = [json.loads(b.payload) for b in Reader(tmp_path / "obs.archx.mdl")
+                    .blocks(BlockType.EVENT)]
+    assert [o["step"] for o in observations] == [0, 1]
+    assert observations[0]["loss"] == 1.0 and observations[1]["loss"] == 0.5
+    assert all(o["grad_norm"] == 0.5 for o in observations)
+    assert all(o["regions"] for o in observations), "movement per region must be recorded"
+
+
+def test_log_carries_the_loss_and_is_not_reused_by_the_next_step(tmp_path):
+    model = FakeModel(seed=3, size=8)
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "logged.archx.mdl"),
+                        policy=PhasePolicy(total_steps=3, min_warmup_steps=3))
+    rng = np.random.default_rng(11)
+    model.step(rng)
+    recorder.log(loss=2.0, data=b"a batch of text\n")     # the adapter's one optional line
+    recorder.step(0, grad_norm=0.1)
+    model.step(rng)
+    recorder.step(1, grad_norm=0.1)                        # nothing logged for this step
+    recorder.close()
+
+    reader = Reader(tmp_path / "logged.archx.mdl")
+    observations = [json.loads(b.payload) for b in reader.blocks(BlockType.EVENT)]
+    assert observations[0]["loss"] == 2.0
+    assert observations[1]["loss"] is None, "a logged value belongs to one step only"
+    assert [json.loads(b.payload) for b in reader.blocks(BlockType.DATA_SEGMENT)]
+
+
+def test_the_file_states_the_tier_it_reached_and_what_it_could_not_see(tmp_path):
+    model = FakeModel(seed=4, size=8)
+    recorder = Recorder(model.registry(), model.read, str(tmp_path / "tier.archx.mdl"),
+                        policy=PhasePolicy(total_steps=2, min_warmup_steps=2))
+    model.step(np.random.default_rng(5))
+    recorder.step(0, loss=1.0, grad_norm=1.0, data=b"text\n")
+    recorder.close()
+
+    info = [json.loads(b.payload) for b in Reader(tmp_path / "tier.archx.mdl")
+            .blocks(BlockType.INFO)]
+    capability = next(block for block in info if block["event"] == "capabilities")
+    assert capability["capability_tier"] == 2, "loss, gradients and data were all recorded"
+    assert capability["capabilities_missing"].get("activations"), (
+        "tier 3 must be reported missing with a reason, not silently absent")
 
 
 def test_stored_delta_covers_every_skipped_step(tmp_path):

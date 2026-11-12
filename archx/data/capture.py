@@ -12,6 +12,8 @@ The dedup rule is the whole point: an epoch over the same data costs pointers, n
 
 from __future__ import annotations
 
+import json
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -45,8 +47,25 @@ class Segment:
     region_effects: dict = field(default_factory=dict)
     component_mask: int = 0
     delta_reconstruction_error: float = 0.0
+    #: Bytes waiting for the writer thread. Never written unless a shard is made from it.
+    content: bytes | None = field(default=None, repr=False, compare=False)
+    sensitive: bool = field(default=False, repr=False, compare=False)
+    #: True when the caller named this segment. A name is never merged away.
+    named: bool = field(default=False, repr=False, compare=False)
+    #: The exact text last written to the file, so an unchanged segment is never written twice.
+    written_payload: str | None = field(default=None, repr=False, compare=False)
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, upto: int | None = None) -> dict:
+        """The join as it stands. `upto` clamps the end of the span to recorded history.
+
+        A segment is observed on the training thread and written from the writer thread, which
+        is behind it by design. A crash between the two could otherwise leave a segment saying
+        it was last seen at a step the file never reached - a record of motion that is not in
+        the file. Only the end of the span is clamped: where a segment *started* is a fact the
+        moment it is observed, and it cannot be beyond `upto`, because `upto` is always at
+        least as high as the step being observed.
+        """
+        last = self.last_step if upto is None else min(self.last_step, upto)
         return {
             "segment_id": self.segment_id,
             "shard_id": self.shard_id,
@@ -54,7 +73,7 @@ class Segment:
             "fingerprint": self.fingerprint,
             "characteristics": self.characteristics,
             "first_step": self.first_step,
-            "last_step": self.last_step,
+            "last_step": max(self.first_step, last),
             "times_seen": self.times_seen,
             "region_effects": self.region_effects,
             "component_mask": self.component_mask,
@@ -62,11 +81,16 @@ class Segment:
         }
 
 
-def characteristics(data: bytes) -> dict:
-    """Cheap, comparable description of the data. Same schema for every run, by design."""
+def characteristics(data: bytes, *, shard_id: str = "") -> dict:
+    """Cheap, comparable description of the data. Same schema for every run, by design.
+
+    `shard_id` is the content hash when the caller already has it. Hashing a 128 KiB batch
+    costs ~210 us, so hashing the same bytes twice per step would be the single most
+    expensive thing recording does.
+    """
     info = {
         "bytes": len(data),
-        "sha:blake2b16": content_id(data),
+        "sha:blake2b16": shard_id or content_id(data),
     }
     try:
         text = data.decode("utf-8")
@@ -85,7 +109,14 @@ def characteristics(data: bytes) -> dict:
 
 
 class DataCapture:
-    """Collects data segments and deduplicated shards for the recorder to write."""
+    """Collects data segments and deduplicated shards for the recorder to write.
+
+    Two phases, split on purpose. `observe` runs on the training thread and does the cheapest
+    thing that can answer "which segment is this?" - an identity check, then a pointer lookup
+    against data already seen. `seal` runs on the writer thread and does the expensive work:
+    hashing and compressing. Measured on a 128 KiB batch, hashing costs ~210 us and
+    compressing ~530 us, both of which must not be felt by a training step.
+    """
 
     def __init__(self, level: DataLevel | str = DataLevel.SEGMENTS, *,
                  max_bytes: int | None = None) -> None:
@@ -94,6 +125,14 @@ class DataCapture:
         self.shards: dict[str, EncodedShard] = {}
         self.segments: dict[str, Segment] = {}
         self.sensitive: set[str] = set()
+        self.pointers: set[str] = set()
+        self._by_shard: dict[str, Segment] = {}
+        self._observed = 0
+        self._by_identity: dict[int, Segment] = {}
+        # `observe` runs on the training thread and the flush runs on the writer thread, so
+        # every read or write of these dicts is under this lock. Without it a flush can see a
+        # segment that was created but not yet sealed, and write it out with no characteristics.
+        self._lock = threading.Lock()
         self.bytes_stored = 0
         self.degraded_to: DataLevel | None = None
         self._started = time.monotonic()
@@ -102,33 +141,138 @@ class DataCapture:
 
     def observe(self, data: bytes, step: int, *, segment_id: str = "",
                 source: str = "", sensitive: bool = False) -> Segment | None:
-        """Record one observation of data. Returns None when the level keeps nothing."""
+        """Record one observation of data. Returns None when the level keeps nothing.
+
+        Cheap by design. Same bytes under the same id is a pointer come back; a new segment is
+        recorded with its content left unhashed until `seal` runs off the training thread.
+        """
         if self.level is DataLevel.NONE:
             return None
+        with self._lock:
+            return self._observe(data, step, segment_id, source, sensitive)
 
-        shard_id = content_id(data)
-        lookup = segment_id or shard_id
-        existing = self.segments.get(lookup) if lookup else None
-        if existing is not None:
-            existing.last_step = step
-            existing.times_seen += 1
-            return existing
+    def _observe(self, data: bytes, step: int, segment_id: str,
+                 source: str, sensitive: bool) -> Segment | None:
+        """The body of `observe`, called with the lock held."""
+        if segment_id:
+            existing = self.segments.get(segment_id)
+            if existing is not None:
+                # The caller named this segment, so the name is the identity. Whether the
+                # bytes changed is a question for the hash, on the writer thread.
+                existing.last_step = step
+                existing.times_seen += 1
+                return existing
+        else:
+            # Unnamed: the only free identity check is object identity, which is exactly true
+            # when a dataloader hands over the same batch object again. Never a byte compare.
+            existing = self._by_identity.get(id(data))
+            if existing is not None and existing.content is data:
+                existing.last_step = step
+                existing.times_seen += 1
+                return existing
 
-        stored_id = shard_id
-        if self.level in (DataLevel.SEGMENTS, DataLevel.FULL):
-            stored_id = self._store_shard(data, shard_id, sensitive=sensitive)
+        self._observed += 1
+        key = segment_id or f"data-{self._observed}"
 
         segment = Segment(
-            segment_id=lookup,
-            shard_id=stored_id,
+            segment_id=key,
+            shard_id="",                 # known only after sealing
             source=source,
-            fingerprint=characteristics(data)["sha:blake2b16"],
-            characteristics=characteristics(data),
+            fingerprint="",              # known only after sealing
+            characteristics={},
             first_step=step,
             last_step=step,
+            content=data,
+            sensitive=sensitive,
+            named=bool(segment_id),
         )
-        self.segments[lookup] = segment
+        self.segments[key] = segment
+        if data is not None:
+            self._by_identity[id(data)] = segment
         return segment
+
+    def seal(self) -> None:
+        """Hash, deduplicate and compress every unsealed segment. Runs on the writer thread.
+
+        A content cap that is hit degrades to `pointers` here, once, for the whole capture:
+        the file keeps the hash and the characteristics, never a half-stored shard.
+        """
+        with self._lock:
+            self._seal()
+
+    def _seal(self) -> None:
+        for segment in list(self.segments.values()):   # merging removes entries
+            if segment.shard_id or segment.content is None:
+                continue
+            data = segment.content
+            shard_id = content_id(data)
+            segment.fingerprint = shard_id
+            segment.characteristics = characteristics(data, shard_id=shard_id)
+
+            if self.level is DataLevel.NONE:
+                segment.shard_id = shard_id
+            elif self.level is DataLevel.POINTERS:
+                segment.shard_id = shard_id
+                self.pointers.add(shard_id)
+            elif segment.sensitive:
+                self.sensitive.add(shard_id)
+                segment.shard_id = shard_id
+            elif self.max_bytes is not None and self.bytes_stored + len(data) > self.max_bytes:
+                # Degrade, never truncate: a half-stored shard would look complete and be wrong.
+                self.level = DataLevel.POINTERS
+                self.degraded_to = DataLevel.POINTERS
+                self.pointers.add(shard_id)
+                segment.shard_id = shard_id
+            elif shard_id in self.shards:
+                segment.shard_id = shard_id     # dedup: the second sighting costs nothing
+            else:
+                encoded = encode_shard(data)
+                self.shards[shard_id] = encoded
+                self.bytes_stored += encoded.nbytes
+                segment.shard_id = shard_id
+            segment.content = None              # the bytes live in the shard now, not twice
+            self._merge_unnamed(segment)
+        self._by_shard = {s.shard_id: s for s in self.segments.values() if not s.named}
+
+    def statements(self, upto: int | None = None) -> list[tuple["Segment", str]]:
+        """The segments plus the text that should now be in the file for each.
+
+        Comparing that text with `written_payload` is how the writer decides whether to write
+        at all. A flag would be simpler and wrong twice over: the writer thread lags the
+        training thread, so a flush can write a clamped, partial statement that a flag would
+        mark as done, and a re-statement whose content is identical would be written anyway.
+        Text comparison is exact, idempotent, and costs a JSON dump per changed segment.
+        """
+        with self._lock:
+            return [(segment, json.dumps(segment.to_dict(upto=upto)))
+                    for segment in self.segments.values()]
+
+    def _merge_unnamed(self, segment: Segment) -> None:
+        """Collapse two unnamed segments that turned out to hold the same bytes.
+
+        While recording, identical bytes in two different objects are indistinguishable from
+        two segments - telling them apart would mean hashing on the training thread. After
+        sealing, the hash says they are one shard, so they are one segment too. A *named*
+        segment is never merged: two ids over one shard is the join case, not a duplicate.
+        """
+        if segment.named:
+            return
+        previous = self._by_shard.get(segment.shard_id)
+        if previous is None:
+            self._by_shard[segment.shard_id] = segment
+            return
+        # Merging into a segment already in the file is safe: the next flush sees the changed
+        # (last_step, times_seen) and re-states it, so the file never keeps an older copy.
+        previous.last_step = max(previous.last_step, segment.last_step)
+        previous.times_seen += segment.times_seen
+        previous.first_step = min(previous.first_step, segment.first_step)
+        for region, effects in segment.region_effects.items():
+            held = previous.region_effects.setdefault(
+                region, {"delta_norm": 0.0, "grad_norm_max": 0.0, "loss_delta": 0.0})
+            held["delta_norm"] += effects["delta_norm"]
+            held["grad_norm_max"] = max(held["grad_norm_max"], effects["grad_norm_max"])
+            held["loss_delta"] += effects["loss_delta"]
+        self.segments.pop(segment.segment_id, None)
 
     def record_effects(self, segment_id: str, *, region: str, delta_norm: float,
                        grad_norm: float | None, loss_delta: float | None) -> None:
@@ -155,21 +299,3 @@ class DataCapture:
         return self.bytes_stored
 
     # ------------------------------------------------------------ internals
-
-    def _store_shard(self, data: bytes, shard_id: str, *, sensitive: bool) -> str:
-        if shard_id in self.shards or shard_id in self.sensitive:
-            return shard_id  # dedup: the second sighting costs nothing
-        if sensitive:
-            self.sensitive.add(shard_id)
-            return shard_id  # content deliberately not kept; hash and characteristics remain
-
-        if self.max_bytes is not None and self.bytes_stored + len(data) > self.max_bytes:
-            # Degrade, never truncate: a half-stored shard would look complete and be wrong.
-            self.level = DataLevel.POINTERS
-            self.degraded_to = DataLevel.POINTERS
-            return shard_id
-
-        encoded = encode_shard(data)
-        self.shards[shard_id] = encoded
-        self.bytes_stored += encoded.nbytes
-        return shard_id

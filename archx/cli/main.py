@@ -29,6 +29,15 @@ def build_parser() -> argparse.ArgumentParser:
     recover.add_argument("file", help="path to the recording")
     recover.add_argument("--out", help="recover into a copy instead of in place")
 
+    reconstruct = sub.add_parser("reconstruct", help="rebuild the weights at a step")
+    reconstruct.add_argument("file", help="path to the recording")
+    reconstruct.add_argument("--step", type=int, help="step to rebuild (default: the last)")
+    reconstruct.add_argument("--out", help="output .npz path")
+
+    events = sub.add_parser("events", help="list events, annotations and data segments")
+    events.add_argument("file", help="path to the recording")
+    events.add_argument("--json", action="store_true", help="machine-readable output")
+
     return parser
 
 
@@ -50,6 +59,16 @@ def main(argv: list[str] | None = None) -> int:
         from .recover import run_recover
 
         return run_recover(args.file, out=args.out)
+
+    if args.command == "reconstruct":
+        from .reconstruct import run_reconstruct
+
+        return run_reconstruct(args.file, step=args.step, out=args.out)
+
+    if args.command == "events":
+        from .events import run_events
+
+        return run_events(args.file, as_json=args.json)
 
     parser.error(f"unknown command {args.command!r}")
     return 2

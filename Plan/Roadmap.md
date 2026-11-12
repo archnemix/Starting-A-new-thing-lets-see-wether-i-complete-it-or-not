@@ -46,22 +46,23 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 3.1 | Tensor registry: dtype/shape map, tied weights by `data_ptr`, frozen detection | Unit tests for ties and frozen params | todo |
-| 3.2 | Shadow-buffer delta engine + async writer thread with bounded queue and degrade-not-block policy | Overhead measured on synthetic loops; drop policy tested | todo |
-| 3.3 | Phase policy: warmup/middle/cool-down, per-region thresholds, event triggers | Claim 6 measured: adaptive vs fixed interval at equal bytes | todo |
-| 3.4 | Event stream + annotations + component transitions | Round-trip test of every event type | todo |
-| 3.5 | Crash test end-to-end: recorder killed mid-run, file recovered, partial history readable | Test record on all 3 runners | todo |
-| 3.6 | Data capture pipeline: segment detection, content hashing, dedup, shard writing, `data_level` | Unit tests: epoch re-seen stores 0 new bytes; opt-out recorded in META | todo |
-| 3.7 | Conversion evidence: per-region effect summaries + thresholded streams + segment join | Join round-trip test from a recorded run | todo |
+| 3.1 | Tensor registry: dtype/shape map, tied weights by `data_ptr`, frozen detection | Unit tests for ties and frozen params | done (`formats/registry.py`, `Tests/unit/formats/test_registry.py`) |
+| 3.2 | Shadow-buffer delta engine + async writer thread with bounded queue and degrade-not-block policy | Overhead measured on synthetic loops; drop policy tested | done (`recorder.py`, `Bench/claim05_overhead.py`, `test_backpressure_drops_detail_instead_of_blocking`) |
+| 3.3 | Phase policy: warmup/middle/cool-down, per-region thresholds, event triggers | Claim 6 measured: adaptive vs fixed interval at equal bytes | **partly done** - policy and triggers live and tested; claim 6 (adaptive vs fixed *at equal bytes*) not yet measured |
+| 3.4 | Event stream + annotations + component transitions | Round-trip test of every event type | done - observations in `EVENT`, annotations in `ANNOT` (separate types), `archx events` |
+| 3.5 | Crash test end-to-end: recorder killed mid-run, file recovered, partial history readable | Test record on all 3 runners | done locally (`Tests/integration/test_crash_recovery.py`, real SIGKILL, 6 repeats); CI record pending |
+| 3.6 | Data capture pipeline: segment detection, content hashing, dedup, shard writing, `data_level` | Unit tests: epoch re-seen stores 0 new bytes; opt-out recorded in META | done (`data/{codecs,capture}.py`, `Tests/unit/data/test_capture.py`) |
+| 3.7 | Conversion evidence: per-region effect summaries + thresholded streams + segment join | Join round-trip test from a recorded run | done (`Tests/integration/test_join.py`, `test_recorder.py`) |
+| 3.8 | Capability tiers written as facts: achieved tier + every missing field with its reason | A recorded run states its tier and its gaps; tier 3 never claimed | done (`capabilities.py`, `test_the_file_states_the_tier_it_reached_and_what_it_could_not_see`) |
 
 ## Phase 4 - PyTorch adapter (v0.5)
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 4.1 | `archx.attach(model, optimizer, path)` via optimizer post-hook | Works for SGD/Adam/AdamW; gradient norms captured | todo |
-| 4.2 | `recorder.log(loss=, data_id=)` and `annotate()` | Tier 1-2 reached, data fingerprints stored | todo |
-| 4.3 | Numerics guard: same seed, recorder off vs on, bit-identical final weights (claim 9) | Passing on all 3 runners, recorded | todo |
-| 4.4 | Overhead guard: median step time delta < 5% (claim 5) | Numbers recorded per architecture | todo |
+| 4.1 | `archx.attach(model, optimizer, path)` via optimizer post-hook | Works for SGD/Adam/AdamW; gradient norms captured | done locally (`adapters/torch.py`, SGD tested; Adam/AdamW folded into 4.5) |
+| 4.2 | `recorder.log(loss=, data=, lr=)` and `annotate()` | Tier 1-2 reached, data fingerprints stored | done |
+| 4.3 | Numerics guard: same seed, recorder off vs on, bit-identical final weights (claim 9) | Passing on all 3 runners, recorded | done locally (identical loss curve + `torch.equal` weights); CI record pending |
+| 4.4 | Overhead guard: median step time delta < 5% (claim 5) | Numbers recorded per architecture | done locally - 0.6% weights, 0.7% with data, charged and printed (see Technical 5b); per-architecture sweep is 4.5 |
 | 4.5 | Architecture sweep: transformer, CNN, RNN, SSM-like, MoE-ish, multimodal-style custom stack | Tier 0/1 on all, no model-specific code | todo |
 | 4.6 | Claim 7 measured: optimizer-hook only vs richer hooking - what is lost | Written comparison | todo |
 

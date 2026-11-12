@@ -20,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from .capabilities import Capabilities
 from .container.schema import BlockType
 from .container.writer import Writer
 from .data.capture import DataCapture, DataLevel
@@ -82,20 +83,30 @@ class Recorder:
         self.max_rel_error = max_rel_error
         self.stats = RecorderStats()
         self._queue: queue.Queue[_Pending | None] = queue.Queue(maxsize=queue_size)
-        self._previous: dict[str, np.ndarray] = {}
+        self._last_loss: float | None = None
+        self._shards_written: set[str] = set()
+        self._logged: dict[str, Any] = {}
         self._thread = threading.Thread(target=self._run, name="archx-writer", daemon=True)
         self._stop = threading.Event()
         self._error: BaseException | None = None
         self._encoders = [Unchanged(), Sparse(threshold=0.0), DenseQuant(bits=8),
                           LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw()]
         self.data = DataCapture(data_level, max_bytes=data_max_bytes)
+        # What this run can promise. Filled in as facts arrive, never assumed up front.
+        self.capabilities = Capabilities()
+        self.capabilities.offer("steps")
+        self.capabilities.offer("deltas")
+        # The state at attach is what the first stored step is measured against. It is copied
+        # once, here, and never read again: step 0 is always an anchor.
+        self._previous = self._snapshot()
 
         self._writer_kwargs = {} if codec is None else {"codec": codec}
         self._path = path
         self._meta = {
             "library": f"archx {__version__}",
             "format": "1.0",
-            "capability_tier": 1,
+            "capability_tier": 0,   # the floor, true by construction; the achieved tier is
+                                    # reported by the INFO capability block written at close
             "attribution": "observational",
             "data_level": self.data.level.value,
             "tensors": len(registry),
@@ -106,21 +117,53 @@ class Recorder:
 
     # ------------------------------------------------------------ observation
 
+    def log(self, *, loss: float | None = None, data: bytes | None = None,
+            segment_id: str = "", source: str = "", lr: float | None = None) -> None:
+        """Hand the recorder what only the training loop can see, for the step now ending.
+
+        This is the one line an adapter cannot write for the user: the loss exists as a local
+        variable and dies with the step. Calling it is always optional, and anything logged
+        is used by the next `step()` and then cleared, so it cannot leak into a later step.
+        """
+        if loss is not None:
+            self._logged["loss"] = float(loss)
+        if data is not None:
+            self._logged["data"] = data
+        if segment_id:
+            self._logged["segment_id"] = segment_id
+        if source:
+            self._logged["source"] = source
+        if lr is not None:
+            self._logged["lr"] = float(lr)
+
     def step(self, step: int, *, loss: float | None = None, grad_norm: float | None = None,
              event: bool = False, data: bytes | None = None,
-             segment_id: str = "", source: str = "") -> Decision:
+             segment_id: str = "", source: str = "", lr: float | None = None) -> Decision:
         """Call once per optimizer step, after the weights have been updated.
 
         `data` is the batch (or a fingerprint-worthy slice of it). It is deduplicated by
-        content, so passing the same batch again costs a pointer, not a copy.
+        content, so passing the same batch again costs a pointer, not a copy. Anything not
+        passed here is taken from the last `log()` call and then cleared.
         """
+        logged, self._logged = self._logged, {}
+        loss = loss if loss is not None else logged.get("loss")
+        lr = lr if lr is not None else logged.get("lr")
+        data = data if data is not None else logged.get("data")
+        segment_id = segment_id or logged.get("segment_id", "")
+        source = source or logged.get("source", "")
         try:
             decision = self.policy.decide(step, loss=loss, grad_norm=grad_norm, event=event)
             self.stats.steps_seen += 1
+            if loss is not None:
+                self.capabilities.offer("loss")
+            if grad_norm is not None:
+                self.capabilities.offer("grad_norms")
+            if lr is not None:
+                self.capabilities.offer("learning_rate")
             segment = None
             if data is not None:
                 segment = self.data.observe(data, step, segment_id=segment_id, source=source)
-            context = {"loss": loss, "grad_norm": grad_norm,
+            context = {"loss": loss, "grad_norm": grad_norm, "lr": lr,
                        "segment_id": segment.segment_id if segment else ""}
             if decision is Decision.SKIP:
                 self.stats.steps_skipped += 1
@@ -131,17 +174,23 @@ class Recorder:
             snapshot = self._snapshot()
             self.stats.copy_seconds += time.perf_counter() - started
 
+            previous = self._previous or snapshot
+            movement = _movement_by_region(self.registry, previous, snapshot)
+            context["regions"] = movement
+            context["seconds"] = time.time()
+            self._previous = snapshot
+
             if decision is Decision.ANCHOR:
+                # An anchor already holds the current weights, so it is its own previous
+                # snapshot: no second copy, and no stale reference either.
                 self._enqueue(_Pending("anchor", step, snapshot, context=context))
                 self.stats.anchors += 1
-                # The anchor becomes the reference for the next delta; without this the next
-                # delta would be measured against a stale snapshot and silently lose motion.
-                self._previous = snapshot
             else:
-                previous = self._previous or snapshot
                 self._enqueue(_Pending("delta", step, previous, current=snapshot, context=context))
-                self._previous = snapshot
             self.stats.steps_stored += 1
+            self._last_loss = loss
+            if segment is not None:
+                self._attribute(segment.segment_id, movement, grad_norm, loss)
             self.policy.observe(loss=loss, grad_norm=grad_norm)
             return decision
         except Exception as exc:  # noqa: BLE001 - a recorder fault must not stop training
@@ -150,10 +199,25 @@ class Recorder:
 
     def annotate(self, step: int, event: str, detail: str = "") -> None:
         """Record a user annotation (stage boundary, unfreeze, curriculum change)."""
-        self._enqueue(_Pending("event", step, {}, context={"event": event, "detail": detail}))
+        self._enqueue(_Pending("annotate", step, {},
+                               context={"event": event, "detail": detail}))
+
+    def _attribute(self, segment_id: str, movement: dict[str, float],
+                   grad_norm: float | None, loss: float | None) -> None:
+        """Say what the weights did while this segment was on screen (Architecture 6.9)."""
+        loss_delta = None
+        if loss is not None and self._last_loss is not None:
+            loss_delta = loss - self._last_loss
+        for region, delta_norm in movement.items():
+            self.data.record_effects(segment_id, region=region, delta_norm=delta_norm,
+                                     grad_norm=grad_norm, loss_delta=loss_delta)
 
     def close(self) -> None:
-        """Flush the queue, write the footer and stop the thread."""
+        """Flush the queue, write the footer and stop the thread.
+
+        The capability block is written here, not at open, because a tier is what the run
+        turned out to be able to see - not what was asked for at the start.
+        """
         self._queue.put(None)
         self._thread.join(timeout=60)
         if self._error is not None:
@@ -188,22 +252,62 @@ class Recorder:
             self._error = exc
 
     def _run(self) -> None:
+        """The writer thread: open the file once, then drain the queue until told to stop.
+
+        A fault here is the worst kind, because the training run continues and nobody looks
+        at the recorder again until the end. So the file is always tried, even after a fault:
+        if a single block was bad, the file still closes with a footer and records what
+        happened, and `close()` raises so the caller cannot mistake a partial file for a
+        complete one. Discovered by a crash test - a merge bug killed this thread at step 22
+        and the run kept going silently for four thousand more steps.
+        """
+        writer: Writer | None = None
         try:
-            with Writer(self._path, **self._writer_kwargs) as writer:
-                writer.write_block(BlockType.META, json.dumps(self._meta).encode())
-                writer.write_block(BlockType.TENSOR_REGISTRY, self._registry_payload())
-                while True:
-                    item = self._queue.get()
-                    if item is None:
-                        break
+            writer = Writer(self._path, **self._writer_kwargs)
+            writer.write_block(BlockType.META, json.dumps(self._meta).encode())
+            writer.write_block(BlockType.TENSOR_REGISTRY, self._registry_payload())
+            while True:
+                item = self._queue.get()
+                if item is None:
+                    break
+                try:
                     self._handle(writer, item)
-                self._write_data(writer)
+                except Exception as exc:  # noqa: BLE001 - one bad step, not a lost run
+                    self._degrade(exc)
+            self._write_data(writer)
+            # Last, because writing the data is what makes tier 2 provable.
+            self._write_capabilities(writer)
         except BaseException as exc:  # noqa: BLE001 - surfaced at close()
             self._error = exc
+        finally:
+            if writer is not None:
+                try:
+                    if self._error is not None:
+                        writer.write_block(BlockType.INFO, json.dumps({
+                            "event": "recorder_fault",
+                            "error": f"{type(self._error).__name__}: {self._error}",
+                            "steps_stored": self.stats.steps_stored,
+                        }).encode())
+                    writer.close()
+                except Exception as exc:  # noqa: BLE001 - nothing left to save it with
+                    self._error = self._error or exc
 
-    def _write_data(self, writer: Writer) -> None:
-        """Write deduplicated shards first, then the segments that point at them."""
+    def _flush_data(self, writer: Writer, upto: int | None = None) -> None:
+        """Seal, then write whatever data is not in the file yet.
+
+        This runs after every stored step, not only at close, because the crash test says
+        why: a killed run that kept its deltas but lost its data would answer "the weights
+        moved" and not "because of this data" - half a product. Ordering matters: a shard is
+        on disk before the segment pointing at it, and both after the movement they explain,
+        so no record ever names a step the file does not have.
+
+        Sealing is the expensive half - hashing and compressing - and it happens here, on the
+        writer thread, which is the whole reason `observe` is allowed to be cheap.
+        """
+        self.data.seal()
         for shard_id, shard in self.data.shards.items():
+            if shard_id in self._shards_written:
+                continue
             payload = json.dumps({
                 "shard_id": shard_id,
                 "codec": shard.codec,
@@ -212,14 +316,45 @@ class Recorder:
                 "reconstruction_error": shard.reconstruction_error,
             }).encode()
             writer.write_block(BlockType.DATA_SHARD, payload + b"\n" + shard.payload)
-        for segment in self.data.segments.values():
-            writer.write_block(BlockType.DATA_SEGMENT,
-                               json.dumps(segment.to_dict()).encode(), step=segment.first_step)
+            self._shards_written.add(shard_id)
+        if self.data.segments:
+            self.capabilities.offer("data_segments")
+        # A segment grows while the run continues, so it is re-stated rather than rewritten:
+        # the file is append-only, and the last statement about an id is the true one. Only
+        # segments whose state changed are stated again, which keeps the cost linear in the
+        # number of changes instead of quadratic in the number of steps.
+        for segment, statement in self.data.statements(upto=upto):
+            if upto is not None and segment.first_step > upto:
+                # The step this data belongs to is not in the file yet, so the segment would
+                # claim a movement that is not recorded. Deferred, not dropped: the next flush
+                # states it, and the final flush states every one of them unclamped.
+                continue
+            if statement == segment.written_payload:
+                continue                      # already in the file, character for character
+            writer.write_block(BlockType.DATA_SEGMENT, statement.encode(),
+                               step=segment.first_step)
+            segment.written_payload = statement
+
+    def _write_data(self, writer: Writer) -> None:
+        """Final flush at close, plus the blocks that record what was deliberately withheld."""
+        self._flush_data(writer)
         if self.data.sensitive:
             writer.write_block(BlockType.DATA_POINTER, json.dumps({
                 "sensitive": sorted(self.data.sensitive),
                 "reason": "content withheld by request; hash and characteristics kept",
             }).encode())
+        if self.data.pointers:
+            # Level `pointers`, or a cap that was hit: the file says where to look, not what
+            # was there. Never a silent downgrade - META and this block both state it.
+            writer.write_block(BlockType.DATA_POINTER, json.dumps({
+                "pointers": sorted(self.data.pointers),
+                "reason": "content not stored: level is pointers, or the byte cap was reached",
+            }).encode())
+
+    def _write_capabilities(self, writer: Writer) -> None:
+        """State the tier this run reached, and name every field it could not see."""
+        payload = {"event": "capabilities", **self.capabilities.resolve().to_dict()}
+        writer.write_block(BlockType.INFO, json.dumps(payload).encode())
 
     def _registry_payload(self) -> bytes:
         import struct
@@ -240,14 +375,30 @@ class Recorder:
 
     def _handle(self, writer: Writer, item: _Pending) -> None:
         started = time.perf_counter()
-        if item.kind == "event":
+        if item.kind == "annotate":
+            writer.write_block(BlockType.ANNOT,
+                               json.dumps({"step": item.step, **item.context}).encode(),
+                               step=item.step)
+        elif item.kind in ("anchor", "delta"):
+            payload = (self._anchor_payload(item) if item.kind == "anchor"
+                       else self._delta_payload(item))
+            writer.write_block(BlockType.ANCHOR if item.kind == "anchor" else BlockType.DELTA,
+                               payload, step=item.step)
+            # Data goes to disk right after the movement it explains, never before. The other
+            # order would let a crash leave a segment naming step N in a file whose history
+            # stops at N-1, and a reader would be told about data that moved nothing. This way
+            # the only thing a crash can cost is the data for the step that was being written,
+            # which a reader can already tell apart from a step recorded without data.
+            # `upto` is the step before this one, not this one: the delta for `item.step` is
+            # written above, but the event that belongs to it is written after this call, so
+            # only steps strictly below are guaranteed complete on disk.
+            self._flush_data(writer, upto=item.step - 1)
+            # One observation per stored step: the weight change, and the stage it happened
+            # at. Loss and gradient norm are optional facts, empty when unavailable, never
+            # invented - the tier in META says which of them this run could see.
             writer.write_block(BlockType.EVENT,
                                json.dumps({"step": item.step, **item.context}).encode(),
                                step=item.step)
-        elif item.kind == "anchor":
-            writer.write_block(BlockType.ANCHOR, self._anchor_payload(item), step=item.step)
-        else:
-            writer.write_block(BlockType.DELTA, self._delta_payload(item), step=item.step)
         self.stats.blocks_written += 1
         self.stats.bytes_written = writer._fh.tell() if not writer._closed else self.stats.bytes_written
         self.stats.encode_seconds += time.perf_counter() - started
@@ -286,6 +437,27 @@ class Recorder:
 
 _DTYPE_IDS = {"f32": 0, "f16": 1, "bf16": 2, "f64": 3, "i8": 4, "i16": 5, "i32": 6,
               "i64": 7, "bool": 8}
+
+
+def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray],
+                        current: dict[str, np.ndarray]) -> dict[str, float]:
+    """Frobenius norm of the change, summed per region.
+
+    Regions are the only grouping that is stable across architectures, so this is the
+    number a reader gets to compare between runs and between steps. Untouched tensors are
+    skipped without a copy.
+    """
+    totals: dict[str, float] = {}
+    for entry in registry.primary_entries:
+        before = previous.get(entry.key)
+        after = current.get(entry.key)
+        if before is None or after is None:
+            continue
+        diff = after - before
+        delta = float(np.sqrt(np.dot(diff.ravel(), diff.ravel())))
+        if delta:
+            totals[entry.region] = totals.get(entry.region, 0.0) + delta
+    return totals
 
 
 def _dtype_id(name: str) -> int:

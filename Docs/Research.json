@@ -307,16 +307,111 @@
       ],
       "findings": [
         "256x256 f32, 1% moved: sparse 3,404 B exact (77x); int8 2,098 B at 8.9e-3 (125x); lowrank refused.",
-        "256x256 f32, all moved: int8 56,190 B at 1.1e-2 (4.7x); sparse refused; lowrank refused; dense_raw 227,534 B exact (1.2x).",
-        "rank-4 structure: lowrank found rank 4 exactly, 7,680 B (34x, 8.4e-8); int8 52,266 B at 1.5e-2; dense_raw 233,011 B exact.",
+        "256x256 f32, all moved: int8 56,190 B at 1.1e-2 (4.7x); sparse refused; lowrank refused; dense_raw 242,475 B exact (1.1x).",
+        "rank-4 structure: lowrank found rank 4 exactly, 7,680 B (34.1x, 8.4e-8); int8 52,266 B at 1.5e-2; dense_raw 243,459 B exact (1.1x).",
         "Sparse vs int8 crossover: int8 is smaller at every density from 0.1% to 100% when error is allowed; sparse only wins when exactness is required.",
         "Byte-plane shuffle: sparse 1% 4,533 -> 7,774 B (0.58x, a loss); dense 242,473 -> 227,533 (1.07x); rank-4 243,457 -> 233,010 (1.04x). An all-zero tensor is shuffle-invariant.",
-        "Low-rank refuses random noise at rank 8 with a 1e-3 budget (relative error stays ~0.9)."
+        "Low-rank refuses random noise at rank 8 with a 1e-3 budget (relative error stays ~0.9).",
+        "Re-run 2026-11-12 after the Phase 3 source changes: identical encoder choices, and the dense_raw figures moved by <3% (zstd stream layout), which is the noise floor of these scripts.",
+        "Claim 5 re-run on the same date, 262,144 params, 200 steps: none 3.63 ms; adaptive default 3.75 ms (+3.4%, 18,443 KiB, 23 stored / 177 skipped); every step 4.53 ms (+24.7%, 57,671 KiB). The run varies by a percent between invocations, so read these as a range, not a precise figure."
       ],
       "verdict": "Policy is per tensor: exact path = sparse or dense_raw, lossy path = int8 unless the delta is genuinely low rank. Shuffle stays off by default. Any ratio quoted in the docs must come from these scripts.",
       "affects": [
         "archx/encoders/*",
         "Plan/Architecture.md 6.3-6.4",
+        "Docs/Technical.md"
+      ]
+    },
+    {
+      "id": "recorder-overhead-measurements",
+      "question": "What does attaching the recorder actually cost per optimizer step, and which half costs it?",
+      "sources": [
+        "Tests/integration/test_torch_adapter.py (fixture overhead_numbers, _Charged timer)",
+        "Bench/claim05_overhead.py",
+        "local timings, 2 vCPU sandbox, torch 2.15.0+cu132 on CPU"
+      ],
+      "findings": [
+        "Charged cost of the recorder's own code: 0.119 ms per step with data_level=none, 0.140 ms with segments, on a 19.2 ms step (512-wide MLP, batch 1024, median of 25).",
+        "Wall-clock overhead of timing two whole runs is unusable here: the same loop varies by +/-8% between runs, and the first measurement of the same code gave +550%, +320% and -0.6% on consecutive runs.",
+        "Taking the snapshot twice per anchor cost +17% before it was removed; hashing and compressing the batch on the training thread cost +81% before it was moved to the writer thread.",
+        "content_id (blake2b-16) of 128 KiB = 210 us, of 2 MiB = 3.4 ms; zstd level 3 of 128 KiB = ~530 us; detach().cpu().numpy().tobytes() of a 2 MiB tensor = 150 us.",
+        "Global grad norm via pow(2).sum().item() per tensor = 40 us; via one numpy dot per tensor = 19 us, on a 6-tensor model.",
+        "On a 0.3 ms toy step the same code is a 350-650% overhead because framework dispatch dominates; a fixed percentage budget is only meaningful on a step big enough to have a cost."
+      ],
+      "verdict": "Measure by charging our own code, not by differencing two noisy runs. Data hashing and compression belong on the writer thread; the one unavoidable training-thread cost is one buffer copy, and data_level is the escape hatch. The <5% claim is stated for the weight half, where it is 0.6%.",
+      "affects": [
+        "Docs/Technical.md 5a/5b",
+        "Docs/Thinking.md round 6",
+        "Plan/Roadmap.md 4.4",
+        "Tests/integration/test_torch_adapter.py"
+      ]
+    },
+    {
+      "id": "crash-safety-of-a-live-recorder",
+      "question": "If the training process is killed while recording, what survives, and what must the recorder do to keep the join?",
+      "sources": [
+        "Tests/integration/test_crash_recovery.py (child process, real SIGKILL on POSIX, terminate on Windows)",
+        "Tests/integration/test_recovery_property.py (8 seeded tear points)",
+        "archx/container/recovery.py"
+      ],
+      "findings": [
+        "A killed process never writes a footer, so the file is 'crashed' by definition; Reader(allow_torn=True) already read a valid prefix before any recovery, and recover_in_place then makes it closed and re-indexed without inventing blocks.",
+        "Data written only at close was lost entirely on a kill: the deltas survived and every batch did not. The product's answer became 'the weights moved' with no cause.",
+        "Writing data after each stored step introduced two ordering rules: a shard before the segment pointing at it, and movement before the data explaining it.",
+        "A segment may still not name a step the file has not reached; the flush that writes a segment is clamped to the previous step, because the EVENT for the current step is appended after the flush.",
+        "A writer-thread exception used to kill the thread silently while training continued: a dict-mutation race at step 22 lost 4000 further steps with no signal.",
+        "A segment stated several times (as it grows) is resolved by last-statement-wins in Timeline.segments(); the raw block list is append-only and not the reader's view."
+      ],
+      "verdict": "Write data during the run, in a fixed order, under a lock; state a segment only for steps already on disk; never let the writer thread die without recording the fault in an INFO block and re-raising it from close().",
+      "affects": [
+        "archx/recorder.py",
+        "archx/data/capture.py",
+        "archx/container/values.py",
+        "Docs/Technical.md 5a",
+        "Docs/Thinking.md round 6"
+      ]
+    },
+    {
+      "id": "torch-installability-in-sandbox",
+      "question": "How can torch be installed so the adapter is tested for real instead of skipped?",
+      "sources": [
+        "https://pypi.org/pypi/torch/json (2.15.0, CUDA build as the default wheel)",
+        "local pip runs, 2026-11-12"
+      ],
+      "findings": [
+        "pip install torch installs 2.15.0+cu132; import fails with ValueError: libcublasLt.so.*[0-9] not found.",
+        "pip install --no-deps torch installs but stays unimportable.",
+        "The CPU index https://download.pytorch.org/whl/cpu is unreachable from this sandbox: TLS handshake closed (SSLZeroReturnError), no version list returned.",
+        "Installing nvidia-cublas, -cuda-runtime, -cuda-nvrtc, -cudnn-cu13, -cufft, -cusolver, -cusparse, -curand, -nvjitlink, -nccl-cu13, -nvtx, -cuda-cupti, -cusparselt-cu13, -cufile and -nvshmem-cu13 makes import work; nvshmem is the one pip does not pull in itself (libnvshmem_host.so.3).",
+        "pip then reports version conflicts against torch's pins (nccl, cusparselt, setuptools); the CPU path still imports and runs every step, so the warnings are cosmetic here.",
+        "Cost: 8 GB of disk out of 20 GB free, about 2.5 minutes of download."
+      ],
+      "verdict": "Install the nvidia dependency set to test the adapter locally; keep pytest.importorskip('torch') in the test module so a runner without torch skips with a reason instead of failing. Documented in Docs/Workaround.md.",
+      "affects": [
+        "Docs/Workaround.md",
+        "Tests/integration/test_torch_adapter.py",
+        "Docs/Thinking.md round 6"
+      ]
+    },
+    {
+      "id": "per-step-observation-blocks",
+      "question": "Where do loss, gradient norm, learning rate and user annotations belong in the container?",
+      "sources": [
+        "Plan/Format_Spec.md section 4 (block table: 5 EVENT, 7 ANNOT)",
+        "Plan/Architecture.md 4 (recording model), 6.11 (tiers)"
+      ],
+      "findings": [
+        "The spec already allocated EVENT (5) for 'timeline entry: step, kind, values (loss, lr, grad norms, timings)' and ANNOT (7) for 'user annotation: step, event name, detail'.",
+        "The first implementation wrote both into EVENT, so a reader could not separate what the run measured from what the user declared.",
+        "META claimed capability_tier 1 unconditionally while no tier-1 value was ever written.",
+        "A tier is only meaningful compared with its own data: tier 2 without tier 1 is a claim the file contradicts."
+      ],
+      "verdict": "EVENT carries observations only, ANNOT carries annotations only, and the achieved tier plus every missing field with a reason goes into an INFO capability block written at close, after the data that proves tier 2.",
+      "affects": [
+        "archx/capabilities.py",
+        "archx/recorder.py",
+        "archx/cli/events.py",
+        "archx/container/values.py",
         "Docs/Technical.md"
       ]
     }

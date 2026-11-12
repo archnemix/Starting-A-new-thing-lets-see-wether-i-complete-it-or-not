@@ -90,4 +90,20 @@ def test_cli_info_reports_what_the_writer_wrote(tmp_path, capsys):
     assert main(["info", str(path)]) == 0
     out = capsys.readouterr().out
     assert "launcher" in out
-    assert "closed         True" in out
+    assert "crashed" not in out
+    assert "closed         yes" in out
+
+
+def test_cli_info_reads_a_crashed_file_and_points_at_recover(tmp_path, capsys):
+    """The moment a run dies is exactly when someone types `archx info`; it must not refuse."""
+    path = tmp_path / "crashed.archx.mdl"
+    with Writer(path) as w:
+        w.write_block(BlockType.META, json.dumps({"adapter": "torch"}).encode())
+        w.write_block(BlockType.DELTA, b"\x00" * 32, step=0)
+    path.write_bytes(path.read_bytes()[:-10])          # a torn tail, no footer
+
+    assert main(["info", str(path)]) == 0
+    out = capsys.readouterr().out
+    assert "closed         no" in out
+    assert "archx recover" in out
+    assert "torch" in out

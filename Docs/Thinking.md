@@ -240,3 +240,98 @@ matrix that runs them on Linux, Windows and macOS and commits the records.
   silently mis-decoding it is not.
 - The property test uses fixed seeds instead of hypothesis: a failure is then reproducible
   from the test id alone, which matters more than input variety at this stage.
+
+## Round 6 - 2026-11-12 - Phase 3 finishes: the torch adapter, the crash test, and what it caught
+
+**Built:** `archx.attach()` for raw PyTorch; `max_rel_error` exposed on attach; per-step
+observations (`EVENT`) carrying loss, gradient norm, learning rate and movement per region;
+annotations moved to their own `ANNOT` block; a capability block written at close; `archx
+reconstruct` and `archx events`; data written during the run instead of at close; 99 tests,
+green locally and stable over three consecutive full runs.
+
+**The measurement that started this round.** torch from PyPI would not import here: it is the
+CUDA wheel and `libcublasLt.so` was missing. I installed the nvidia wheels it asks for until
+`import torch` worked: 8 GB of the 20 GB disk, about two and a half minutes of downloading, and
+a CPU-only machine that never uses any of it. That is written into `Docs/Workaround.md` so
+nobody repeats the search.
+On step 1 of the plan I had planned to skip the adapter test in CI; it stays skippable there
+(`pytest.importorskip`) because a runner without torch is a real configuration, but it now
+runs for real locally, and the numbers below are from a real `nn.Module`, not a stub.
+
+**Bugs found, in the order they appeared - each one is a reason the previous design was wrong**
+
+1. *The recorder computed loss and gradient norms and then threw them away.* `step()` built a
+   context dict for the writer that nothing ever wrote. The file therefore claimed tier 1 in
+   META while containing none of tier 1. Fix: every stored step writes an `EVENT` block with
+   those values, and META no longer claims a tier at all - the achieved tier is written at
+   close, when it is a fact.
+2. *Annotations and observations shared one block type.* `annotate()` wrote `{"event": ...}`
+   into `EVENT`, which the spec reserves for what the run measured. A reader could not tell
+   "the user unfroze the model at step 900" from "loss was 0.31 at step 900", and the join lost
+   the distinction between cause and commentary. Fix: `ANNOT` (id 7, already allocated in the
+   spec) is the user's word; `EVENT` is the run's measurement. The CLI prints them apart.
+3. *Data capture did the hashing and compression inside the training step.* It cost +81% on a
+   19 ms step, and on the 128 KiB batch used by the crash test the hash alone is 210 us. Fix:
+   `observe()` now only checks identity and stores a reference; `seal()` hashes and compresses
+   on the writer thread. This also fixed a subtler thing: the batch is hashed once, not twice
+   (once for the shard id, once for the characteristics).
+4. *Every anchor copied the whole model twice.* The anchor's payload and the shadow buffer were
+   the same arrays, duplicated. Fix: an anchor *is* its own previous state, so the copy is
+   reused. Measured: +17% overhead became +0.6%.
+5. *A data cap silently produced segments with no shard.* At level `pointers`, or after the cap
+   was hit, the segment said `shard_id` with nothing behind it and no `DATA_POINTER` block.
+   Fix: pointers are collected and written, so "where to look" is a fact in the file.
+6. *The crash test found that data never reached the disk during the run.* A killed process
+   kept its deltas and lost every batch: "the weights moved" with no "because of this data",
+   which is half of the product and precisely what someone investigating a crashed run needs.
+   Fix: the writer seals and appends after every stored step.
+7. *That fix exposed a race that killed the writer thread.* `seal()` merged segments into the
+   same dict the flush was iterating, so the thread died with "dictionary changed size during
+   iteration" at step 22 - and the training run continued for four thousand more steps, silently
+   recording nothing. Two fixes, both kept: a lock around the shared dicts, and a writer thread
+   that can no longer die silently. It now catches per-step faults, writes an `INFO` block
+   naming the error, still closes the file, and re-raises from `close()`.
+8. *Segments claimed steps the file did not have.* The segment grew on the training thread while
+   the writer lagged, so a crash could leave a segment naming step N in a file whose history
+   stopped at N-2. Fix: a flush states a segment only once its first step is on disk, and clamps
+   the end of its span to the last step whose *event* is guaranteed written - which is the
+   previous step, not the current one, because the event for the current step is appended after
+   the call. Getting that off-by-one wrong the first time produced the "segment at step 0 while
+   only step -1 exists" bug.
+9. *The dirty flag was the wrong mechanism, twice.* First it was cleared before the clamped
+   write (so a stale span was never corrected); then it was kept set (so identical content was
+   rewritten each flush, giving nine statements for four segments). Fix: compare the text of
+   the statement with the text last written, and write only when it differs. Exact, idempotent,
+   and it removes a whole class of "when do I clear this" reasoning.
+10. *Tied weights were reconstructed as if they had drifted apart.* Deltas are stored under the
+    primary name only, so applying them and forgetting the alias produced a model where
+    `encoder.weight` and `decoder.weight` held different values - a state that never existed.
+    Fix: `Timeline.reconstruct` copies the primary value onto every name in the tie group.
+11. *`archx info` refused the file it was most needed for.* A torn tail raised, so the command
+    you run on a crashed run failed on a crashed run. Fix: `info` reads with `allow_torn=True`
+    and says `closed no (crashed: run archx recover)`.
+12. *The overhead test was measuring the machine, not the code.* Timing two whole runs and
+    subtracting gave +550%, +320%, -0.6% for the same code on consecutive runs - the sandbox
+    varies by more than the effect. Fix: charge the recorder's own `step` and `log` with a timer,
+    and assert the charge against the measured step time. The wall-clock numbers are still
+    printed but no longer asserted on.
+
+**What the numbers actually say, and what I am not claiming**
+
+Recording the weights costs 0.119 ms on a 19.2 ms step: **0.6%**, inside the 5% budget.
+Recording the data as well costs 0.140 ms: **0.7%**, because only a buffer copy is left on the
+training thread. Both are measured by charging our code, not inferred from a noisy difference.
+
+I am *not* claiming 5% on a toy model, and the test says so in a comment: at 0.3 ms per step,
+framework dispatch dominates and any fixed percentage is meaningless. The <5% claim belongs to
+a step big enough to have a meaningful cost, which is where it is measured.
+
+**Verified, not assumed**
+
+- 99 tests, 0 failures, 0 errors, 0 skips; three consecutive full runs identical.
+- The crash test is a real `SIGKILL` of a child process, repeated six times without a flake.
+- The numerics guard runs the same loop twice with the same seed - once recorded, once not -
+  and compares the loss curve element by element and the final weights with `torch.equal`.
+- The lossless path (`max_rel_error=0.0`) rebuilds to 1e-10, and that residual is float32
+  accumulation when five deltas are summed onto an anchor, not an encoding loss; with an
+  anchor at the same step it is exact.

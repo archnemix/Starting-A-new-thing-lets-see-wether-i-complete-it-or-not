@@ -4,42 +4,71 @@
 > can be traced from the user's line to the exact file. Updated whenever a call chain
 > changes.
 
-Implemented so far: the container layer and the CLI (Phase 0-1). Chains for the recorder
-and adapters are still the contract the code will be built against. `[live]` marks a chain
-that exists in code today; `[planned]` marks one that does not.
+Implemented so far: the container layer, the CLI, the recorder, data capture and the raw
+PyTorch adapter (Phases 0-3). The HF Trainer and Lightning chains are still the contract the
+code will be built against. `[live]` marks a chain that exists in code today; `[planned]`
+marks one that does not.
 
 ---
 
-## 1. `archx.attach(model, optimizer, path=...)` - plain PyTorch
+## 1. `archx.attach(model, optimizer, path=...)` - plain PyTorch  [live]
 
 ```
 user script
-  └─ archx.attach()                       archx/__init__.py
-       └─ Recorder(...)                   archx/recorder.py
-            ├─ build tensor registry      archx/formats/tensor.py
-            │    (names, dtypes, shapes, tied weights by data_ptr, frozen flags)
-            ├─ open container             archx/container/writer.py
-            │    └─ header block + META block + first ANCHOR
-            ├─ start writer thread        archx/recorder.py  (bounded queue)
-            ├─ optimizer.register_step_post_hook(_on_step)   archx/adapters/torch.py
-            └─ per-parameter grad hooks (torch >= 2.1)       archx/adapters/torch.py
+  └─ archx.attach(model, optimizer, path)          archx/__init__.py   (lazy import)
+       └─ attach()                                 archx/adapters/torch.py
+            ├─ named_parameters(remove_duplicate=False)
+            ├─ TensorRegistry.add(..., data_ptr, frozen, region, component)
+            │                                       archx/formats/registry.py
+            ├─ TorchRecorder(...)                   archx/recorder.py
+            │    ├─ writer thread opens the file, writes META + TENSOR_REGISTRY
+            │    └─ shadow copy of every primary tensor   (the step-0 baseline)
+            └─ optimizer.register_step_post_hook(hook)   archx/adapters/torch.py
 ```
 
 Per training step:
 
 ```
 optimizer.step()
-  └─ step_post_hook                        archx/adapters/torch.py
-       ├─ read param.grad -> norms          archx/adapters/torch.py
-       ├─ copy param.data -> queue          archx/adapters/torch.py
-       └─ policy.decide(step, stats)        archx/policy.py
-            └─ enqueue(delta_request | skip | anchor_request)
-writer thread (never blocks training)
-  ├─ delta = current - shadow              archx/recorder.py
-  ├─ encode (unchanged|sparse|quant|lowrank) archx/encoders/*
-  ├─ byte-plane shuffle + xor              archx/encoders/plane.py
-  ├─ zstd compress                         archx/container/writer.py
-  └─ append block + batched fsync          archx/container/writer.py
+  └─ step_post_hook                                archx/adapters/torch.py
+       ├─ global grad norm (one numpy dot per grad, ~19 us)
+       └─ Recorder.step(step, grad_norm=...)       archx/recorder.py
+            ├─ pick up anything from log()  (loss, data, lr) for this step only
+            ├─ DataCapture.observe()               archx/data/capture.py   (~0.3 us)
+            ├─ PhasePolicy.decide()                archx/policy.py
+            ├─ SKIP  -> count, feed the policy, done (nothing is copied)
+            ├─ STORE -> copy every primary tensor (shadow copy)
+            │            movement per region       archx/recorder.py
+            │            attribute effects to the segment   archx/data/capture.py
+            └─ enqueue anchor | delta              (bounded queue; full = drop + count)
+
+writer thread
+  ├─ ANCHOR | DELTA block written first            archx/container/writer.py
+  ├─ EVENT block: step, loss, grad_norm, lr, regions
+  ├─ DataCapture.seal()                            archx/data/capture.py
+  │    ├─ content id (blake2b-16)
+  │    ├─ dedup against stored shards  -> pointer only
+  │    └─ codec by content -> compress            archx/data/codecs.py
+  ├─ DATA_SHARD (once per unique content)          then DATA_SEGMENT (per statement)
+  └─ encode deltas                                 archx/encoders/*  (choose_encoder)
+
+recorder.close()
+  ├─ final clamp-free data flush + DATA_POINTER blocks (sensitive, pointers)
+  ├─ INFO capabilities: the tier reached, every missing field with its reason
+  ├─ INDEX + footer, CLOSED flag                   archx/container/writer.py
+  └─ re-raise any writer fault                     archx/recorder.py
+```
+
+Reading it back - `archx reconstruct`, `archx events`, or the library:
+
+```
+Reader(path)                                       archx/container/reader.py
+  └─ Timeline(reader)                              archx/container/values.py
+       ├─ parse_registry -> TensorInfo[]
+       ├─ parse_anchor / parse_delta -> arrays
+       ├─ reconstruct(step): nearest anchor + deltas  -> tensors (ties re-aliased)
+       ├─ events() / annotations() / segments()      -> the join, as records
+       └─ steps                                       -> what the file claims to have
 ```
 
 ## 2. `ArchxCallback(...)` - Hugging Face Trainer
@@ -124,19 +153,19 @@ archx recover <file> [--out copy]          archx/cli/recover.py
 ## 6. Failure paths `[live]` (must never propagate into training)
 
 ```
-any recorder exception
-  └─ guard in archx/recorder.py [planned]: log once, mark feature unavailable,
-     write CAPABILITY_DEGRADED event, continue training
+any exception inside Recorder.step()
+  └─ caught in archx/recorder.py: stats.failed += 1, remember the first error,
+     return SKIP -> training continues untouched
+
+any exception while writing one block
+  └─ caught per step in the writer thread: counted, remembered, the queue keeps draining;
+     the file still closes with a footer and an INFO block naming the fault
+
+close()
+  └─ raises RuntimeError if anything was swallowed, so a partial recording can never be
+     mistaken for a complete one
 
 any reader exception
   └─ typed errors in archx/errors.py: FormatError / CorruptBlockError /
      TruncatedFileError / UnsupportedVersionError -> CLI prints and exits 1
-```
-
-## 6. Failure paths (must never propagate into training)
-
-```
-any recorder exception
-  └─ guard in archx/recorder.py: log once, mark feature unavailable,
-     write CAPABILITY_DEGRADED event, continue training
 ```

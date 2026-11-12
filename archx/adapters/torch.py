@@ -1,0 +1,190 @@
+"""Plain PyTorch: attach in one line, leave the loop alone, lose nothing that was recorded.
+
+    recorder = archx.attach(model, optimizer, path="run.archx.mdl")
+
+The hook is `optimizer.register_step_post_hook`, public since torch 2.0. It fires after the
+weights have changed, which is exactly why the recorder keeps a shadow copy of the previous
+store point (see archx/recorder.py). Gradients are read inside the same hook, before the
+caller's `zero_grad()`, so gradient norms cost nothing extra.
+
+The hook cannot see the loss or the batch: those are locals that die with the iteration. One
+optional line hands them over, before `optimizer.step()`:
+
+    optimizer.zero_grad()
+    loss = criterion(model(x), y)
+    loss.backward()
+    recorder.log(loss=loss.item(), data=x)   # optional; only these two need it
+    optimizer.step()
+
+The file then reaches tier 2 without the loop being restructured in any other way.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+from ..formats.registry import TensorRegistry
+from ..policy import PhasePolicy
+from ..recorder import Recorder
+
+
+def _label_for(key: str, labels: dict[str, str]) -> str:
+    """Longest matching prefix wins, so 'vision.encoder' beats 'vision'."""
+    best = ""
+    for prefix in labels:
+        if key.startswith(prefix) and len(prefix) > len(best):
+            best = prefix
+    return labels[best] if best else ""
+
+
+def _build_registry(parameters: dict, *, regions: dict[str, str] | None,
+                    components: dict[str, str] | None) -> TensorRegistry:
+    """Registry with region tags and component names applied by longest matching prefix."""
+    regions = regions or {}
+    components = components or {}
+    registry = TensorRegistry()
+    for key, parameter in parameters.items():
+        array = parameter.detach().cpu().numpy()
+        registry.add(
+            key,
+            array,
+            pointer=int(parameter.data_ptr()),
+            frozen=not bool(getattr(parameter, "requires_grad", True)),
+            region=_label_for(key, regions),
+            component=_label_for(key, components),
+        )
+    return registry
+
+
+def as_bytes(data: Any) -> bytes | None:
+    """Turn whatever the training loop calls "a batch" into bytes, without changing it.
+
+    Tensors are read through their CPU view; nothing is mutated and no gradient is retained.
+    An unsupported type returns None, which the recorder reads as "no data recorded" - never
+    as a guess about what the user meant.
+    """
+    if data is None:
+        return None
+    if isinstance(data, bytes):
+        return data
+    if isinstance(data, str):
+        return data.encode("utf-8")
+    if isinstance(data, np.ndarray):
+        return np.ascontiguousarray(data).tobytes()
+    if hasattr(data, "detach"):                       # torch.Tensor
+        return data.detach().cpu().numpy().tobytes()
+    if isinstance(data, (list, tuple)):               # a batch of examples or tensors
+        parts = [as_bytes(item) for item in data]
+        if parts and all(part is not None for part in parts):
+            return b"".join(parts)                    # fixed per-batch layout, byte exact
+    return None
+
+
+class TorchRecorder(Recorder):
+    """A recorder that also understands the things a torch loop naturally has to hand.
+
+    The core recorder only ever accepts bytes, because a container format has no opinion about
+    tensors. This subclass is where "a batch" means something: it is the one place the adapter
+    converts, so the conversion rules live next to the framework they belong to.
+    """
+
+    def log(self, *, loss: float | None = None, data: Any = None, lr: float | None = None,
+            segment_id: str = "", source: str = "") -> None:
+        super().log(loss=loss, data=as_bytes(data), lr=lr,
+                    segment_id=segment_id, source=source)
+
+
+def attach(
+    model,
+    optimizer,
+    path: str,
+    *,
+    policy: PhasePolicy | None = None,
+    regions: dict[str, str] | None = None,
+    components: dict[str, str] | None = None,
+    data_level: str = "segments",
+    queue_size: int = 8,
+    max_rel_error: float = 1e-3,
+    meta: dict[str, Any] | None = None,
+) -> Recorder:
+    """Attach a recorder and return it. The training loop stays exactly as it was.
+
+    `model` may be a `nn.Module` or any object with `named_parameters()`. The returned
+    recorder's `log()` takes the loss and the batch; both are optional.
+
+    `max_rel_error` is the reconstruction budget per delta. The default (1e-3) is what makes
+    a run small; `0.0` restricts every delta to a lossless encoder and makes every stored step
+    rebuild exactly.
+    """
+    parameters = dict(_named_parameters(model))
+    registry = _build_registry(parameters, regions=regions, components=components)
+
+    def read_parameter(key: str) -> np.ndarray:
+        return parameters[key].detach().cpu().numpy()
+
+    recorder = TorchRecorder(registry, read_parameter, path, policy=policy,
+                        queue_size=queue_size,
+                        max_rel_error=max_rel_error,
+                        data_level=data_level,
+                        meta={"adapter": "torch", "torch": _torch_version(), **(meta or {})})
+    recorder._archx_parameters = parameters        # type: ignore[attr-defined]
+    handle = optimizer.register_step_post_hook(_make_step_hook(recorder, parameters))
+    recorder._archx_handle = handle                # type: ignore[attr-defined]
+    return recorder
+
+
+def _named_parameters(model):
+    """Every parameter, with its dotted name - including both names of a tied tensor.
+
+    `remove_duplicate=False` is deliberate: torch hides the second name of a shared parameter
+    by default, and that name is exactly what tells the registry the two are one storage unit.
+    """
+    try:
+        return model.named_parameters(remove_duplicate=False)
+    except TypeError:            # older torch, or an object that only takes no arguments
+        return model.named_parameters()
+
+
+def _grad_norm(parameters: dict) -> float | None:
+    """Global L2 norm of the gradients, read in one pass over the CPU views.
+
+    Measured on a 6-tensor model: `pow(2).sum().item()` costs ~40 us per call, the numpy
+    reduction ~19 us, and this runs on every step whether or not the step is stored. The norm
+    is summed in float64 because a float32 accumulation loses the small tensors entirely.
+    """
+    total = 0.0
+    seen = False
+    for parameter in parameters.values():
+        grad = getattr(parameter, "grad", None)
+        if grad is None:
+            continue
+        flat = grad.detach().cpu().numpy().ravel()
+        total += float(np.dot(flat, flat))
+        seen = True
+    return total ** 0.5 if seen and total else None
+
+
+def _torch_version() -> str:
+    """The framework version goes into the file: a recording must say what produced it."""
+    try:
+        import torch
+    except ImportError:  # pragma: no cover - torch is a hard requirement of this adapter
+        return "unknown"
+    return torch.__version__
+
+
+def _make_step_hook(recorder: Recorder, parameters: dict):
+    """Build the post-step hook: read the gradients, then let the recorder decide.
+
+    Gradient norms are computed here because this is the last moment they exist: the caller's
+    loop calls zero_grad() immediately afterwards. Nothing is kept alive afterwards.
+    """
+    state = {"step": -1}
+
+    def hook(_optimizer, _args, _kwargs) -> None:
+        state["step"] += 1
+        recorder.step(state["step"], grad_norm=_grad_norm(parameters))
+
+    return hook

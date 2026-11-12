@@ -218,16 +218,6 @@
       ],
       "handles": "Size discipline."
     },
-    "Actions/out/README.md": {
-      "purpose": "Outputs folder rule: one label folder per run, summary plus raw logs.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Anti-reliance on the Actions UI."
-    },
     "Actions/scripts/README.md": {
       "purpose": "Index of workflow helper scripts.",
       "inputs": [
@@ -689,10 +679,14 @@
       "handles": "Measured to hurt zero-heavy data; used only where it helps."
     },
     "Bench/README.md": {
-      "purpose": "Folder README: one script per claim, numbers go to Research.json.",
-      "inputs": [],
-      "outputs": [],
-      "handles": "CPU-only, fixed seeds, prints markdown."
+      "purpose": "Index of the measurement scripts and the claim each one measures.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Orientation for Bench/; points at Docs/Research.json for results."
     },
     "Bench/claim01_error_vs_ratio.py": {
       "purpose": "Claim 1: error vs compression ratio per encoder on three delta shapes.",
@@ -732,13 +726,264 @@
         "pass/fail"
       ],
       "handles": "Also pins the measured shuffle behaviour so the finding cannot silently regress."
+    },
+    "archx/policy.py": {
+      "purpose": "Phase policy: warmup / middle / cool-down plus event triggers -> store, skip or anchor.",
+      "inputs": [
+        "step index",
+        "loss",
+        "gradient norm",
+        "optional region movement",
+        "event flag"
+      ],
+      "outputs": [
+        "Decision (STORE | SKIP | ANCHOR)",
+        "phase labels for a step"
+      ],
+      "handles": "Recording density. Thresholds are per region, never global; a short run stays in warmup."
+    },
+    "archx/recorder.py": {
+      "purpose": "The hook surface: takes a snapshot, decides, and hands work to the writer thread.",
+      "inputs": [
+        "TensorRegistry",
+        "read(key) callable",
+        "path",
+        "policy",
+        "loss / grad_norm / lr",
+        "data bytes",
+        "annotations"
+      ],
+      "outputs": [
+        ".archx.mdl file",
+        "RecorderStats",
+        "Decision per step"
+      ],
+      "handles": "Two promises: training never waits (bounded queue, drops detail), and recording never changes training (reads only). Writes movement, then observation, then data."
+    },
+    "archx/capabilities.py": {
+      "purpose": "What a run could actually see: the tier reached and every field it could not see.",
+      "inputs": [
+        "fields offered as facts arrive"
+      ],
+      "outputs": [
+        "capability_tier",
+        "capabilities_missing with a reason per field"
+      ],
+      "handles": "A tier is measured, never requested; a tier cannot be reached above a missing lower tier."
+    },
+    "archx/formats/registry.py": {
+      "purpose": "The tensor registry: names, dtypes, shapes, tie groups, regions, components.",
+      "inputs": [
+        "named arrays plus storage pointers"
+      ],
+      "outputs": [
+        "TensorEntry list addressed by stable index",
+        "primary_entries",
+        "components",
+        "regions"
+      ],
+      "handles": "Tied weights detected by data_ptr so bytes are stored once and the alias survives."
+    },
+    "archx/data/codecs.py": {
+      "purpose": "Content id and per-shard codec: text-zstd, tokens-varint or zstd, all lossless.",
+      "inputs": [
+        "bytes of one batch or shard"
+      ],
+      "outputs": [
+        "EncodedShard (id, codec, payload, crc)",
+        "exact original bytes on decode"
+      ],
+      "handles": "Content addressing and the measured varint threshold (ids < 128)."
+    },
+    "archx/data/capture.py": {
+      "purpose": "Data capture in two phases: cheap observe on the training thread, seal off it.",
+      "inputs": [
+        "batch bytes",
+        "step",
+        "segment id",
+        "sensitivity flag",
+        "optional byte cap"
+      ],
+      "outputs": [
+        "Segment records with characteristics and per-region effects",
+        "deduplicated shards"
+      ],
+      "handles": "Four data levels, content dedup, sensitive shards, a cap that degrades to pointers, and a lock so the writer thread and the training thread cannot corrupt each other's view."
+    },
+    "archx/container/values.py": {
+      "purpose": "Blocks turned back into meaning: registry, anchor, delta and the Timeline over them.",
+      "inputs": [
+        "Reader"
+      ],
+      "outputs": [
+        "TensorInfo list",
+        "reconstruct(step) -> arrays",
+        "events()",
+        "annotations()",
+        "segments()"
+      ],
+      "handles": "Decoding with the encoder the writer recorded, tie re-aliasing, and last-statement-wins for a segment that grew while the run continued."
+    },
+    "archx/adapters/torch.py": {
+      "purpose": "Raw PyTorch: attach in one line via optimizer.register_step_post_hook.",
+      "inputs": [
+        "model",
+        "optimizer",
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "data_level"
+      ],
+      "outputs": [
+        "TorchRecorder",
+        "as_bytes() for any batch type"
+      ],
+      "handles": "Global gradient norm read before zero_grad(), tied parameters kept via remove_duplicate=False, and the batch converted in exactly one place."
+    },
+    "archx/cli/reconstruct.py": {
+      "purpose": "archx reconstruct: rebuild the weights at a step and write them to .npz.",
+      "inputs": [
+        "recording path",
+        "--step",
+        "--out"
+      ],
+      "outputs": [
+        ".npz file (no pickle)",
+        "stdout summary",
+        "exit code"
+      ],
+      "handles": "Defaults to the last recorded step; refuses a step the file does not have."
+    },
+    "archx/cli/events.py": {
+      "purpose": "archx events: per-step observations, user annotations and data segments.",
+      "inputs": [
+        "recording path",
+        "--json"
+      ],
+      "outputs": [
+        "human table or JSON with steps / observations / annotations / segments"
+      ],
+      "handles": "Keeps the three streams apart, because they answer three different questions."
+    },
+    "Bench/claim05_overhead.py": {
+      "purpose": "Claim 5: what recording costs per step, against the same loop with no recorder.",
+      "inputs": [
+        "synthetic training loops",
+        "policy settings"
+      ],
+      "outputs": [
+        "median step time, bytes written, stored/skipped counts"
+      ],
+      "handles": "Measurement only. The adapter-level version lives in the torch integration test."
+    },
+    "Tests/unit/test_policy.py": {
+      "purpose": "Unit tests for the phase policy: phases, triggers, heartbeat, anchors.",
+      "inputs": [
+        "PhasePolicy"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That density follows the stage of the run and that explicit events win over the phase."
+    },
+    "Tests/unit/test_recorder.py": {
+      "purpose": "Unit tests for the recorder: observation, no mutation, degradation, observations written.",
+      "inputs": [
+        "Recorder",
+        "TemporaryDirectory"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That the recorder never alters a weight, never raises into training, drops detail under backpressure, and writes what it promised into the file."
+    },
+    "Tests/unit/formats/test_registry.py": {
+      "purpose": "Unit tests for the tensor registry: stable indices, tie groups, prefixes.",
+      "inputs": [
+        "TensorRegistry"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That tied weights are one storage unit and that region/component labels use the longest matching prefix."
+    },
+    "Tests/unit/data/test_capture.py": {
+      "purpose": "Unit tests for data capture: dedup, levels, sensitivity, caps, codecs, exact round-trip.",
+      "inputs": [
+        "DataCapture",
+        "codec helpers"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That an epoch over the same data costs no new bytes, that observe does no expensive work, and that every shipped codec is lossless."
+    },
+    "Tests/unit/container/test_values.py": {
+      "purpose": "Unit tests for reading a recording back as values, events and ties.",
+      "inputs": [
+        "Timeline",
+        "Reader"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That reconstruction matches live weights within the encoder budget and that tied names come back identical."
+    },
+    "Tests/integration/test_join.py": {
+      "purpose": "Integration: the join - this data moved these weights at these steps - from the file alone.",
+      "inputs": [
+        "a recorded synthetic run"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The product's core claim, asserted through the container rather than the recorder."
+    },
+    "Tests/integration/test_torch_adapter.py": {
+      "purpose": "Integration: a real nn.Module and SGD, attached, read back, and timed.",
+      "inputs": [
+        "torch",
+        "archx.attach"
+      ],
+      "outputs": [
+        "pass/fail",
+        "measured overhead printed"
+      ],
+      "handles": "Reconstruction, numerics unchanged with the same seed, the join after a real optimizer step, tier reporting, and the overhead budget. Skips with a reason when torch is absent."
+    },
+    "Tests/integration/test_crash_recovery.py": {
+      "purpose": "Integration: kill a training process mid-run, then recover its history from the file.",
+      "inputs": [
+        "a child process running a real recorder"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That a crash costs the step in flight and not the history, that data written before the kill survives, and that recovering a copy leaves the evidence untouched."
+    },
+    "archx/adapters/__init__.py": {
+      "purpose": "Marks the adapters package; one file per framework.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "__all__ of planned adapters"
+      ],
+      "handles": "Nothing at import time: torch is optional."
+    },
+    "archx/data/__init__.py": {
+      "purpose": "Marks the data package: codecs and capture.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "__all__ of the data helpers"
+      ],
+      "handles": "Nothing at import time."
     }
   },
-  "_generated": {
-    "Actions/out/latest-env/<OS>-<ARCH>.json": "runner environment record written by env_probe.py during a workflow run; replaced on every run.",
-    "Actions/out/latest-env/<OS>-<ARCH>.log": "echoed trigger intent plus runner versions from the same run.",
-    "Actions/out/test-runs/<label>.json": "test run record written by Actions/scripts/run_tests.py; one per runner, replaced each run"
-  },
+  "_generated": "2026-11-12 - Phases 2 and 3: encoders, policy, recorder, data capture, ",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },
