@@ -3,19 +3,20 @@
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "119 tests: 112 passed, 0 failed, 0 errors, 7 skipped",
+  "summary_line": "120 tests: 112 passed, 0 failed, 0 errors, 8 skipped",
   "counts": {
     "passed": 112,
     "failed": 0,
     "errors": 0,
-    "skipped": 7,
-    "total": 119
+    "skipped": 8,
+    "total": 120
   },
   "failures": [],
   "tests": [
     "::Tests.integration.test_arch_sweep",
     "::Tests.integration.test_hook_reach",
     "::Tests.integration.test_torch_adapter",
+    "::Tests.unit.test_reconstruction_guarantee",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
     "Tests.integration.test_container_end_to_end::test_process_killed_mid_run_leaves_a_recoverable_file",
     "Tests.integration.test_container_end_to_end::test_cli_info_reports_what_the_writer_wrote",
@@ -133,15 +134,15 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T11:01:56.530744+00:00",
-  "duration_s": 3.756,
+  "started_utc": "2026-11-12T11:05:45.244267+00:00",
+  "duration_s": 4.045,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "b0e59a31a8b2d2a288694bce48fb4b8de228575a"
+    "github_sha": "8b25a2c202e016a26450a7658351a701af3216c6"
   },
   "stdout_tail": [
     "...........................ssss......................................... [ 62%]",
@@ -150,6 +151,7 @@
     "SKIPPED [1] Tests\\integration\\test_arch_sweep.py:20: torch is not installed on this runner",
     "SKIPPED [1] Tests\\integration\\test_hook_reach.py:15: torch is not installed on this runner",
     "SKIPPED [1] Tests\\integration\\test_torch_adapter.py:23: torch is not installed on this runner",
+    "SKIPPED [1] Tests\\unit\\test_reconstruction_guarantee.py:19: torch is not installed on this runner",
     "SKIPPED [4] Tests\\unit\\cli\\test_cli.py:134: torch is not installed on this runner"
   ],
   "stderr_tail": []
