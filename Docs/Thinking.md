@@ -340,9 +340,11 @@ a step big enough to have a meaningful cost, which is where it is measured.
   different assertion later.
 - The numerics guard runs the same loop twice with the same seed - once recorded, once not -
   and compares the loss curve element by element and the final weights with `torch.equal`.
-- The lossless path (`max_rel_error=0.0`) rebuilds to 1e-10, and that residual is float32
-  accumulation when five deltas are summed onto an anchor, not an encoding loss; with an
-  anchor at the same step it is exact.
+- The lossless path (`max_rel_error=0.0`) is exact at anchor steps and carries a float32
+  rounding residual elsewhere: measured 4.19e-09 absolute on weights of order 1, from `a +
+  (b - a) != b` in float32, not from encoding. The earlier note here said 1e-10; the measured
+  figure is about 4e-09, and the guarantee is now stated as "exact at anchors, float32
+  rounding between them" rather than "exact" (`Tests/unit/test_reconstruction_guarantee.py`).
 
 ---
 

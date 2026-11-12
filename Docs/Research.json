@@ -534,6 +534,27 @@
         "Docs/Technical.md",
         "Docs/Research.json"
       ]
+    },
+    {
+      "id": "chained-delta-error-vs-anchor-spacing",
+      "question": "Claim 3: how far apart may anchors be before accumulated delta error stops being acceptable?",
+      "sources": [
+        "Bench/claim03_anchor_spacing.py (measured locally, 128x128 deltas, cpu)",
+        "archx/encoders/__init__.py choose_encoder"
+      ],
+      "findings": [
+        "At the default budget (1e-3) every delta is stored exactly (raw float32), so the *encoder* contributes nothing to chained error: measured 0.0 at every chain length from 1 to 64. Real reconstruction is still not bit-exact for chained steps, because a reader adds summed deltas in float32: measured 4.19e-09 absolute on weights of order 1 (relative ~1e-8), and exact at anchor steps. The two effects are separate and both are now measured.",
+        "At a lossy budget of 1e-2, the error after N quantized deltas grows sub-linearly: 7.99e-07 at N=1, 2.63e-04 at N=4, 6.62e-04 at N=16, 1.34e-03 at N=64 - i.e. 0.03x to 0.13x of the per-delta budget.",
+        "At 5e-2: 2.06e-04 at N=1 rising to 1.50e-03 at N=64, 0.03x of budget.",
+        "Even 64 deltas in one chain stay far inside the per-delta budget, so anchor spacing is not bounded by quantization accumulation at these settings.",
+        "The practical bound is not accuracy but the cost of the anchor itself: a full snapshot is what makes a long gap expensive to start from, and a crash loses the options for steps after the last anchor."
+      ],
+      "verdict": "Anchors are needed for recovery and deterministic reproduction, not to bound quantization error: chained quantization stays under a fifth of the per-delta budget for chains of 64, and float32 summation adds ~1e-8 relative at any spacing. Recommended spacing is stated in the spec as a recovery property (how many steps a crash may cost) and the reconstruction guarantee is 'exact at anchors, float32 rounding between them'.",
+      "affects": [
+        "Bench/claim03_anchor_spacing.py",
+        "Plan/Format_Spec.md",
+        "Docs/Technical.md"
+      ]
     }
   ]
 }
