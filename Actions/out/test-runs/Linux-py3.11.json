@@ -259,15 +259,15 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T15:57:11.416900+00:00",
-  "duration_s": 36.812,
+  "started_utc": "2026-11-12T16:00:18.625971+00:00",
+  "duration_s": 36.404,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "d9439a30886cb5878ee28a6e78f2df9ef509c160"
+    "github_sha": "d815ba9cbded90ec8944f84294c48825e6cfb4e5"
   },
   "stdout_tail": [
     "........................................................................ [ 29%]",
