@@ -3,13 +3,13 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "106 tests: 103 passed, 0 failed, 0 errors, 3 skipped",
+  "summary_line": "110 tests: 107 passed, 0 failed, 0 errors, 3 skipped",
   "counts": {
-    "passed": 103,
+    "passed": 107,
     "failed": 0,
     "errors": 0,
     "skipped": 3,
-    "total": 106
+    "total": 110
   },
   "failures": [],
   "tests": [
@@ -22,6 +22,10 @@
     "Tests.integration.test_container_end_to_end::test_cli_info_reads_a_crashed_file_and_points_at_recover",
     "Tests.integration.test_crash_recovery::test_a_killed_run_keeps_every_step_it_managed_to_write",
     "Tests.integration.test_crash_recovery::test_a_killed_run_is_recoverable_into_a_copy_without_touching_evidence",
+    "Tests.integration.test_forward_compat::test_a_newer_minor_version_is_read_and_the_skip_is_reported",
+    "Tests.integration.test_forward_compat::test_a_current_file_reports_no_warnings",
+    "Tests.integration.test_forward_compat::test_a_different_major_version_is_refused_with_a_clear_message",
+    "Tests.integration.test_forward_compat::test_the_cli_info_says_the_file_is_newer_than_the_reader",
     "Tests.integration.test_join::test_a_file_answers_which_data_moved_which_weights_at_which_step",
     "Tests.integration.test_join::test_reader_can_join_segment_to_movement_without_the_recorder",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[1]",
@@ -120,19 +124,19 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T10:48:48.810593+00:00",
-  "duration_s": 2.053,
+  "started_utc": "2026-11-12T10:50:54.428902+00:00",
+  "duration_s": 2.153,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "4fb696f4f8b7d2df0b5c48a52dd5d3e895fd0ca0"
+    "github_sha": "46f518e6a6a3ddbb162144e7bf8e8994ee4992ba"
   },
   "stdout_tail": [
-    "........................................................................ [ 69%]",
-    "...............................                                          [100%]",
+    "........................................................................ [ 67%]",
+    "...................................                                      [100%]",
     "=========================== short test summary info ============================",
     "SKIPPED [1] Tests/integration/test_arch_sweep.py:20: torch is not installed on this runner",
     "SKIPPED [1] Tests/integration/test_hook_reach.py:15: torch is not installed on this runner",
