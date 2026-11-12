@@ -3,13 +3,13 @@
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "209 tests: 209 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "211 tests: 211 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 209,
+    "passed": 211,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 209
+    "total": 211
   },
   "failures": [],
   "tests": [
@@ -102,6 +102,8 @@
     "Tests.integration.test_torch_adapter::test_the_overhead_of_recording_weights_stays_inside_the_budget",
     "Tests.integration.test_torch_adapter::test_the_overhead_of_storing_the_training_data_is_reported_honestly",
     "Tests.integration.test_torch_adapter::test_data_of_every_shape_reaches_the_file_as_bytes",
+    "Tests.integration.test_torch_adapter::test_the_adapter_only_uses_api_that_exists_at_the_claimed_floor",
+    "Tests.integration.test_torch_adapter::test_the_post_hook_fires_after_the_weights_have_changed",
     "Tests.unit.cli.test_cli::test_version_and_help_exit_cleanly",
     "Tests.unit.cli.test_cli::test_info_json_is_machine_readable",
     "Tests.unit.cli.test_cli::test_info_on_a_broken_file_fails_with_a_message",
@@ -223,20 +225,20 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T14:18:30.327240+00:00",
-  "duration_s": 36.811,
+  "started_utc": "2026-11-12T15:23:54.849944+00:00",
+  "duration_s": 49.759,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "7dc4099f970a9d0375c67f6ad77fa098b799da21"
+    "github_sha": "9be1383f905c582b7c2ed6a3fe817631ff4f044e"
   },
   "stdout_tail": [
     "........................................................................ [ 34%]",
     "........................................................................ [ 68%]",
-    ".................................................................        [100%]",
+    "...................................................................      [100%]",
     "============================== warnings summary ===============================",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
