@@ -122,7 +122,34 @@ batch 256x128, 18,128-parameter model, 5 repeats, charged to `log()` + `step()`:
   shard. A shared side-table would fix that and make a recording unreadable without a side
   file - rejected. The measurement note stays above `choose_data_codec`.
 
-Tests: **241 passed** locally (was 211), including 21 codec tests and 5 join round-trip tests.
+### The npm signpost (roadmap 0.5)
+
+`npm/archx/` - a 2.2 KB package with no dependencies whose only job is to tell a JavaScript
+user where the Python tool is:
+
+```console
+$ npx archx train.py
+  archx on npm is a signpost. The real thing is a Python package.
+  Install it with:  pip install archx-mdl
+  ...
+  Exit code 1 is deliberate: nothing was recorded, nothing was run.
+```
+
+- **It fails on purpose.** `npm i archx && archx train.py` must not look like a working
+  install. `--version` and `--help` exit 0, because those questions are about this package.
+- **No wrapper.** No `child_process`, no bundled Python, no shelling out to pip: a signpost
+  that tries to be a bridge is the thing that drifts.
+- Verified by packing the tarball, installing it into a scratch project, and running it
+  through `node_modules/.bin` and `npx`.
+- 8 node tests (one asserts the package contains no `.py`/`.node`/`.so` and no
+  `child_process`) plus 4 pytest tests that skip with a stated reason when node is absent.
+- New `npm-signpost` workflow: Linux/Windows/macOS x node 18/20, testing the **packed
+  tarball** rather than the working tree, so a wrong `files` list fails the job.
+- **Not published.** Publishing needs the user's npm account; the package is built, tested
+  and ready.
+
+Tests: **245 passed** locally (241 python + 4 signpost), including 21 codec tests, 5 join
+round-trip tests and the npm package's own 8.
 
 ## v1.0.0 - not released yet (Phase 9 complete on the branch)
 

@@ -1187,6 +1187,79 @@
         "pass/fail"
       ],
       "handles": "Also covers JOIN_INCOMPLETE, unsynced_log, and the effect_step invariant (movement must land on a step the file actually holds)."
+    },
+    "npm/archx/package.json": {
+      "purpose": "The npm signpost package manifest: name `archx`, one bin, no dependencies, three published files.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "the published tarball (2.2 KB)"
+      ],
+      "handles": "Declares no `os` restriction on purpose: a signpost must install on Windows too and explain itself there, rather than sending the user nowhere."
+    },
+    "npm/archx/bin/archx.js": {
+      "purpose": "The whole signpost: prints the PyPI install command and docs link, exits 1 for any real use.",
+      "inputs": [
+        "argv"
+      ],
+      "outputs": [
+        "stdout/stderr text",
+        "exit code: 0 only for --version/--help, 1 otherwise"
+      ],
+      "handles": "No child_process, no Python, no pip shell-out. `npm i archx && archx train.py` must fail loudly rather than look like a working install."
+    },
+    "npm/archx/test/cli.test.js": {
+      "purpose": "8 node tests for the signpost, including one that asserts the package cannot grow an implementation.",
+      "inputs": [
+        "the packaged CLI"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Run with `npm test` (node --test, no dependencies); the Python suite also invokes it."
+    },
+    "npm/archx/README.md": {
+      "purpose": "What the npm package is, how to install the real tool, and why the exit code is 1.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "shown on the npm registry page"
+      ],
+      "handles": "Orientation for someone who arrived by the wrong package manager."
+    },
+    "Tests/integration/test_npm_signpost.py": {
+      "purpose": "Runs the signpost from pytest: install shape, loud failure, --version parity, and the node suite.",
+      "inputs": [
+        "npm/archx"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Skips with a stated reason when node is absent - never fakes a pass, since the whole point is that a wrong install cannot look like a working one."
+    },
+    ".github/workflows/npm.yml": {
+      "purpose": "Packs the signpost, installs the tarball into a scratch project, and proves the failure behaviour on Linux/Windows/macOS x node 18/20.",
+      "inputs": [
+        "Actions/triggers/npm.txt",
+        "npm/**"
+      ],
+      "outputs": [
+        "Actions/out/npm/*.json",
+        "CI records committed back to the branch"
+      ],
+      "handles": "Tests the packed tarball rather than the working tree: a wrong `files` list would ship no bin, which is the failure this job exists to catch."
+    },
+    "Actions/triggers/npm.txt": {
+      "purpose": "Trigger file for the npm-signpost workflow.",
+      "inputs": [
+        "a new line"
+      ],
+      "outputs": [
+        "an npm CI run on three runners"
+      ],
+      "handles": "Same convention as Actions/triggers/tests.txt."
     }
   },
   "_generated": "2026-11-12 - Phases 6-9: HF, launcher, Lightning, end-to-end proof, spec conformance, 209 tests",

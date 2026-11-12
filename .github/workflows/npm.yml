@@ -1,0 +1,98 @@
+# npm signpost tests
+#
+# Purpose: prove on Linux, Windows and macOS that `npm i archx` lands on a signpost that
+# fails loudly, exits 0 only for --version/--help, and contains no implementation.
+#
+# Triggered by editing Actions/triggers/npm.txt, or by a push to npm/**.
+
+name: npm-signpost
+
+on:
+  push:
+    paths:
+      - "Actions/triggers/npm.txt"
+      - "npm/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signpost:
+    name: signpost (${{ matrix.os }}, node${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ["18", "20"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # Pack exactly what would be published, then install *that* tarball into a scratch
+      # project. Testing the working tree would not prove the published `files` list ships
+      # the bin - a signpost that installs nothing is the failure this job exists to catch.
+      - name: Pack and install the tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd npm/archx
+          npm pack --pack-destination "$RUNNER_TEMP"
+          package=$(ls "$RUNNER_TEMP"/archx-*.tgz | head -1)
+          echo "packed: $package"
+          mkdir -p "$RUNNER_TEMP/consumer"
+          cd "$RUNNER_TEMP/consumer"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$package"
+          ls node_modules/.bin/
+
+      - name: The unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd npm/archx
+          npm test
+
+      - name: The signpost behaves as a failure in a real install
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/consumer"
+          bin=$(pwd)/node_modules/.bin/archx
+          [ -x "$bin" ] || [ -f "$bin" ] || { echo "no archx binary after install"; exit 1; }
+
+          node "$(node -e "console.log(require.resolve('archx/bin/archx.js'))")" --version
+
+          set +e
+          out=$(node "$(node -e "console.log(require.resolve('archx/bin/archx.js'))")" train.py 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          echo "exit code: $code"
+          [ "$code" -ne 0 ] || { echo "FAIL: using the signpost must not exit 0"; exit 1; }
+          case "$out" in
+            *"pip install archx-mdl"*) ;;
+            *) echo "FAIL: the signpost did not name the real install"; exit 1 ;;
+          esac
+
+      - name: Record the result
+        if: always()
+        shell: bash
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p Actions/out/npm
+          printf '{"os": "%s", "node": "%s", "result": "%s"}\n' \
+            "${RUNNER_OS}" "${{ matrix.node }}" "${{ job.status }}" \
+            > "Actions/out/npm/${RUNNER_OS}-node${{ matrix.node }}.json"
+          bash Actions/scripts/commit_results.sh "ci: npm signpost ${RUNNER_OS} node${{ matrix.node }}"

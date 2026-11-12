@@ -771,6 +771,31 @@
         "Tests/unit/data/test_codecs.py",
         "Docs/codec_results.json"
       ]
+    },
+    {
+      "id": "npm-signpost-exit-codes",
+      "question": "How should an npm package that is deliberately not the tool behave, so a wrong install cannot look like a working one?",
+      "sources": [
+        "npm/archx/bin/archx.js",
+        "npm/archx/test/cli.test.js",
+        ".github/workflows/npm.yml"
+      ],
+      "findings": [
+        "The name `archx` is free on npm (404, re-checked 2026-11-11 alongside `archx.mdl`). PyPI `archx-mdl` is also 404, so the signpost's install command is not yet live either - it names the intended distribution.",
+        "The signpost must exit non-zero for any real use. `npm i archx && archx train.py` exiting 0 would let a mistaken install look like a working one, and the first thing the user would lose is a training run they believed was being recorded.",
+        "`--version` and `--help` exit 0 for consistency in the other direction: those are questions about this package, and failing them would be its own lie.",
+        "It carries no `os` restriction. Declaring `!win32` would block the install on Windows and send that user nowhere, when the entire purpose is to tell them where the real tool is.",
+        "Test the packed tarball, not the working tree: a wrong `files` list ships no bin, and the working tree cannot reveal that.",
+        "No `child_process` and no bundled Python. A signpost that shells out to pip is a bridge, and bridges drift away from what they point at."
+      ],
+      "verdict": "Ship a 2.2 KB package with one file, no dependencies, exit 1 on use, exit 0 on --version/--help, and a test that asserts it contains no implementation. Publishing is the user's call and needs their npm account.",
+      "affects": [
+        "npm/archx/package.json",
+        "npm/archx/bin/archx.js",
+        ".github/workflows/npm.yml",
+        "Tests/integration/test_npm_signpost.py",
+        "Plan/Roadmap.md"
+      ]
     }
   ]
 }

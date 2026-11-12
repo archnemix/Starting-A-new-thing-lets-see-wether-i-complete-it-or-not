@@ -16,7 +16,7 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 0.2 | CI spine: `Tests/` runner, log-commit workflow, trigger file | A run on the 3 runners writes a result file into the repo | done (run 43052619656, 3/3 green, results committed) |
 | 0.3 | Packaging skeleton: `pyproject.toml` (distribution `archx.mdl`, import `archx`, CLI `archx`), version string, CLI stub | `pip install -e .` and `archx --help` work on all 3 runners | done (b39ff06, 3/3 runners) |
 | 0.4 | Test-record system: versioned folders, keep current + 2 | A recorded run per runner with inputs/outputs | done (`Actions/out/test-runs/*.json` written by CI) |
-| 0.5 | npm `archx` signpost package (prints the PyPI command + docs link, exits non-zero on wrong use) | `npm i archx` then `npx archx` prints the real install path; published only when you say so | todo |
+| 0.5 | npm `archx` signpost package (prints the PyPI command + docs link, exits non-zero on wrong use) | `npm i archx` then `npx archx` prints the real install path; published only when you say so | done - built and tested, **not published** (that needs the user's npm account). `npm/archx/`: 2.2 KB tarball, no dependencies, no wrapper. Verified by packing, installing the tarball into a scratch project, and running it through `node_modules/.bin` and `npx`: `archx train.py` exits 1, `archx --version` exits 0. 8 node tests + 4 pytest tests; new `npm-signpost` workflow runs the node suite on Linux/Windows/macOS x node 18/20 |
 
 ## Phase 1 - Container format (v0.2)
 

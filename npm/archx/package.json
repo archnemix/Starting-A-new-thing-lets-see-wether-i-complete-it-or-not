@@ -1,0 +1,31 @@
+{
+  "name": "archx",
+  "version": "1.0.1",
+  "description": "Signpost: archx is a Python tool. `npm i archx` installs this notice, which prints the real install command. It is not an implementation.",
+  "keywords": [
+    "signpost",
+    "not-implemented",
+    "archx",
+    "python",
+    "machine-learning"
+  ],
+  "license": "MIT",
+  "bin": {
+    "archx": "bin/archx.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not.git",
+    "directory": "npm/archx"
+  },
+  "scripts": {
+    "test": "node --test test/cli.test.js"
+  }
+}
