@@ -23,6 +23,11 @@ from archx.container.reader import Reader
 from archx.container.recovery import recover_in_place
 from archx.container.schema import BlockType
 from archx.container.values import Timeline
+from archx.errors import ArchxError
+
+#: How much history must exist before the kill, so the test is about recovery and not about
+#: how fast a particular runner starts a child process.
+_MIN_STEPS_BEFORE_KILL = 3
 
 _TRAINER = """
 import sys
@@ -57,13 +62,22 @@ def _kill_mid_run(directory) -> tuple[int, str, "Path"]:
         [sys.executable, str(script), str(recording)],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-    # Do not guess at timing: wait for the child to say it is inside the loop, then wait for
-    # bytes on disk, so the kill lands while real history already exists.
+    # Do not guess at timing. "The file exists" and "the file is big enough" are both wrong
+    # conditions: on a slower runner the file can exist with only the header and meta blocks
+    # while the first delta is still queued, and the kill then leaves no history at all. The
+    # condition that is actually required is history, so wait for deltas specifically.
     line = process.stdout.readline()
     assert "ready" in line, line
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 60
+    seen = 0
     while time.monotonic() < deadline:
-        if recording.exists() and recording.stat().st_size > 4096:
+        try:
+            seen = sum(1 for _ in Reader(recording, allow_torn=True).blocks(BlockType.DELTA))
+        except (FileNotFoundError, ArchxError):
+            seen = 0                       # still being written, or not readable yet
+        if seen >= _MIN_STEPS_BEFORE_KILL:
+            break
+        if process.poll() is not None:
             break
         time.sleep(0.02)
     if sys.platform == "win32":
@@ -71,6 +85,9 @@ def _kill_mid_run(directory) -> tuple[int, str, "Path"]:
     else:
         process.kill()                     # SIGKILL: no atexit, no flush, no footer
     _, stderr = process.communicate(timeout=30)
+    assert seen >= _MIN_STEPS_BEFORE_KILL, (
+        f"the child never wrote {_MIN_STEPS_BEFORE_KILL} steps in 60 s (saw {seen}); "
+        f"exit {process.returncode}, stderr: {stderr[-800:]}")
     return process.returncode, stderr, recording
 
 

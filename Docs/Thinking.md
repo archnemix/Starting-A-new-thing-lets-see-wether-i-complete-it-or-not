@@ -330,6 +330,12 @@ a step big enough to have a meaningful cost, which is where it is measured.
 
 - 99 tests, 0 failures, 0 errors, 0 skips; three consecutive full runs identical.
 - The crash test is a real `SIGKILL` of a child process, repeated six times without a flake.
+  Its first CI run failed on macOS for a reason worth keeping in the design: the test waited
+  for "the file exists and is big enough", and on a slower runner that was true with only the
+  header and meta blocks on disk, so the kill landed before any history existed. The condition
+  is now the thing the test is about - deltas present, read back through the reader - and the
+  test fails loudly if a runner cannot produce three steps in a minute instead of failing a
+  different assertion later.
 - The numerics guard runs the same loop twice with the same seed - once recorded, once not -
   and compares the loss curve element by element and the final weights with `torch.equal`.
 - The lossless path (`max_rel_error=0.0`) rebuilds to 1e-10, and that residual is float32
