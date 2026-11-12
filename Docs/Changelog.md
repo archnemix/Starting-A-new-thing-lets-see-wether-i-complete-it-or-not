@@ -46,6 +46,79 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v1.0.1 - not released yet (Phase 2 complete: codecs and data capture measured)
+
+Two roadmap rows finished, four silent defects found, three of them in code that was
+documented as working.
+
+### Claims 13-14: capture cost and the join round-trip
+
+Measured, `Bench/claim13_capture_levels.py`, numbers in `Docs/capture_levels.json`. 60 steps,
+batch 256x128, 18,128-parameter model, 5 repeats, charged to `log()` + `step()`:
+
+| level | file bytes | step() median | p95 | seal (writer thread) | join answered |
+|---|---|---|---|---|---|
+| `none` | 1,455,641 | 0.018 ms | 14.4 ms | 0.17 s | n/a - no data |
+| `pointers` | 1,478,206 | 0.033 ms | 14.9 ms | 0.20 s | no - content withheld |
+| `segments` | 8,756,493 | 0.032 ms | 14.2 ms | 0.25 s | **60/60** |
+| `full` | 8,756,491 | 0.033 ms | 12.1 ms | 0.43 s | **60/60** |
+
+- The marginal cost of capture is **~15 us per step**. Hashing and compression are on the
+  writer thread, not the training thread.
+- **The tail belongs to the weights, not the data.** 12-17% of steps exceed 1 ms at every
+  level, including `none` with nothing handed over, because the trainer encodes a held weight
+  block when the writer falls behind. Charging that to capture would be wrong.
+- The bench's first version timed `optimizer.step()` and reported a *negative* overhead for
+  `pointers`. It was measuring AdamW; the optimizer is now outside the timed region.
+
+### Fixed: four defects that were silently wrong
+
+1. **`full` was never implemented.** Documented since the first design ("every batch exactly
+   as fed, no dedup"), it wrote the same deduplicated file as `segments` - 4 bytes apart on
+   60 identical batches. It now stores one shard per observation (60 shards where `segments`
+   writes 1 for 60 sightings). Test: `test_full_stores_every_batch_even_when_the_bytes_repeat`.
+2. **A merged segment stayed reachable through the identity map.** `_merge_unnamed` popped the
+   duplicate from `segments`, but `_by_identity` kept it and sealing had already set
+   `content = None`, so the stale entry was permanent. Later sightings of the same batch
+   incremented a segment no longer in the file: a 20-step run reported `times_seen` summing to
+   19. The map is now pruned at seal; observations and `times_seen` agree exactly.
+3. **The join had nowhere to point.** `span_steps` said how long a measurement's span was,
+   never which recorded step it belonged to. 36 of 60 segments in the first measurement
+   carried movement that landed on no stored step. New additive v1 field `effect_step` (the
+   store point at which the movement was measured, `-1` when there is none): 24/60 -> 60/60.
+4. **Data logged after the final optimizer step vanished.** 20 observations, 19 in the file,
+   no warning. It is now stored and an `unsynced_log` block says it was never trained on.
+
+### Added, both documented since the first design and never emitted
+
+- **`JOIN_INCOMPLETE`** (`INFO`) for `none`, `pointers`, and any run whose byte cap degraded
+  to `pointers`, listing what the reader cannot answer.
+- Spec: the `segments` vs `full` distinction is now stated in `Plan/Format_Spec.md` §4 with
+  the shard-id rule (`<hash>-<n>` under `full`) a second implementation must follow.
+
+### Claims 11-12: shard codecs
+
+`Bench/claim11_codecs.py`, `Docs/codec_results.json`. Every case exact, every CRC matching:
+
+| case | raw | stored | ratio | codec |
+|---|---|---|---|---|
+| prose | 30,749 | 153 | 0.0050 | text-zstd |
+| code | 51,200 | 116 | 0.0023 | text-zstd |
+| tokens-128 | 16,384 | 3,620 | 0.2209 | tokens-varint |
+| tokens-5000 | 16,384 | 7,397 | 0.4515 | tokens-varint |
+| pixels | 16,384 | 16,394 | 1.0006 | zstd |
+| weights | 16,384 | 15,167 | 0.9257 | zstd |
+
+- **The token path was dead code**: its detector required every id below 128, so a real
+  vocabulary never took it (0.560 -> 0.451 with shape-based detection).
+- **A zstd dictionary was implemented, measured losing at every combination, and removed.**
+  1-16 KB dictionaries against 15 KB-1.5 MB of text: plain 3,325 / 15,875 / 123,396 bytes
+  versus dictionary 14,974 / 30,809 / 140,136. It has to repay its own bytes inside every
+  shard. A shared side-table would fix that and make a recording unreadable without a side
+  file - rejected. The measurement note stays above `choose_data_codec`.
+
+Tests: **241 passed** locally (was 211), including 21 codec tests and 5 join round-trip tests.
+
 ## v1.0.0 - not released yet (Phase 9 complete on the branch)
 
 ## The CI record for the v1.0 work: run 43235517057

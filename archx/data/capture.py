@@ -54,6 +54,12 @@ class Segment:
     #: instead of a batch that looks like it did nothing.
     span_segments: int = 1
     span_steps: int = 1
+    #: The store point at which this data's effect was measured, or -1 when none was.
+    #: `span_steps` says how many steps the measurement covers but not *which* recorded step
+    #: it belongs to, so a batch seen on a skipped step was attributed to movement the reader
+    #: could not locate. With this, "which data moved which weights at which step" is answered
+    #: by a step number that the file definitely holds.
+    effect_step: int = -1
     #: Bytes waiting for the writer thread. Never written unless a shard is made from it.
     content: bytes | None = field(default=None, repr=False, compare=False)
     sensitive: bool = field(default=False, repr=False, compare=False)
@@ -87,6 +93,7 @@ class Segment:
             "delta_reconstruction_error": self.delta_reconstruction_error,
             "span_segments": self.span_segments,
             "span_steps": self.span_steps,
+            "effect_step": self.effect_step,
         }
 
 
@@ -163,6 +170,13 @@ class DataCapture:
     def _observe(self, data: bytes, step: int, segment_id: str,
                  source: str, sensitive: bool) -> Segment | None:
         """The body of `observe`, called with the lock held."""
+        if self.level is DataLevel.FULL:
+            # `full` promises every batch exactly as fed, in order, deduplicated never. An
+            # epoch over 30 batches must produce 30 stored segments even when the batches
+            # hold identical bytes, so no identity check may run here at all. Measured
+            # before this branch existed: `full` and `segments` wrote files 10 bytes apart,
+            # because `full` was documented and never implemented.
+            segment_id = ""
         if segment_id:
             existing = self.segments.get(segment_id)
             if existing is not None:
@@ -171,7 +185,7 @@ class DataCapture:
                 existing.last_step = step
                 existing.times_seen += 1
                 return existing
-        else:
+        elif self.level is not DataLevel.FULL:
             # Unnamed: the only free identity check is object identity, which is exactly true
             # when a dataloader hands over the same batch object again. Never a byte compare.
             existing = self._by_identity.get(id(data))
@@ -232,16 +246,34 @@ class DataCapture:
                 self.degraded_to = DataLevel.POINTERS
                 self.pointers.add(shard_id)
                 segment.shard_id = shard_id
-            elif shard_id in self.shards:
+            elif self.level is not DataLevel.FULL and shard_id in self.shards:
                 segment.shard_id = shard_id     # dedup: the second sighting costs nothing
             else:
                 encoded = encode_shard(data)
-                self.shards[shard_id] = encoded
+                # Under `segments` the key is the content hash, so an epoch over the same
+                # data costs pointers rather than copies - including when two *named*
+                # segments share bytes, which is the join case: two ids, one stored copy.
+                # Only `full` reaches the suffixed branch, because it promises every batch
+                # exactly as fed, and two identical copies under one id would collapse in
+                # any reader that keys shards by id.
+                key = shard_id if shard_id not in self.shards else f"{shard_id}-{len(self.shards)}"
+                self.shards[key] = encoded
                 self.bytes_stored += encoded.nbytes
-                segment.shard_id = shard_id
+                segment.shard_id = key
             segment.content = None              # the bytes live in the shard now, not twice
             self._merge_unnamed(segment)
         self._by_shard = {s.shard_id: s for s in self.segments.values() if not s.named}
+        # Forget identity references to sealed segments. The identity fast-path only proves
+        # two observations are the same batch while it can still see the object; once the
+        # bytes have been handed to a shard, the entry is a bare `id()` that could be reused
+        # by a different object, and the segment it names may have been merged away. Keeping
+        # them was a real accounting bug: observations and `times_seen` disagreed with no
+        # warning. After this, a repeat observation becomes a new segment and the content
+        # hash merges it on the next seal - slower, and true.
+        self._by_identity = {identity: segment
+                             for identity, segment in self._by_identity.items()
+                             if segment.content is not None
+                             and self.segments.get(segment.segment_id) is segment}
 
     def statements(self, upto: int | None = None) -> list[tuple["Segment", str]]:
         """The segments plus the text that should now be in the file for each.
@@ -264,7 +296,7 @@ class DataCapture:
         sealing, the hash says they are one shard, so they are one segment too. A *named*
         segment is never merged: two ids over one shard is the join case, not a duplicate.
         """
-        if segment.named:
+        if segment.named or self.level is DataLevel.FULL:
             return
         previous = self._by_shard.get(segment.shard_id)
         if previous is None:
@@ -275,17 +307,28 @@ class DataCapture:
         previous.last_step = max(previous.last_step, segment.last_step)
         previous.times_seen += segment.times_seen
         previous.first_step = min(previous.first_step, segment.first_step)
+        previous.effect_step = max(previous.effect_step, segment.effect_step)
         for region, effects in segment.region_effects.items():
             held = previous.region_effects.setdefault(
                 region, {"delta_norm": 0.0, "grad_norm_max": 0.0, "loss_delta": 0.0})
             held["delta_norm"] += effects["delta_norm"]
             held["grad_norm_max"] = max(held["grad_norm_max"], effects["grad_norm_max"])
             held["loss_delta"] += effects["loss_delta"]
+        # Repoint every identity reference at the survivor before dropping the duplicate.
+        # Without this, `_by_identity` keeps a handle on the popped object and every later
+        # sighting of the same batch increments a segment that is no longer in the file -
+        # measured as `times_seen` totals that did not match the number of observations.
+        for identity, held in list(self._by_identity.items()):
+            if held is segment:
+                self._by_identity[identity] = previous
+        if self._by_shard.get(segment.shard_id) is segment:
+            self._by_shard[segment.shard_id] = previous
         self.segments.pop(segment.segment_id, None)
 
     def record_effects(self, segment_id: str, *, region: str, delta_norm: float,
                        grad_norm: float | None, loss_delta: float | None,
-                       span_segments: int = 1, span_steps: int = 1) -> None:
+                       span_segments: int = 1, span_steps: int = 1,
+                       step: int | None = None) -> None:
         """Attach what the weights did while this segment was being trained on.
 
         `span_segments` and `span_steps` say how many batches and steps share the measurement,
@@ -300,6 +343,8 @@ class DataCapture:
                                     span_segments)
         segment.span_steps = max(segment.span_steps if segment.region_effects else 1,
                                  span_steps)
+        if step is not None:
+            segment.effect_step = step
         entry = segment.region_effects.setdefault(
             region, {"delta_norm": 0.0, "grad_norm_max": 0.0, "loss_delta": 0.0}
         )

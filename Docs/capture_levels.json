@@ -1,0 +1,170 @@
+{
+  "levels": [
+    {
+      "level": "none",
+      "bytes": 1455631,
+      "recorder_ms_per_step": 0.01753000003645866,
+      "recorder_p95_ms_per_step": 14.393123999980162,
+      "recorder_max_ms_per_step": 14.794328999869322,
+      "slow_step_share": 0.11666666666666667,
+      "waited": 7,
+      "skipped_steps": 36,
+      "seal_seconds": 0.17371544400020866,
+      "copy_seconds": 0.0011183180001808068,
+      "steps_stored": 24,
+      "segments": 0,
+      "shards": 0,
+      "pointer_blocks": 0,
+      "join": {
+        "segments_total": 0,
+        "shards_verified": 0,
+        "shard_hash_mismatches": [],
+        "segments_on_stored_steps": 0,
+        "segments_with_positive_effects": 0,
+        "stored_step_coverage": 0.0,
+        "answers_from_file_alone": false,
+        "samples": []
+      },
+      "recorder_min": 0.016088499933175626,
+      "recorder_max": 0.02012999993894482,
+      "repeats": 5
+    },
+    {
+      "level": "pointers",
+      "bytes": 1478299,
+      "recorder_ms_per_step": 0.03340649993788247,
+      "recorder_p95_ms_per_step": 14.940861000013683,
+      "recorder_max_ms_per_step": 27.642876000072647,
+      "slow_step_share": 0.16666666666666666,
+      "waited": 10,
+      "skipped_steps": 36,
+      "seal_seconds": 0.2009267829998862,
+      "copy_seconds": 0.013527264000003925,
+      "steps_stored": 24,
+      "segments": 60,
+      "shards": 0,
+      "pointer_blocks": 1,
+      "join": {
+        "segments_total": 60,
+        "shards_verified": 0,
+        "shard_hash_mismatches": [],
+        "segments_on_stored_steps": 0,
+        "segments_with_positive_effects": 0,
+        "stored_step_coverage": 0.0,
+        "answers_from_file_alone": false,
+        "samples": []
+      },
+      "recorder_min": 0.03293650001978676,
+      "recorder_max": 0.03633849985362758,
+      "repeats": 5
+    },
+    {
+      "level": "segments",
+      "bytes": 8756613,
+      "recorder_ms_per_step": 0.032342999929824146,
+      "recorder_p95_ms_per_step": 14.241577999882793,
+      "recorder_max_ms_per_step": 64.81463599993731,
+      "slow_step_share": 0.16666666666666666,
+      "waited": 9,
+      "skipped_steps": 36,
+      "seal_seconds": 0.271150878999606,
+      "copy_seconds": 0.0008652870001242263,
+      "steps_stored": 24,
+      "segments": 60,
+      "shards": 60,
+      "pointer_blocks": 0,
+      "join": {
+        "segments_total": 60,
+        "shards_verified": 60,
+        "shard_hash_mismatches": [],
+        "segments_on_stored_steps": 60,
+        "segments_with_positive_effects": 60,
+        "stored_step_coverage": 1.0,
+        "answers_from_file_alone": true,
+        "samples": [
+          {
+            "segment": "data-1",
+            "step": 0,
+            "shard": "c8f0a6102fae71ca8857a8ff18871a5f",
+            "regions": {
+              "": 0.019637
+            }
+          },
+          {
+            "segment": "data-2",
+            "step": 4,
+            "shard": "440e07251d3dc7e70399316ebadd3380",
+            "regions": {
+              "": 0.039208
+            }
+          },
+          {
+            "segment": "data-3",
+            "step": 4,
+            "shard": "12f06f5558a560aa3ad5f025941d53b1",
+            "regions": {
+              "": 0.039208
+            }
+          }
+        ]
+      },
+      "recorder_min": 0.030689500022162974,
+      "recorder_max": 0.055994999911490595,
+      "repeats": 5
+    },
+    {
+      "level": "full",
+      "bytes": 8756600,
+      "recorder_ms_per_step": 0.03336249994845275,
+      "recorder_p95_ms_per_step": 12.064838000014788,
+      "recorder_max_ms_per_step": 109.17302699999709,
+      "slow_step_share": 0.08333333333333333,
+      "waited": 4,
+      "skipped_steps": 36,
+      "seal_seconds": 0.3069793960003153,
+      "copy_seconds": 0.0008048009995036409,
+      "steps_stored": 24,
+      "segments": 60,
+      "shards": 60,
+      "pointer_blocks": 0,
+      "join": {
+        "segments_total": 60,
+        "shards_verified": 60,
+        "shard_hash_mismatches": [],
+        "segments_on_stored_steps": 60,
+        "segments_with_positive_effects": 60,
+        "stored_step_coverage": 1.0,
+        "answers_from_file_alone": true,
+        "samples": [
+          {
+            "segment": "data-1",
+            "step": 0,
+            "shard": "c8f0a6102fae71ca8857a8ff18871a5f",
+            "regions": {
+              "": 0.019637
+            }
+          },
+          {
+            "segment": "data-2",
+            "step": 4,
+            "shard": "440e07251d3dc7e70399316ebadd3380",
+            "regions": {
+              "": 0.039208
+            }
+          },
+          {
+            "segment": "data-3",
+            "step": 4,
+            "shard": "12f06f5558a560aa3ad5f025941d53b1",
+            "regions": {
+              "": 0.039208
+            }
+          }
+        ]
+      },
+      "recorder_min": 0.02627150001899281,
+      "recorder_max": 0.05083499991087592,
+      "repeats": 5
+    }
+  ]
+}

@@ -132,3 +132,72 @@ def test_token_varint_helps_only_for_genuinely_small_ids():
     assert small_shard.codec == "tokens-varint"
     assert small_shard.nbytes < len(small) / 3, "one-byte ids should shrink a lot"
     assert len(medium) / medium_shard.nbytes < len(small) / small_shard.nbytes
+
+
+def test_full_stores_every_batch_even_when_the_bytes_repeat():
+    """`full` promises "no dedup, exact sample order" (Architecture 6.8).
+
+    It was documented and never implemented: `segments` and `full` wrote files 10 bytes
+    apart on six identical batches, so a user who paid for `full` got `segments`. A level
+    that silently behaves as another level is worse than a missing one, because the file
+    still claims the level it was asked for.
+    """
+    capture = DataCapture(DataLevel.FULL)
+    data = b"the same batch every step\n" * 8
+    for step in range(5):
+        capture.observe(data, step=step)
+    capture.seal()
+
+    assert len(capture.segments) == 5, "five observations must be five stored segments"
+    assert len(capture.shards) == 5, "five copies, not one shared by five ids"
+    assert len(set(capture.shards)) == 5, "each copy needs its own id to survive a reader"
+    assert all(segment.times_seen == 1 for segment in capture.segments.values())
+
+
+def test_segments_still_dedups_named_segments_that_share_bytes():
+    """The join case: two ids over one shard is one stored copy, not two.
+
+    Regression for a fix to `full` that keyed shards by position and broke this, making a
+    file 4 shards where the documented answer is 2.
+    """
+    capture = DataCapture(DataLevel.SEGMENTS)
+    data = b"shared corpus line\n" * 4
+    capture.observe(data, step=0, segment_id="batch-a")
+    capture.observe(data, step=1, segment_id="batch-b")
+    capture.seal()
+
+    assert len(capture.segments) == 2, "a name is never merged away"
+    assert len(capture.shards) == 1, "identical bytes cost one copy"
+
+
+def test_no_observation_is_lost_or_counted_twice_across_seals():
+    """Accounting invariant: the final statements must account for every observation.
+
+    The identity fast-path is only sound while it can still see the batch object. Sealing
+    set `content = None` and left the `id()` entry behind, so a repeat observation after a
+    seal either resurrected a merged-away segment or created a phantom one: on a 20-step run
+    the file's `times_seen` and the number of observations disagreed, silently.
+    """
+    capture = DataCapture(DataLevel.SEGMENTS)
+    data = bytes(bytearray(b"the same object, every step\n" * 4))
+
+    for step in range(6):
+        capture.observe(data, step=step)
+        capture.seal()                    # a seal between every observation, as a flush does
+
+    latest: dict[str, int] = {}
+    for segment in capture.segments.values():
+        latest[segment.segment_id] = segment.times_seen
+    assert len(capture.segments) == 1, "same bytes, so one segment once the hash has spoken"
+    assert sum(segment.times_seen for segment in capture.segments.values()) == 6, \
+        f"6 observations must be accounted for, not {sum(s.times_seen for s in capture.segments.values())}"
+
+
+def test_the_identity_map_holds_no_reference_to_a_sealed_segment():
+    """A stale `id()` entry is a correctness hazard, not just a leak: ids get reused."""
+    capture = DataCapture(DataLevel.SEGMENTS)
+    data = bytes(bytearray(b"batch\n" * 4))
+    capture.observe(data, step=0)
+    capture.seal()
+
+    assert capture._by_identity == {}, "no entry may survive the bytes being sealed"

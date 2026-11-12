@@ -111,6 +111,8 @@ class Recorder:
         self._items: deque[_Pending] = deque()
         self._cond = threading.Condition()
         self._last_loss: float | None = None
+        #: Highest step number seen, so deferred work can be stamped with a real step.
+        self._last_step: int | None = None
         self._shards_written: set[str] = set()
         self._logged: dict[str, Any] = {}
         #: Segment ids observed since the last store point; attributed together when it lands.
@@ -195,6 +197,7 @@ class Recorder:
         segment_id = segment_id or logged.get("segment_id", "")
         source = source or logged.get("source", "")
         try:
+            self._last_step = step if self._last_step is None else max(self._last_step, step)
             decision = self.policy.decide(step, loss=loss, grad_norm=grad_norm, event=event)
             self.stats.steps_seen += 1
             if loss is not None:
@@ -281,7 +284,8 @@ class Recorder:
                 self.data.record_effects(
                     segment_id, region=region, delta_norm=delta_norm,
                     grad_norm=grad_norm, loss_delta=loss_delta,
-                    span_segments=len(segment_ids), span_steps=span_steps)
+                    span_segments=len(segment_ids), span_steps=span_steps,
+                    step=step)
 
     def close(self) -> None:
         """Flush the queue, write the footer and stop the thread.
@@ -380,6 +384,8 @@ class Recorder:
                 except Exception as exc:  # noqa: BLE001 - one bad step, not a lost run
                     self._degrade(exc)
             self._write_data(writer)
+            self._flush_unsynced(writer)
+            self._write_join_status(writer)
             # Last, because writing the data is what makes tier 2 provable.
             self._write_capabilities(writer)
         except BaseException as exc:  # noqa: BLE001 - surfaced at close()
@@ -455,6 +461,59 @@ class Recorder:
                 "pointers": sorted(self.data.pointers),
                 "reason": "content not stored: level is pointers, or the byte cap was reached",
             }).encode())
+
+    def _flush_unsynced(self, writer: Writer) -> None:
+        """Record the data a run logged after its last optimizer step, instead of dropping it.
+
+        A loop that calls `log(data=...)` after the final `step()` - the natural shape if the
+        loss is computed per batch and printed afterwards - would otherwise have its last
+        batch vanish from the file. Measured on a 20-step run: 20 observations, 19 in the
+        file, and no warning anywhere. Silence is the one thing this recorder is not allowed
+        to produce, so the data is stored and an INFO block says it was never trained on.
+        """
+        pending = self._logged
+        if not pending:
+            return
+        data = _as_bytes(pending.get("data"))
+        if data is not None and self.data.level is not DataLevel.NONE:
+            segment = self.data.observe(data, self._last_step or 0)
+            self.data.seal()
+            self._flush_data(writer)
+            current = segment.segment_id if segment is not None else ""
+        else:
+            current = ""
+        writer.write_block(BlockType.INFO, json.dumps({
+            "event": "unsynced_log",
+            "detail": "log() was called with no optimizer step afterwards, so this data was "
+                      "observed but never trained on. It is stored with no region effects.",
+            "segment_id": current,
+            "loss": pending.get("loss"),
+        }).encode())
+        self._logged = {}
+
+    def _write_join_status(self, writer: Writer) -> None:
+        """Say what the join cannot answer, at the levels where it cannot (Architecture 6.8).
+
+        Documented since the first design and never written, so a `none` recording and a
+        `segments` recording looked equally complete to a reader. Written as an INFO block
+        rather than a comment because the reader has to be able to tell.
+        """
+        level = self.data.level.value
+        if level in ("segments", "full"):
+            return
+        missing = {
+            "none": ["data_content", "data_characteristics_join", "segment_spans"],
+            "pointers": ["data_content", "data_characteristics_join"],
+        }.get(level, [])
+        if self.data.dropped_to_pointers:
+            missing = sorted(set(missing) | {"data_content", "data_characteristics_join"})
+        writer.write_block(BlockType.INFO, json.dumps({
+            "event": "JOIN_INCOMPLETE",
+            "data_level": level,
+            "degraded_from_cap": self.data.dropped_to_pointers,
+            "cannot_answer": missing,
+            "detail": "the weights and deltas are complete; only the data side is partial",
+        }).encode())
 
     def _write_capabilities(self, writer: Writer) -> None:
         """State the tier this run reached, and name every field it could not see."""
@@ -541,6 +600,28 @@ class Recorder:
 
 _DTYPE_IDS = {"f32": 0, "f16": 1, "bf16": 2, "f64": 3, "i8": 4, "i16": 5, "i32": 6,
               "i64": 7, "bool": 8}
+
+
+def _as_bytes(data: Any) -> bytes | None:
+    """Accept what a user would naturally pass as a batch: bytes, a numpy array, or a tensor.
+
+    `log(data=...)` is documented as taking bytes, but a batch is a tensor far more often than
+    it is bytes, and `content_id` needs bytes to hash. Converting here means the last-batch
+    flush cannot fail on the shape a user actually has.
+    """
+    if data is None:
+        return None
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return bytes(data)
+    tobytes = getattr(data, "tobytes", None)
+    if tobytes is not None:
+        try:
+            return tobytes()
+        except Exception:  # noqa: BLE001 - a tensor needing .numpy()/detach() first
+            pass
+    for step in ("detach", "cpu", "numpy"):
+        data = getattr(data, step)() if hasattr(data, step) else data
+    return data.tobytes() if hasattr(data, "tobytes") else None
 
 
 def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray],

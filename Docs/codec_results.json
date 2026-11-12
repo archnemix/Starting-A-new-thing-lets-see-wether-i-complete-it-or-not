@@ -1,0 +1,90 @@
+{
+  "codecs": [
+    {
+      "case": "prose",
+      "bytes": 30749,
+      "stored": 153,
+      "ratio": 0.004975771569807148,
+      "codec": "text-zstd",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    },
+    {
+      "case": "code",
+      "bytes": 51200,
+      "stored": 116,
+      "ratio": 0.002265625,
+      "codec": "text-zstd",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    },
+    {
+      "case": "tokens-128",
+      "bytes": 16384,
+      "stored": 3620,
+      "ratio": 0.220947265625,
+      "codec": "tokens-varint",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    },
+    {
+      "case": "tokens-5000",
+      "bytes": 16384,
+      "stored": 7397,
+      "ratio": 0.45147705078125,
+      "codec": "tokens-varint",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    },
+    {
+      "case": "pixels",
+      "bytes": 16384,
+      "stored": 16394,
+      "ratio": 1.0006103515625,
+      "codec": "zstd",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    },
+    {
+      "case": "weights",
+      "bytes": 16384,
+      "stored": 15167,
+      "ratio": 0.92572021484375,
+      "codec": "zstd",
+      "exact": true,
+      "crc32_matches": true,
+      "chosen_by_heuristic": true
+    }
+  ],
+  "dictionary": {
+    "note": "a per-shard dictionary must repay its own bytes on every shard",
+    "cases": [
+      {
+        "text_bytes": 15801,
+        "plain_zstd": 3325,
+        "dictionary_bytes": 12132,
+        "dictionary_plus_stored": 14974,
+        "dictionary_wins": false
+      },
+      {
+        "text_bytes": 80447,
+        "plain_zstd": 15875,
+        "dictionary_bytes": 16384,
+        "dictionary_plus_stored": 30809,
+        "dictionary_wins": false
+      },
+      {
+        "text_bytes": 638425,
+        "plain_zstd": 123396,
+        "dictionary_bytes": 16384,
+        "dictionary_plus_stored": 140136,
+        "dictionary_wins": false
+      }
+    ]
+  }
+}

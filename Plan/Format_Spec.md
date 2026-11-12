@@ -127,6 +127,14 @@ agree with the blocks present: `segments`/`full` require at least one `DATA_SHAR
 `pointers` requires `DATA_POINTER` blocks and no shards, `none` requires neither. A reader
 that finds a mismatch reports a corrupt header rather than guessing.
 
+`segments` and `full` differ in one measurable way: `segments` deduplicates by content hash,
+so an epoch over the same data costs pointers (`times_seen` > 1), and two *named* segments
+over identical bytes share one shard. `full` stores one shard per observation, with no
+`times_seen` above 1, and therefore preserves exact sample order and repetition. A shard in a
+`full` file may carry a suffixed id (`<hash>-<n>`) so that two identical copies stay distinct;
+the fingerprint of every segment is always the plain content hash. A v1 reader must key
+shards by their `shard_id` field, not by recomputing the hash and assuming uniqueness.
+
 `base_model` and `ancestor` are reserved-but-null in v1: a future version can make a file
 a pure delta against a parent (Q18). `data_stored` must be `false` in v1 and must agree
 with the presence or absence of `DATA_BLOB` blocks.
@@ -211,7 +219,9 @@ the writer is worse than no spec, because it is the thing a second implementatio
   "component_mask": 0,
   "delta_reconstruction_error": 0.0,
   "span_segments": 1,             // how many batches share this effect measurement
-  "span_steps": 1                 // how many steps it was measured across
+  "span_steps": 1,                // how many steps it was measured across
+  "effect_step": 3                // the stored step at which the movement was measured,
+                                  // or -1 when this data has no measured movement
 }
 ```
 
@@ -220,6 +230,13 @@ movement of its own: the weights did not change on that step. Such a batch is at
 everything observed since the previous store point, and these two fields say how many batches
 and steps that was. Without them an empty `region_effects` is ambiguous - it could mean "this
 batch caused nothing", which is a claim the recorder is not entitled to make.
+
+`effect_step` closes the remaining gap: `span_steps` said how many steps a measurement
+covered but never *which* recorded step it belonged to, so a batch seen on a skipped step was
+attributed to movement the reader could not locate. `effect_step` is the store point that
+followed the batch and is always a step present in an `EVENT` block. It is `-1` when no
+movement was measured. It is an additive v1 change: a reader that does not know the field
+still reads `first_step`/`last_step` as before.
 
 A segment is **re-stated** rather than rewritten: the file is append-only, so a growing segment
 is written again with its new `last_step`, and the last statement about an id is the true one.
@@ -252,7 +269,19 @@ Two kinds, both `{"event": ...}`:
 {"event": "capabilities", "capability_tier": 2, "capabilities": [...],
  "capabilities_missing": {"activations": "not provided by this adapter"}}
 {"event": "recorder_fault", "error": "...", "steps_stored": 12}
+{"event": "JOIN_INCOMPLETE", "data_level": "none",
+ "cannot_answer": ["data_content", "data_characteristics_join", "segment_spans"],
+ "degraded_from_cap": false,
+ "detail": "the weights and deltas are complete; only the data side is partial"}
+{"event": "unsynced_log", "segment_id": "data-9", "loss": 0.31,
+ "detail": "log() was called with no optimizer step afterwards, so this data was observed
+            but never trained on. It is stored with no region effects."}
 ```
+
+`JOIN_INCOMPLETE` is written for `none` and `pointers` (and for any run whose byte cap
+degraded it to `pointers`), listing the questions the file cannot answer. `unsynced_log`
+appears when data was logged after the final optimizer step: the data is still stored, and
+the block says it was never trained on rather than letting it vanish.
 
 The capability block is written **last**, at close, because a tier is what the run turned out
 to be able to see rather than what was asked for at the start. A reader that finds a claimed

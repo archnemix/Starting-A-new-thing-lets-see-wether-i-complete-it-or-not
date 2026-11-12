@@ -1125,6 +1125,68 @@
         "18 tests"
       ],
       "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself."
+    },
+    "Bench/claim11_codecs.py": {
+      "purpose": "Claim 11-12 bench: storage ratio, exactness and CRC per data type, plus the dictionary comparison that justified removing `text-dict`.",
+      "inputs": [
+        "synthetic prose, code, token-id arrays, pixel arrays and float weights"
+      ],
+      "outputs": [
+        "Docs/codec_results.json",
+        "a printed ratio/exactness table"
+      ],
+      "handles": "Chooses nothing itself - it measures `choose_data_codec` + `encode_shard`/`decode_shard` and reports what they did. `--dictionary` re-runs the losing comparison."
+    },
+    "Docs/codec_results.json": {
+      "purpose": "The recorded Claim 11-12 table: per-case raw/stored bytes, ratio, chosen codec, exactness and CRC agreement.",
+      "inputs": [
+        "Bench/claim11_codecs.py"
+      ],
+      "outputs": [
+        "claimed numbers cited in Plan/Roadmap.md and Docs/Research.json"
+      ],
+      "handles": "Generated output, committed so a reader can check a claim without rerunning the bench."
+    },
+    "Tests/unit/data/test_codecs.py": {
+      "purpose": "Unit tests for shard codecs: lossless round-trip, CRC identity, varint boundaries, realistic-token detection, incompressible honesty, and the absence of the removed dictionary codec.",
+      "inputs": [
+        "synthetic shard payloads of each supported shape"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Asserts that a codec which cannot compress (pixels, weights) says so with a ratio near or above 1 instead of pretending."
+    },
+    "Bench/claim13_capture_levels.py": {
+      "purpose": "Claim 13-14 bench: recorder overhead per data level, charged to log()+step(), and a join round-trip checked against the bytes.",
+      "inputs": [
+        "a tiny torch model, synthetic batches, four data levels"
+      ],
+      "outputs": [
+        "Docs/capture_levels.json",
+        "a printed per-level table and join report"
+      ],
+      "handles": "Keeps the optimizer out of the timed region (timing it measured AdamW instead of the recorder). Reports the catch-up tail separately, and verifies every shard by re-decoding it rather than trusting the header."
+    },
+    "Docs/capture_levels.json": {
+      "purpose": "The recorded Claim 13-14 numbers: per-level bytes, median/p95/max step cost, catch-up share, seal time, and the join report with verified-shard counts.",
+      "inputs": [
+        "Bench/claim13_capture_levels.py"
+      ],
+      "outputs": [
+        "the table in Plan/Roadmap.md"
+      ],
+      "handles": "Generated output, committed so the overhead claim is checkable."
+    },
+    "Tests/integration/test_join_round_trip.py": {
+      "purpose": "Claim 14 as a test: the file alone answers which data, at which step, and what movement - with every shard re-decoded and hash-verified.",
+      "inputs": [
+        "a recorded .archx.mdl from a toy model at each data level"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Also covers JOIN_INCOMPLETE, unsynced_log, and the effect_step invariant (movement must land on a step the file actually holds)."
     }
   },
   "_generated": "2026-11-12 - Phases 6-9: HF, launcher, Lightning, end-to-end proof, spec conformance, 209 tests",

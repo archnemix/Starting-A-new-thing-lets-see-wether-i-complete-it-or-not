@@ -720,6 +720,56 @@
         "Docs/Workaround.md",
         "pyproject.toml"
       ]
+    },
+    {
+      "id": "capture-overhead-and-the-join",
+      "question": "Claim 13-14: what does capturing data cost per level, and can the file alone answer which data moved which weights at which step?",
+      "sources": [
+        "Bench/claim13_capture_levels.py",
+        "Docs/capture_levels.json",
+        "Tests/integration/test_join_round_trip.py"
+      ],
+      "findings": [
+        "Charged to log() + step() over 60 steps (batch 256x128, 18,128 params, 5 repeats), the median step costs 0.018 ms at `none`, 0.033 ms at `pointers`, 0.032 ms at `segments` and 0.033 ms at `full`. The marginal cost of capture is therefore ~15 us per step, and the data copy, hash and compression are not on the training thread at all.",
+        "The first version of the bench timed optimizer.step() and reported a NEGATIVE overhead for `pointers` and a `full` cheaper than `segments`. It was measuring AdamW. The optimizer now takes no part in the timed region.",
+        "12-17% of steps run over 1 ms at EVERY level, including `none` with no data handed over at all. The tail is the weight block: past `queue_size` the writer is behind and the training thread encodes that block itself instead of dropping it. Attributing it to data capture would be wrong in both directions.",
+        "`full` was documented from the first design (Architecture 6.8: no dedup, exact sample order) and was never implemented - it wrote the same deduplicated file as `segments`, 4 bytes apart on the same 60 batches. Now it stores one shard per observation: 60 shards and 60 segments where `segments` writes 1 shard for 60 sightings.",
+        "`JOIN_INCOMPLETE` was also documented and never emitted, so a `none` recording and a `segments` recording looked equally complete. It is now written for `none` and `pointers`, listing the questions the file cannot answer.",
+        "Merging a duplicate segment left `_by_identity` pointing at the popped object, and sealing had already set content=None so the staleness was permanent: later sightings of the same batch incremented a segment no longer in the file. On 20 steps the file's times_seen summed to 19. Pruning the identity map at seal makes observations and times_seen agree exactly (6/6, 20/20, 50/50).",
+        "The join could not say WHICH recorded step a measurement belonged to: span_steps gives only a length. In the first measurement 36 of 60 segments carried movement that landed on no recorded step. `effect_step` (additive v1 field, -1 when there is no movement) fixes it: 24/60 -> 60/60 answered.",
+        "Data logged after the final optimizer step was dropped in silence (20 observations, 19 in the file). It is now stored and an `unsynced_log` INFO block says it was never trained on."
+      ],
+      "verdict": "Capture costs about 15 us per recorded step on the median and is not the tail; the honest number for the tail is 'the weight block, at every level'. With effect_step and the per-observation `full` path, the file alone answers all three join questions for 60/60 segments at `segments` and at `full`, with every shard re-decoded, CRC-checked and hash-verified by the reader.",
+      "affects": [
+        "archx/data/capture.py",
+        "archx/recorder.py",
+        "Plan/Format_Spec.md",
+        "Bench/claim13_capture_levels.py",
+        "Tests/integration/test_join_round_trip.py",
+        "Tests/unit/data/test_capture.py"
+      ]
+    },
+    {
+      "id": "codecs-that-were-removed",
+      "question": "Claim 11-12: which per-type shard codec actually earns its place, and which one is intuition wearing a benchmark?",
+      "sources": [
+        "Bench/claim11_codecs.py",
+        "Docs/codec_results.json",
+        "Tests/unit/data/test_codecs.py"
+      ],
+      "findings": [
+        "Measured ratios, all exact with matching CRCs: prose 0.0050, code 0.0023, token ids 0.2209 (small ids) and 0.4515 (real vocabulary), pixels 1.0006, float weights 0.9257. Pixels and weights above/below 1 is the honest answer - zstd cannot compress noise, and a codec that promised otherwise would be lying.",
+        "The `tokens-varint` path was dead code: its detector required every id below 128, so a real vocabulary never took it and every token shard paid zstd alone (0.560). Shape-based detection gives 0.451 on the same data.",
+        "A zstd dictionary trained on the run's own text was implemented and then MEASURED LOSING at every combination: 1-16 KB dictionaries against 15 KB-1.5 MB of corpus text, plain 3,325 / 15,875 / 123,396 bytes versus dictionary 14,974 / 30,809 / 140,136. The dictionary must repay its own bytes inside every shard, and zstd's window already captures the repetition.",
+        "A shared dictionary side-table would fix the repayment and make a recording unreadable without a side file. Rejected: portability of a single file is the point."
+      ],
+      "verdict": "Ship three codecs (text-zstd, tokens-varint, zstd) and no dictionary. The dictionary's removal is recorded above choose_data_codec so it cannot be re-added on intuition; the test file asserts the codec is gone.",
+      "affects": [
+        "archx/data/codecs.py",
+        "Bench/claim11_codecs.py",
+        "Tests/unit/data/test_codecs.py",
+        "Docs/codec_results.json"
+      ]
     }
   ]
 }

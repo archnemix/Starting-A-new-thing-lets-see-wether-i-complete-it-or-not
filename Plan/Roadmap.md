@@ -39,8 +39,80 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | done (claims 1-2 measured, numbers in Research.json) |
 | 2.5 | Claim 3 measured: chained-delta error vs anchor spacing | Recommended spacing written into the spec | done - `Bench/claim03_anchor_spacing.py`: quantization contributes nothing at the default budget and stays under 0.13x of the per-delta budget over 64 chained deltas at 1e-2. Anchors are a recovery property, not an accuracy one, and the guarantee is now stated as "exact at anchors, float32 rounding (~4e-9) between them" (`Tests/unit/test_reconstruction_guarantee.py`) |
 | 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | done, with an uncomfortable result - `Bench/claim04_storage_vs_checkpoints.py` (matched accuracy on every step: checkpointing wins by 4-9x, reported as such) and `Bench/claim04_long_run.py` (a 1000-step run: the recorder is 1.7-5.9x smaller than a checkpoint at every step). The claim is about resolution, not file size |
-| 2.7 | Claim 13-14 measured: data capture overhead per level, and the join round-trip | Numbers recorded; join answers from file alone | todo |
-| 2.8 | Shard codecs: text dict, token varint-delta, lossless image; Claim 11-12 measured | Byte ratio + exactness per data type | todo |
+| 2.7 | Claim 13-14 measured: data capture overhead per level, and the join round-trip | Numbers recorded; join answers from file alone | done |
+| 2.8 | Shard codecs: text dict, token varint-delta, lossless image; Claim 11-12 measured | Byte ratio + exactness per data type | done |
+
+### Claim 13-14 evidence (`Bench/claim13_capture_levels.py`, `Docs/capture_levels.json`)
+
+60 steps, batch 256x128, 18,128-parameter model, 5 repeats, charged to `log()` + `step()`
+only. The optimizer is outside the timed region on purpose: the first version of the bench
+timed `optimizer.step()` and reported a *negative* overhead for `pointers`.
+
+| level | file bytes | step() median | p95 | catch-up share | seal (writer thread) | join |
+|---|---|---|---|---|---|---|
+| `none` | 1,455,631 | 0.018 ms | 14.39 ms | 12% | 0.174 s | n/a (no data) |
+| `pointers` | 1,478,299 | 0.033 ms | 14.94 ms | 17% | 0.201 s | no (withheld) |
+| `segments` | 8,756,613 | 0.032 ms | 14.24 ms | 17% | 0.271 s | **60/60** |
+| `full` | 8,756,600 | 0.033 ms | 12.06 ms | 8% | 0.307 s | **60/60** |
+
+What this says, and what it refuses to say:
+
+- **The marginal cost of capture is ~15 us per step.** `none` -> `segments` is
+  +0.015 ms on the median step: the identity check and
+  the segment bookkeeping. Storing the data itself is not on the training thread at all.
+- **The tail is not the data level.** 12-17% of steps run over 1 ms at *every* level,
+  including `none` with no data handed over. It is the weight block: once the writer is a
+  queue behind, the training thread encodes that block itself rather than dropping it
+  (`Recorder._enqueue`). Charging that to capture would be wrong in both directions.
+- **Six identical batches cost one shard under `segments` and six under `full`**, which is
+  the only behavioural difference between the two levels and is now implemented, tested, and
+  in the spec. `full` was documented from the start and behaved as `segments` until this row:
+  measured, the two files differed by 4 bytes.
+- **The join answers from the file alone.** For every stored segment the reader verified the
+  shard by re-decoding it, checked the CRC *and* recomputed the content hash from the bytes,
+  then located the movement at a step the file holds. 60/60 at `segments` and 60/60 at `full`,
+  0 hash mismatches.
+
+Three defects were found and fixed while measuring this, all of them silent:
+
+1. **`full` was not implemented** - it wrote the same deduplicated file as `segments`.
+2. **A merged segment stayed reachable through the identity map.** `_merge_unnamed` popped the
+   duplicate from `segments` but `_by_identity` kept it, and sealing had already set
+   `content = None`, so every later sighting of that batch incremented a segment that was no
+   longer in the file. Observations and `times_seen` disagreed with no warning; the map is now
+   pruned at seal and the invariant is a test.
+3. **The join had nowhere to point.** `span_steps` said how long a span was, never which
+   recorded step it belonged to, so 36 of 60 segments in the first measurement carried
+   movement a reader could not locate. `effect_step` (an additive v1 field) fixes it: 24/60 ->
+   60/60 answered.
+4. **Data logged after the final optimizer step was dropped.** Now stored, with an
+   `unsynced_log` block saying it was never trained on.
+
+Also written now, both documented since the first design and never emitted: the
+`JOIN_INCOMPLETE` block for `none`/`pointers`, and `full`'s per-observation shards.
+
+### Claim 11-12 evidence (`Bench/claim11_codecs.py`, `Docs/codec_results.json`)
+
+| case | raw | stored | ratio | codec | exact |
+|---|---|---|---|---|---|
+| prose | 30,749 | 153 | **0.0050** | text-zstd | yes |
+| code | 51,200 | 116 | **0.0023** | text-zstd | yes |
+| tokens-128 | 16,384 | 3,620 | **0.2209** | tokens-varint | yes |
+| tokens-5000 | 16,384 | 7,397 | **0.4515** | tokens-varint | yes |
+| pixels | 16,384 | 16,394 | 1.0006 | zstd | yes |
+| weights | 16,384 | 15,167 | 0.9257 | zstd | yes |
+
+Every case round-trips exactly and every CRC matches. Two findings worth keeping:
+
+- **The `tokens-varint` detector was dead code.** It required every id `< 128`, so a real
+  vocabulary (ids up to 50,000) never took the path and every token shard paid zstd alone:
+  0.560 before, 0.451 after. The new test asserts detection from realistic ids.
+- **A per-shard zstd dictionary loses at every size and was removed.** Measured at 1-16 KB
+  dictionaries against 15 KB-1.5 MB of corpus text: plain 3,325 / 15,875 / 123,396 bytes vs
+  dictionary 14,974 / 30,809 / 140,136. The dictionary has to repay its own bytes inside every
+  shard, and zstd's window already captures the repetition. A shared side-table would fix
+  repayment and make a recording unreadable without a side file - rejected. The measurement
+  note stays above `choose_data_codec` so nobody re-adds it on intuition.
 
 ## Phase 3 - Core recorder (v0.4)
 

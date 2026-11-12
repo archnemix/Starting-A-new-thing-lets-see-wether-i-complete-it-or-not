@@ -704,3 +704,44 @@ values against an independent source - the live weights of the run, the Trainer'
 loss, the same seed twice, a real checkpoint on disk, or the file's own bytes parsed against its
 own spec. The lesson is not "test more"; it is that a test which only confirms the shape of the
 output cannot tell a correct recording from a confident one.
+
+## What the data layer kept getting wrong
+
+Four more of the same kind, found by measuring Phase 2 instead of assuming it was finished.
+
+**A level that was documented and never written.** `full` had a paragraph in
+`Plan/Architecture.md` from the first design - "every batch exactly as fed, no dedup, exact
+sample order" - and no branch in the code. It wrote the same deduplicated file as `segments`;
+on 60 identical batches the two files differed by 4 bytes. The lesson is narrower than
+"write tests": a *level* is a promise about behaviour, and there was no test that compared two
+levels, so nothing could notice that two of them were the same level.
+
+**A stale map that counted into nothing.** Merging a duplicate segment removed it from
+`segments` but left it in `_by_identity`. Because sealing sets `content = None`, the identity
+fast-path could never succeed again, so the entry was pure poison: every later sighting of the
+same batch incremented a segment that no longer existed in the file. The aggregate still looked
+plausible - there was a segment, it had a `times_seen`, the file opened. What exposed it was
+adding up `times_seen` over the *final* statement of every segment and comparing it to the
+number of observations: 19 against 20.
+
+**A measurement with no address.** `span_steps` recorded how many steps a shared measurement
+covered and not which recorded step it belonged to. So a batch seen on a skipped step carried a
+real `delta_norm` that pointed nowhere: 36 of 60 segments in the first measurement. This is the
+subtle one, because the data was all *there* - the numbers were right, the join was simply
+unaddressable. The fix was a field, and the test that keeps it fixed asserts the step exists in
+the file rather than that the field is present.
+
+**A benchmark that measured the wrong thing.** The first version of the capture-overhead bench
+timed `optimizer.step()`, which included AdamW, and duly reported that capturing data *saved*
+3 ms per step. It also reported `full` as cheaper than `segments` and 0.000 ms for every level
+after a units slip (seconds printed as milliseconds). Three separate errors, and each one
+produced a number. The only reason they were caught is that the numbers were implausible: a
+negative overhead, an ordering that contradicted the code, and a zero. A benchmark whose
+results are believable is not checked; implausibility is the last line of defence, which is why
+the bench now also prints its spread and its catch-up count.
+
+The common thread with the eight defects above: none of them crashed, none of them turned a
+test red, and every one of them produced output that a careful reader would have accepted. The
+difference this time is that the suspicious numbers were *impossible* rather than merely
+unexpected, so the measurement argued with itself.
+
