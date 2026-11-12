@@ -162,8 +162,14 @@ shell. The test now runs `node --test <file>` - `node` is a real executable ever
 the npm workflow runs both forms so a contributor's `npm test` cannot rot unnoticed. No
 platform conditional, no `shell=True`.
 
-This is the third time the three-runner matrix has caught a defect that a single-platform
-green suite hid (after `/tmp` in the launcher test and the skipped Hugging Face tests).
+A second failure followed on macOS, and it was the same test for a different reason: it
+asserted the literal string `# fail 0`, but node's TAP reporter prefix is not stable across
+versions (node 22 prints `ℹ fail 0`). All eight node tests passed and the pytest test failed
+anyway. It now matches a prefix-free `fail <n>` **and** requires the exit code to be 0.
+
+This is the third and fourth time the three-runner matrix has caught a defect that a
+single-platform green suite hid (after `/tmp` in the launcher test and the skipped Hugging
+Face tests).
 
 ### CI: a record commit must not be reported as a test failure
 

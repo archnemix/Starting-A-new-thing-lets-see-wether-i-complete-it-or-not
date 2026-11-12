@@ -8,6 +8,7 @@ that passes without running node would defeat exactly that.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -73,4 +74,9 @@ def test_the_node_suite_itself_passes():
     result = subprocess.run([node, "--test", str(test_file)], cwd=PACKAGE,
                             capture_output=True, text=True, timeout=300, check=False)
     assert result.returncode == 0, f"node --test failed:\n{result.stdout}\n{result.stderr}"
-    assert "# fail 0" in result.stdout, result.stdout
+    # The reporter prefix is not stable across node versions: 22 prints `ℹ fail 0`, 20 prints
+    # `# fail 0`, and 18 prints `# fail 0` too. Matching a literal prefix made this test fail
+    # on macOS while every one of the 8 node tests passed - the exit code is the real signal,
+    # and this is a readability check on top of it.
+    assert re.search(r"fail[ \t]+0\b", result.stdout), result.stdout
+    assert re.search(r"pass[ \t]+([1-9]\d*)", result.stdout), "no tests ran"
