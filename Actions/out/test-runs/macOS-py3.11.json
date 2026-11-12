@@ -2,21 +2,16 @@
   "purpose": "test run record written by Actions/scripts/run_tests.py",
   "label": "macOS-py3.11",
   "command": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/Users/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/macOS-py3.11.junit.xml",
-  "exit_code": 1,
-  "summary_line": "245 tests: 244 passed, 1 failed, 0 errors, 0 skipped",
+  "exit_code": 0,
+  "summary_line": "245 tests: 245 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 244,
-    "failed": 1,
+    "passed": 245,
+    "failed": 0,
     "errors": 0,
     "skipped": 0,
     "total": 245
   },
-  "failures": [
-    {
-      "test": "Tests.integration.test_npm_signpost::test_the_node_suite_itself_passes",
-      "detail": "Tests/integration/test_npm_signpost.py:67: in test_the_node_suite_itself_passes\n    assert \"# fail 0\" in result.stdout, result.stdout\nE   AssertionError: \u2714 a bare invocation fails and says where the real tool is (46.17825ms)\nE     \u2714 any real command line fails, because the real tool is elsewhere (261.336917ms)\nE     \u2714 a failed attempt echoes what was asked for, so the error is actionable (47.410667ms)\nE     \u2714 --version answers about this package and exits 0 (49.202541ms)\nE     \u2714 --help exits 0 and names the escape hatch (48.132334ms)\nE     \u2714 the package ships no Python, no native code, and no wrapper (1.256333ms)\nE     \u2714 the bin entry point is executable and named archx (0.241833ms)\nE     \u2714 the module can be required without running anything (45.076084ms)\nE     \u2139 tests 8\nE     \u2139 suites 0\nE"
-    }
-  ],
+  "failures": [],
   "tests": [
     "Tests.integration.test_arch_sweep::test_every_architecture_reaches_tier_two_and_rebuilds_its_weights",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
@@ -264,17 +259,25 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T16:10:19.890316+00:00",
-  "duration_s": 34.361,
+  "started_utc": "2026-11-12T16:20:35.165896+00:00",
+  "duration_s": 26.966,
   "runner": {
     "os": "macOS-26.7.2-arm64-arm-64bit",
     "github_os": "macOS",
     "github_arch": "ARM64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "d815ba9cbded90ec8944f84294c48825e6cfb4e5"
+    "github_sha": "88c15c0747b6af72b086540b1948b0958496af08"
   },
   "stdout_tail": [
+    "........................................................................ [ 29%]",
+    "........................................................................ [ 58%]",
+    "........................................................................ [ 88%]",
+    ".............................                                            [100%]",
+    "=============================== warnings summary ===============================",
+    "../../../../../Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31",
+    "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31: UserWarning: Skipping device Apple Paravirtual device that does not support Metal 2.0 (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/mps/MPSDevice.mm:28.)",
+    "    return torch._C._mps_is_available()",
     "",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
@@ -294,27 +297,7 @@
     "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
     "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=2` in the `DataLoader` to improve performance.",
     "",
-    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
-    "=========================== short test summary info ============================",
-    "FAILED Tests/integration/test_npm_signpost.py::test_the_node_suite_itself_passes - AssertionError: \u2714 a bare invocation fails and says where the real tool is (46.17825ms)",
-    "  \u2714 any real command line fails, because the real tool is elsewhere (261.336917ms)",
-    "  \u2714 a failed attempt echoes what was asked for, so the error is actionable (47.410667ms)",
-    "  \u2714 --version answers about this package and exits 0 (49.202541ms)",
-    "  \u2714 --help exits 0 and names the escape hatch (48.132334ms)",
-    "  \u2714 the package ships no Python, no native code, and no wrapper (1.256333ms)",
-    "  \u2714 the bin entry point is executable and named archx (0.241833ms)",
-    "  \u2714 the module can be required without running anything (45.076084ms)",
-    "  \u2139 tests 8",
-    "  \u2139 suites 0",
-    "  \u2139 pass 8",
-    "  \u2139 fail 0",
-    "  \u2139 cancelled 0",
-    "  \u2139 skipped 0",
-    "  \u2139 todo 0",
-    "  \u2139 duration_ms 568.273167",
-    "  ",
-    "assert '# fail 0' in '\u2714 a bare invocation fails and says where the real tool is (46.17825ms)\\n\u2714 any real command line fails, because the re...076084ms)\\n\u2139 tests 8\\n\u2139 suites 0\\n\u2139 pass 8\\n\u2139 fail 0\\n\u2139 cancelled 0\\n\u2139 skipped 0\\n\u2139 todo 0\\n\u2139 duration_ms 568.273167\\n'",
-    " +  where '\u2714 a bare invocation fails and says where the real tool is (46.17825ms)\\n\u2714 any real command line fails, because the re...076084ms)\\n\u2139 tests 8\\n\u2139 suites 0\\n\u2139 pass 8\\n\u2139 fail 0\\n\u2139 cancelled 0\\n\u2139 skipped 0\\n\u2139 todo 0\\n\u2139 duration_ms 568.273167\\n' = CompletedProcess(args=['npm', 'test', '--silent'], returncode=0, stdout='\u2714 a bare invocation fails and says where the ... tests 8\\n\u2139 suites 0\\n\u2139 pass 8\\n\u2139 fail 0\\n\u2139 cancelled 0\\n\u2139 skipped 0\\n\u2139 todo 0\\n\u2139 duration_ms 568.273167\\n', stderr='').stdout"
+    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
   ],
   "stderr_tail": []
 }
