@@ -3,13 +3,13 @@
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "158 tests: 158 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "167 tests: 167 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 158,
+    "passed": 167,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 158
+    "total": 167
   },
   "failures": [],
   "tests": [
@@ -54,6 +54,15 @@
     "Tests.integration.test_launcher::test_the_injected_hook_always_compiles",
     "Tests.integration.test_launcher::test_the_hook_directory_does_not_leak_into_the_environment",
     "Tests.integration.test_launcher::test_the_launcher_reports_what_it_produced",
+    "Tests.integration.test_lightning_adapter::test_the_file_holds_the_weights_after_each_update",
+    "Tests.integration.test_lightning_adapter::test_the_loss_is_recorded_without_any_user_code",
+    "Tests.integration.test_lightning_adapter::test_gradient_norms_are_recorded_and_are_not_clipped",
+    "Tests.integration.test_lightning_adapter::test_a_scheduler_that_steps_every_epoch_is_shown_as_it_changes",
+    "Tests.integration.test_lightning_adapter::test_gradient_accumulation_gives_one_store_point_per_update",
+    "Tests.integration.test_lightning_adapter::test_an_explicit_policy_reaches_the_recorder",
+    "Tests.integration.test_lightning_adapter::test_the_callback_is_a_real_lightning_callback",
+    "Tests.integration.test_lightning_adapter::test_the_adapter_imports_without_lightning",
+    "Tests.integration.test_lightning_adapter::test_the_metadata_says_which_adapter_and_model",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[1]",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[2]",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[3]",
@@ -172,20 +181,40 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T14:02:27.257809+00:00",
-  "duration_s": 43.649,
+  "started_utc": "2026-11-12T14:10:52.078957+00:00",
+  "duration_s": 43.676,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "602115ac2eb9a4b32cbe28e193757a30148abb5a"
+    "github_sha": "84889c1bee10a06edf81a78710230b79f6eb3383"
   },
   "stdout_tail": [
-    "........................................................................ [ 45%]",
-    "........................................................................ [ 91%]",
-    "..............                                                           [100%]"
+    "........................................................................ [ 43%]",
+    "........................................................................ [ 86%]",
+    ".......................                                                  [100%]",
+    "============================== warnings summary ===============================",
+    "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
+    "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
+    "Tests/integration/test_lightning_adapter.py::test_gradient_norms_are_recorded_and_are_not_clipped",
+    "Tests/integration/test_lightning_adapter.py::test_a_scheduler_that_steps_every_epoch_is_shown_as_it_changes",
+    "Tests/integration/test_lightning_adapter.py::test_gradient_accumulation_gives_one_store_point_per_update",
+    "Tests/integration/test_lightning_adapter.py::test_an_explicit_policy_reaches_the_recorder",
+    "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
+    "  C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\site-packages\\lightning\\pytorch\\utilities\\_pytree.py:21: `isinstance(treespec, LeafSpec)` is deprecated, use `isinstance(treespec, TreeSpec) and treespec.is_leaf()` instead.",
+    "",
+    "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
+    "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
+    "Tests/integration/test_lightning_adapter.py::test_gradient_norms_are_recorded_and_are_not_clipped",
+    "Tests/integration/test_lightning_adapter.py::test_a_scheduler_that_steps_every_epoch_is_shown_as_it_changes",
+    "Tests/integration/test_lightning_adapter.py::test_gradient_accumulation_gives_one_store_point_per_update",
+    "Tests/integration/test_lightning_adapter.py::test_an_explicit_policy_reaches_the_recorder",
+    "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
+    "  C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\site-packages\\lightning\\pytorch\\trainer\\connectors\\data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.",
+    "",
+    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
   ],
   "stderr_tail": []
 }
