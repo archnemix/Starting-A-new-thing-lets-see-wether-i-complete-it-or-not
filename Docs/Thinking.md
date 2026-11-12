@@ -493,3 +493,43 @@ The CRC covers the fields being changed, so it has to be computed after them.
 `archx info` also reads the capability facts from the file now instead of recomputing them. A
 tier belongs to the run that produced it; working it out again at read time would be a second
 opinion presented as a record.
+
+---
+
+## Claim 4: the claim was aimed at the wrong comparison
+
+"Smaller than naive checkpointing" is the kind of claim that is easy to state and hard to state
+honestly, because it is true or false depending entirely on what "than" means.
+
+**At matched accuracy on every step, checkpointing wins.** Measured on six stacks at a 1e-2
+target: 4-9x in favour of checkpoints. One stored step of ours is roughly one whole checkpoint,
+so an interval coarse enough to hit the accuracy target is simply cheaper. There is no tuning
+that fixes this - it is what a per-step delta over every tensor costs.
+
+**At matched accuracy on the stored steps of a 1000-step run, recording wins**: 1.7x to 5.9x
+smaller than a checkpoint at every step (CNN 3.8x, RNN 5.9x, multimodal 5.5x, MoE 2.9x, SSM
+1.7x). The gap grows with run length, because checkpointing costs model-size times step count
+while the recorder's per-step cost falls as the phases let it skip.
+
+Both are in `Docs/Research.json` and both benchmarks are committed. The claim on the box is now
+worded as resolution - dense where the model moved - and not as a smaller file. That is the
+honest version, and it is also the one a user would notice: a checkpoint interval cannot be
+dense at an event and sparse elsewhere, and claim 6 measured that difference at 12/12 events
+against 1/12.
+
+**Building the benchmark found three bugs, all in my own work rather than in the product.**
+1. The truth was indexed one update early, so the recorder looked like it was uniformly one
+   step behind - a flattering bug for checkpoints and a real one for me.
+2. `assert_python = all(...), ("message")` in the benchmark. That is a tuple assignment. It
+   checked nothing, in a file whose whole purpose is not lying to yourself.
+3. Offering int16 quantization at the default budget quietly made the default path lossy. The
+   tests caught it (`step 1 w1 differs`), and the decision was to keep the default exact and
+   make int16 opt-in rather than to update the promise.
+
+And one real product bug that the tests could not have caught, because the code path did not
+exist until this benchmark created it: **int16 quantization shares encoding id 2 with int8, and
+the reader decoded by encoding id alone.** Every int16 delta came back at half length and failed
+on reshape. The recorder wrote a file that its own reader rejected - the worst possible shape of
+this bug, and it existed for the ten minutes between adding int16 and running the benchmark.
+The width now comes from the block's value dtype, and `Tests/unit/encoders/test_quantization_path.py`
+pins the window where int16 is chosen.

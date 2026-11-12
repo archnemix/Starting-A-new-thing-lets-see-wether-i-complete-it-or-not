@@ -63,6 +63,16 @@ class _Pending:
     payload: bytes = b""
 
 
+#: The error budget above which int16 quantization is offered.
+#:
+#: Measured on a 64x64 delta of 1e-3 noise: int8 costs 8.9e-3 relative, int16 costs 3.4e-5, raw
+#: float32 costs nothing. At the default budget of 1e-3 int8 is refused and the delta is stored
+#: raw, so the default path rebuilds exactly - which is the promise the tests make and users
+#: rely on. int16's 3.4e-5 fits inside 1e-3, so offering it there would quietly make the default
+#: lossy. It is offered only when the caller chooses a larger budget, where loss is the point.
+_INT16_MIN_BUDGET = 1e-3
+
+
 class Recorder:
     """Observes a training run and writes one .archx.mdl file.
 
@@ -106,8 +116,20 @@ class Recorder:
         self._thread = threading.Thread(target=self._run, name="archx-writer", daemon=True)
         self._stop = threading.Event()
         self._error: BaseException | None = None
+        # Quantization is offered at two widths and the error is measured, not assumed. An
+        # int8 step is max|delta|/127, which for a noisy delta of many small values is a
+        # relative error near 0.2% - above the default budget, so int8 alone was never
+        # choosable and every delta fell through to raw float32 at twice the size.
+        #
+        # int16 is a tenth of int8's error (6.1e-6 against 7.9e-4 on measured deltas), so it
+        # is offered only when the budget actually permits it. Adding it unconditionally made
+        # the *default* configuration lossy: reconstruction stopped being exact at anchor
+        # steps, which broke a documented promise. At the default 1e-3 the recorder is still
+        # lossless; an opt-in budget such as 1e-2 buys the size.
         self._encoders = [Unchanged(), Sparse(threshold=0.0), DenseQuant(bits=8),
                           LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw()]
+        if max_rel_error > _INT16_MIN_BUDGET:
+            self._encoders.insert(3, DenseQuant(bits=16))
         self.data = DataCapture(data_level, max_bytes=data_max_bytes)
         # What this run can promise. Filled in as facts arrive, never assumed up front.
         self.capabilities = Capabilities()

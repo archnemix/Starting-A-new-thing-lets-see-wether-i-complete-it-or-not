@@ -139,7 +139,7 @@ accuracy win: on a single-jump stationary run a fixed interval of the same size 
 more accurate, because the adaptive policy spends its bytes on the dense warmup and cooldown.
 Both results are in `Docs/Research.json`.
 
-Tests: 121 local, 0 failures, 0 errors, 0 skips. CI run `43204316653`: 114 tests on each of
+Tests: 126 local, 0 failures, 0 errors, 0 skips. CI run `43204316653`: 114 tests on each of
 Linux, Windows and macOS, 0 failures, 0 errors, 7 skips (the torch-dependent modules, on runners
 without torch), identical test-name lists on all three.
 
@@ -154,3 +154,17 @@ Also in this version (Phase 4.5, 4.6, 5.1, 5.4):
 - `archx diff`: two steps of one run (which tensors moved, by how much, absolute and relative
   to their own size, and in which region) or two recordings (shared steps, exclusive steps,
   and the first step where they disagree). Two identical runs report as identical.
+- Claim 4 measured, both ways round (`Bench/claim04_storage_vs_checkpoints.py`,
+  `Bench/claim04_long_run.py`). At matched accuracy on the stored steps of a 1000-step run a
+  recording is 1.7-5.9x smaller than a checkpoint at every step; at matched accuracy on *every*
+  step a coarse checkpoint interval is 4-9x smaller. Both numbers are published and the claim is
+  worded as resolution, not size.
+
+Fixed:
+
+- **An int16 delta could not be read back.** Quantization width lives in the block's value
+  dtype, but the reader chose its decoder from the encoding id alone, so every int16 delta
+  decoded as int8, came back at half length and failed on reshape. The recorder wrote a file
+  its own reader rejected.
+- int16 quantization is offered only above the default 1e-3 budget: its measured error (3.4e-5)
+  fits inside 1e-3, so offering it there silently made the default path lossy.

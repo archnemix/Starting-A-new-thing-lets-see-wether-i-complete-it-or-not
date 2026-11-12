@@ -486,6 +486,33 @@
         "Docs/Technical.md",
         "README.md"
       ]
+    },
+    {
+      "id": "storage-vs-naive-checkpointing",
+      "question": "Claim 4: is a recording smaller than naive checkpointing for the same accuracy?",
+      "sources": [
+        "Bench/claim04_storage_vs_checkpoints.py (measured locally, torch 2.15.0)",
+        "Bench/claim04_long_run.py (measured locally, 1000 steps)",
+        "Docs/Research.json delta-encoder-measurements"
+      ],
+      "findings": [
+        "At matched accuracy on every step of a short run, checkpointing wins: 4-9x on the six test stacks at a 1e-2 target. A stored step of ours is roughly one whole checkpoint plus overhead, so a coarse interval beats it. This is arithmetic, not a tuning problem.",
+        "At matched accuracy on the stored steps of a 1000-step run, recording wins: 0.17x-0.60x of a checkpoint at every step, i.e. 1.7x-5.9x smaller (CNN 3.8x, RNN 5.9x, multimodal 5.5x, MoE 2.9x, SSM 1.7x).",
+        "Only the recorder can be dense at an event and sparse elsewhere within one run; a checkpoint interval is uniform by construction.",
+        "The recorder is lossless at the default budget: median reconstruction error 0.0 at max_rel_error=0 and at 1e-3 (1.6e-07 worst on the MoE), and 1.4e-05-6.0e-05 at 1e-2 where int16 quantization becomes available.",
+        "Two bugs were found by building this benchmark: an off-by-one in the benchmark's own truth indexing (the file's step k is written after the k-th update), and an 'assert' written as `x = cond, \"message\"`, which is a tuple assignment and checks nothing.",
+        "int16 quantization shares encoding id 2 with int8 and was decoded as int8 by the reader, so every int16 delta came back half-length and failed on reshape: a file this build wrote, it could not read. The width is in the block's value dtype and the decoder is now chosen from it.",
+        "Offering int16 at the default 1e-3 budget made the default path lossy (int16 error 3.4e-5 fits inside 1e-3), which broke the documented exactness promise. int16 is offered only above the default budget."
+      ],
+      "verdict": "Claim 4 holds only in the form that matters for a real run: the same accuracy on the same steps, over thousands of steps. Against a checkpoint at every step the recording is 1.7-5.9x smaller; against a coarse interval tuned to the same accuracy it is 4-9x larger, and both numbers are published. The product's claim is resolution, not size.",
+      "affects": [
+        "Bench/claim04_storage_vs_checkpoints.py",
+        "Bench/claim04_long_run.py",
+        "archx/container/values.py",
+        "archx/recorder.py",
+        "Docs/Technical.md",
+        "Plan/Roadmap.md"
+      ]
     }
   ]
 }

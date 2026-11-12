@@ -38,7 +38,7 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 | 2.3 | Byte-plane shuffle + xor, then zstd; compressor per section | Ratio and speed table vs plain zstd | done (shuffle measured: hurts sparse deltas, so opt-in) |
 | 2.4 | Claim 1-2 measured: error vs ratio; sparse vs low-rank crossover per arch family | Numbers in `Docs/Research.json` + test record | done (claims 1-2 measured, numbers in Research.json) |
 | 2.5 | Claim 3 measured: chained-delta error vs anchor spacing | Recommended spacing written into the spec | todo |
-| 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | todo |
+| 2.6 | Claim 4 measured: real storage vs naive checkpointing | Table for tiny transformer / CNN / RNN | done, with an uncomfortable result - `Bench/claim04_storage_vs_checkpoints.py` (matched accuracy on every step: checkpointing wins by 4-9x, reported as such) and `Bench/claim04_long_run.py` (a 1000-step run: the recorder is 1.7-5.9x smaller than a checkpoint at every step). The claim is about resolution, not file size |
 | 2.7 | Claim 13-14 measured: data capture overhead per level, and the join round-trip | Numbers recorded; join answers from file alone | todo |
 | 2.8 | Shard codecs: text dict, token varint-delta, lossless image; Claim 11-12 measured | Byte ratio + exactness per data type | todo |
 

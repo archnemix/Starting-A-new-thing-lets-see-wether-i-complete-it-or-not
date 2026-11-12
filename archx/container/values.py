@@ -22,6 +22,10 @@ from ..errors import FormatError
 _DECODERS = {
     Unchanged.encoding_id: Unchanged(),
     Sparse.encoding_id: Sparse(),
+    # Quantization width is a property of the *block*, carried in its value dtype, not of the
+    # encoder: the same encoding id can hold int8 or int16. Keying this table by encoding id
+    # alone made every int16 delta decode as int8, which halves the array and fails on reshape.
+    # The reader would have rejected files this build wrote itself.
     DenseQuant.encoding_id: DenseQuant(bits=8),
     3: LowRank(),          # rank carried per delta, so a fresh instance is correct
     DenseRaw.encoding_id: DenseRaw(),
@@ -109,6 +113,10 @@ def parse_delta(payload: bytes, tensors: list[TensorInfo]) -> tuple[int, dict[st
         if decoder is None:
             raise FormatError(f"unknown delta encoding {encoding} for {info.key}")
         dtype_name = _DTYPE_NAMES.get(dtype_id, "f32")
+        if encoding == DenseQuant.encoding_id and dtype_name == "i16":
+            # Same encoding id, twice the width: pick the decoder from what the block says it
+            # stored rather than from the id alone.
+            decoder = DenseQuant(bits=16)
         deltas[info.key] = decoder.decode(body, info.shape, dtype_name, 0)
     return step, deltas
 
