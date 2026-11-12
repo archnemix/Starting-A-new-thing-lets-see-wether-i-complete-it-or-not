@@ -3,13 +3,13 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "114 tests: 107 passed, 0 failed, 0 errors, 7 skipped",
+  "summary_line": "119 tests: 112 passed, 0 failed, 0 errors, 7 skipped",
   "counts": {
-    "passed": 107,
+    "passed": 112,
     "failed": 0,
     "errors": 0,
     "skipped": 7,
-    "total": 114
+    "total": 119
   },
   "failures": [],
   "tests": [
@@ -90,6 +90,11 @@
     "Tests.unit.encoders.test_encoders::test_dense_raw_is_the_exact_fallback_when_nothing_else_fits",
     "Tests.unit.encoders.test_encoders::test_plane_shuffle_is_reversible_and_does_not_change_bytes",
     "Tests.unit.encoders.test_encoders::test_plane_shuffle_measured_behaviour_is_recorded_not_assumed",
+    "Tests.unit.encoders.test_quantization_path::test_int16_round_trips_through_its_own_decoder",
+    "Tests.unit.encoders.test_quantization_path::test_int16_is_cheaper_than_raw_and_more_accurate_than_int8",
+    "Tests.unit.encoders.test_quantization_path::test_the_default_budget_stores_deltas_that_rebuild_exactly",
+    "Tests.unit.encoders.test_quantization_path::test_an_int16_budget_uses_int16_and_stays_readable",
+    "Tests.unit.encoders.test_quantization_path::test_a_loose_budget_prefers_int8_and_is_still_readable",
     "Tests.unit.formats.test_registry::test_indices_are_stable_and_follow_insertion_order",
     "Tests.unit.formats.test_registry::test_adding_the_same_key_twice_does_not_duplicate",
     "Tests.unit.formats.test_registry::test_tied_weights_share_a_group_and_are_counted_once",
@@ -128,19 +133,19 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T10:53:38.157624+00:00",
-  "duration_s": 2.145,
+  "started_utc": "2026-11-12T11:01:28.645335+00:00",
+  "duration_s": 1.905,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "1833a70d8cb579e4c2f3ab142697845456b1b5ef"
+    "github_sha": "b0e59a31a8b2d2a288694bce48fb4b8de228575a"
   },
   "stdout_tail": [
-    "...........................ssss......................................... [ 64%]",
-    ".......................................                                  [100%]",
+    "...........................ssss......................................... [ 62%]",
+    "............................................                             [100%]",
     "=========================== short test summary info ============================",
     "SKIPPED [1] Tests/integration/test_arch_sweep.py:20: torch is not installed on this runner",
     "SKIPPED [1] Tests/integration/test_hook_reach.py:15: torch is not installed on this runner",
