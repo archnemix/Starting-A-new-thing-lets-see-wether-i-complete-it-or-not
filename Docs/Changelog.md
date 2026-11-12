@@ -100,4 +100,9 @@ Measured (this sandbox, 2 vCPU, median of 25 steps):
   prefix of history and the data that produced it.
 - Encoders and data codecs: see `Bench/` and `Docs/Research.json` (`delta-encoder-measurements`).
 
+Test records: `Actions/out/test-runs/` from run `43190502712` - 93 tests, 0 failures,
+0 errors, 1 skip (the torch module, on runners without torch), identical test names on
+Linux, Windows and macOS. Locally the same suite is 99 tests because torch is installed
+and the six adapter tests run for real.
+
 Planned for the same version: claim 6 (adaptive vs fixed interval at equal bytes).

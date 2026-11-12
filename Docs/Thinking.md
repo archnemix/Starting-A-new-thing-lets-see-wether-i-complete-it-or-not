@@ -328,7 +328,9 @@ a step big enough to have a meaningful cost, which is where it is measured.
 
 **Verified, not assumed**
 
-- 99 tests, 0 failures, 0 errors, 0 skips; three consecutive full runs identical.
+- 99 tests locally, 0 failures, 0 errors, 0 skips; three consecutive full runs identical.
+- CI run `43190502712`: 3/3 runners green, 93 tests each, 1 skip each (no torch on the
+  runner), identical test-name lists across Linux, Windows and macOS.
 - The crash test is a real `SIGKILL` of a child process, repeated six times without a flake.
   Its first CI run failed on macOS for a reason worth keeping in the design: the test waited
   for "the file exists and is big enough", and on a slower runner that was true with only the
