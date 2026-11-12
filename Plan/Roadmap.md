@@ -70,10 +70,10 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 5.1 | `archx info` - header, tiers, capabilities, warnings, counts | Human + `--json` output | todo |
+| 5.1 | `archx info` - header, tiers, capabilities, warnings, counts | Human + `--json` output | done - header, format (and this build's format), tier, `records`/`missing` from the file's own capability block, and a warning per read problem; `--json` includes the same (`Tests/integration/test_forward_compat.py`) |
 | 5.2 | `archx reconstruct --step N --out` - weights rebuilt from anchor + deltas | Bit-exactness test vs live weights at anchor, measured error elsewhere | todo |
 | 5.3 | `archx events`, `archx diff` (two files or two steps) | Tests with synthetic runs | todo |
-| 5.4 | Reader rejects unsupported future minor versions with a clear message | Test with forged header | todo |
+| 5.4 | Reader rejects unsupported future minor versions with a clear message | Test with forged header | done - a v1.9 file with an unknown block type 200 is read, the skip is reported (`read_report`), and a v2.0 file is refused naming both versions; forged headers in `Tests/integration/test_forward_compat.py` |
 
 ## Phase 6 - HF Trainer adapter (v0.7)
 

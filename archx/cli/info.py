@@ -35,5 +35,15 @@ def run_info(path: str, *, as_json: bool = False) -> int:
     if meta:
         for key in ("adapter", "capability_tier", "data_level", "attribution"):
             if key in meta:
-                print(f"{key:<14} {meta[key]}")
+                print(f"{key:<16} {meta[key]}")
+    # What this build had to skip or work around. A reader that quietly drops a block it does
+    # not understand looks identical to a reader that read everything, and the difference
+    # matters when the file was written by a newer version.
+    capabilities = info.get("capabilities") or {}
+    if capabilities.get("capabilities_present"):
+        print(f"{'records':<16} {', '.join(capabilities['capabilities_present'])}")
+    for name, reason in (capabilities.get("capabilities_missing") or {}).items():
+        print(f"{'missing':<16} {name} ({reason})")
+    for warning in info.get("warnings") or []:
+        print(f"{'warning':<16} {warning}")
     return 0

@@ -7,6 +7,7 @@ unknown block type is skipped rather than treated as an error, per the format sp
 from __future__ import annotations
 
 import json
+import json
 import os
 import struct
 from dataclasses import dataclass, field
@@ -201,14 +202,67 @@ class Reader:
             return json.loads(block.payload.decode("utf-8"))
         return {}
 
+    def capabilities(self) -> dict:
+        """The capability facts the writer recorded at close, or an empty dict.
+
+        Read from the file rather than recomputed: the tier belongs to the run that produced
+        it, and reconstructing it from blocks here would be a second opinion, not a record.
+        """
+        for block in self.blocks(BlockType.INFO):
+            try:
+                payload = json.loads(block.payload)
+            except (ValueError, TypeError):     # an unreadable INFO must not break `info`
+                continue
+            if payload.get("event") == "capabilities":
+                return payload
+        return {}
+
+    def unknown_blocks(self) -> list[int]:
+        """Block types this build does not know. Kept, skipped, and reported."""
+        known = {int(t) for t in BlockType}
+        return sorted({int(b.block_type) for b in self.container.blocks} - known)
+
+    def read_report(self, *, format_minor: int | None = None) -> dict:
+        """What this build understood, what it could not, and what it had to work around.
+
+        Reading a file and saying nothing about the parts that were skipped is how a reader
+        ends up quietly disagreeing with the writer. `format_minor` is passed in because the
+        module does not import the version constants, and a minor newer than this build is a
+        fact the caller is expected to have.
+        """
+        from ..version import FORMAT_MINOR as BUILD_MINOR
+
+        warnings: list[str] = []
+        if format_minor is not None and format_minor > BUILD_MINOR:
+            warnings.append(
+                f"format 1.{format_minor} is newer than this build (1.{BUILD_MINOR}); "
+                "unknown block types were skipped")
+        if self.unknown_blocks():
+            warnings.append(f"skipped block types {self.unknown_blocks()}")
+        if self.container.torn:
+            warnings.append("the file ends inside a block; `archx recover` can rebuild it")
+        if self.container.footer is None:
+            warnings.append("the file was not closed by its writer")
+        return {
+            "usable": True,
+            "unknown_block_types": self.unknown_blocks(),
+            "warnings": warnings,
+        }
+
     def info(self) -> dict:
         """Small dict suitable for `archx info --json`."""
+        from ..version import FORMAT_MINOR as BUILD_MINOR
+
         return {
             "path": str(self.path),
             "size_bytes": len(self._data),
             "format": f"{self.header.format_major}.{self.header.format_minor}",
+            "builder_format": f"1.{BUILD_MINOR}",
             "closed": self.container.footer is not None,
             "recovered": self.header.recovered,
+            "warnings": self.read_report(format_minor=self.header.format_minor)["warnings"],
+            "unknown_block_types": self.unknown_blocks(),
+            "capabilities": self.capabilities(),
             "parameters_complete": self.header.parameters_complete,
             "blocks": len(self.container.blocks),
             "block_types": sorted({int(b.block_type) for b in self.container.blocks}),
