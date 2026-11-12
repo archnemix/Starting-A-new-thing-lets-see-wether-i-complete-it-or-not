@@ -414,6 +414,30 @@
         "archx/container/values.py",
         "Docs/Technical.md"
       ]
+    },
+    {
+      "id": "adaptive-recording-vs-fixed-interval",
+      "question": "Does storing at a phase- and event-adaptive schedule keep a more useful history than storing at a fixed interval, for the same number of bytes?",
+      "sources": [
+        "Bench/claim06_adaptive_vs_fixed.py (measured; no external source)",
+        "archx/policy.py PhasePolicy",
+        "Plan/Architecture.md adaptive recording"
+      ],
+      "findings": [
+        "Measured on a 2000-step simulated run with 12 irregular weight jumps (steps 137, 271, 449, 613, 700, 811, 1024, 1157, 1390, 1502, 1733, 1891), both policies bisected to the same byte budget: adaptive 4,374,355 B vs fixed interval 26 4,312,597 B - 1.4% apart, so the comparison is fair.",
+        "The adaptive policy stored all 12 events (a step within 0-2 of each jump). The fixed-26 interval stored 1 of 12.",
+        "Median reconstruction error over the five steps after each event: 2.88e-03 adaptive vs 3.63e-01 fixed, a factor of 126. The file that missed the event reports weights that were true up to two intervals earlier.",
+        "On a single-jump run at a matched budget the fixed interval is actually more accurate overall (median 5.27e-03 vs 1.46e-02): a fixed grid is a fine estimator of a stationary run, and the adaptive policy spends many bytes on the dense warmup and cooldown phases.",
+        "The adaptive policy has a floor: 1% warmup plus 1% cooldown are stored densely by construction, so its spend cannot be reduced below roughly that fraction of the run.",
+        "An honest benchmark needs the jump to be visible in the loss and gradient. A pure weight jump is invisible to a policy that only sees loss, gradients and measured movement, so both policies missed it and the test measured their heartbeats instead.",
+        "The fixed baseline must have its triggers switched off. With defaults it stored 57 of its steps in the first third of a 1000-step run - it was an event-driven recorder wearing a fixed interval's name."
+      ],
+      "verdict": "The claim holds for its actual purpose - events - and not as a general accuracy win. The adaptive policy finds events the fixed interval cannot, at 126x lower error immediately after them; on a stationary run a fixed interval of the same size is slightly more accurate. Both results are reported; the product claim is about event resolution, and it is stated that way.",
+      "affects": [
+        "Bench/claim06_adaptive_vs_fixed.py",
+        "Docs/Technical.md",
+        "Plan/Roadmap.md"
+      ]
     }
   ]
 }

@@ -84,6 +84,19 @@ Changed:
 
 Fixed:
 
+- **The recorder silently dropped stored steps when the writer fell behind.** At the default
+  `queue_size` of 8 a 1000-step run lost 13 of its 39 stored steps and recorded nothing about
+  it. A full queue now costs the trainer a little time (it encodes the block itself) and never
+  costs history; the writer queue is one ordered stream, so steps are still written in order.
+- **The per-region movement trigger was dead code.** `decide()` was never given a movement
+  value, so the trigger could not fire; it now receives the measurement taken at the previous
+  store.
+- **Movement was an absolute Frobenius norm compared against a threshold named
+  `region_move_fraction`.** It is now reported relative to each tensor's own size, and a
+  zero-initialised tensor (every bias) is excluded instead of reporting 100% forever.
+- **A gradient spike was invisible when the gradient history was flat**, because the z-score
+  was guarded by `std > 0` - the exact case the trigger exists for. A threshold of `inf` still
+  switches the trigger off.
 - The recorder computed loss and gradient norms and never wrote them.
 - Every anchor copied the whole model twice (+17% overhead, now 0.6%).
 - The batch was hashed and compressed inside the training step (+81% on a 19 ms step).
@@ -105,4 +118,17 @@ Test records: `Actions/out/test-runs/` from run `43190502712` - 93 tests, 0 fail
 Linux, Windows and macOS. Locally the same suite is 99 tests because torch is installed
 and the six adapter tests run for real.
 
-Planned for the same version: claim 6 (adaptive vs fixed interval at equal bytes).
+Claim 6, measured (`Bench/claim06_adaptive_vs_fixed.py`), 2000 steps with 12 irregular jumps
+and both policies bisected to the same byte budget:
+
+| policy | bytes | stored | events stored | median error after event |
+|---|---|---|---|---|
+| adaptive | 4,374,355 | 82 | **12/12** | **2.88e-03** |
+| fixed-26 | 4,312,597 | 78 | 1/12 | 3.63e-01 |
+
+The claim is real for events - 126x lower error immediately after one - and is *not* a general
+accuracy win: on a single-jump stationary run a fixed interval of the same size is slightly
+more accurate, because the adaptive policy spends its bytes on the dense warmup and cooldown.
+Both results are in `Docs/Research.json`.
+
+Tests: 106 local, 0 failures, 0 errors, 0 skips.

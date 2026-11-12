@@ -12,7 +12,7 @@ fires after the weights have already changed and the old value no longer exists.
 from __future__ import annotations
 
 import json
-import queue
+from collections import deque
 import threading
 import time
 from dataclasses import dataclass, field
@@ -39,6 +39,7 @@ class RecorderStats:
     steps_skipped: int = 0
     anchors: int = 0
     blocks_written: int = 0
+    waited: int = 0
     bytes_written: int = 0
     encode_seconds: float = 0.0
     copy_seconds: float = 0.0
@@ -49,11 +50,17 @@ class RecorderStats:
 class _Pending:
     """One unit of work for the writer thread."""
 
-    kind: str                      # "anchor" | "delta"
+    kind: str                      # "anchor" | "delta" | "annotate"
     step: int
     arrays: dict[str, np.ndarray]  # key -> snapshot (anchor) or previous snapshot (delta)
     current: dict[str, np.ndarray] = field(default_factory=dict)
     context: dict[str, Any] = field(default_factory=dict)
+    #: Movement observed between the previous stored step and this one, kept with the item so
+    #: the observation block does not have to recompute it from the arrays.
+    movement: dict[str, float] = field(default_factory=dict)
+    #: Set when the training thread had to encode the block itself because the writer was
+    #: behind. Empty means the writer will encode it, which is the normal path.
+    payload: bytes = b""
 
 
 class Recorder:
@@ -82,7 +89,17 @@ class Recorder:
         self.policy = policy or PhasePolicy()
         self.max_rel_error = max_rel_error
         self.stats = RecorderStats()
-        self._queue: queue.Queue[_Pending | None] = queue.Queue(maxsize=queue_size)
+        self._queue_size = max(1, queue_size)
+        # One ordered stream, not a queue plus an overflow list. Two containers cannot keep
+        # step order: the overflow holds work the writer has not reached, which is *newer*
+        # than anything still queued behind it, so draining the overflow first interleaves
+        # steps out of order. That is what a crash test caught.
+        #
+        # `_queue_size` is therefore a memory budget, not a capacity: past it, the trainer
+        # encodes each block itself before appending (arrays released, bytes kept), and the
+        # writer's backlog is small instead of unbounded.
+        self._items: deque[_Pending] = deque()
+        self._cond = threading.Condition()
         self._last_loss: float | None = None
         self._shards_written: set[str] = set()
         self._logged: dict[str, Any] = {}
@@ -183,15 +200,17 @@ class Recorder:
             if decision is Decision.ANCHOR:
                 # An anchor already holds the current weights, so it is its own previous
                 # snapshot: no second copy, and no stale reference either.
-                self._enqueue(_Pending("anchor", step, snapshot, context=context))
+                self._enqueue(_Pending("anchor", step, snapshot, context=context,
+                                       movement=movement))
                 self.stats.anchors += 1
             else:
-                self._enqueue(_Pending("delta", step, previous, current=snapshot, context=context))
+                self._enqueue(_Pending("delta", step, previous, current=snapshot,
+                                       context=context, movement=movement))
             self.stats.steps_stored += 1
             self._last_loss = loss
             if segment is not None:
                 self._attribute(segment.segment_id, movement, grad_norm, loss)
-            self.policy.observe(loss=loss, grad_norm=grad_norm)
+            self.policy.observe(loss=loss, grad_norm=grad_norm, region_movement=movement)
             return decision
         except Exception as exc:  # noqa: BLE001 - a recorder fault must not stop training
             self._degrade(exc)
@@ -218,7 +237,9 @@ class Recorder:
         The capability block is written here, not at open, because a tier is what the run
         turned out to be able to see - not what was asked for at the start.
         """
-        self._queue.put(None)
+        self._stop.set()
+        with self._cond:
+            self._cond.notify_all()
         self._thread.join(timeout=60)
         if self._error is not None:
             raise RuntimeError(f"archx recorder failed: {self._error}") from self._error
@@ -240,11 +261,40 @@ class Recorder:
         return out
 
     def _enqueue(self, item: _Pending) -> None:
-        """Never block training: if the writer is behind, drop detail, not the run."""
-        try:
-            self._queue.put_nowait(item)
-        except queue.Full:
-            self.stats.failed += 1
+        """Hand work to the writer without blocking the training thread on compression.
+
+        The first design dropped the item when the queue was full, and that was a real bug:
+        with the default queue size of 8, a thousand-step run lost 13 of its 39 stored steps
+        and never noticed. Losing history is not "dropping detail" - it is losing the
+        recording while still claiming the run happened.
+
+        So neither dropping nor blocking is used. The stream is unbounded in order and
+        bounded in memory: once the writer is `queue_size` blocks behind, the training thread
+        encodes each block itself before appending it. The arrays can then be released and
+        only the compressed bytes are held, which is the same work the writer would have done
+        and the same number of bytes that were going to be written anyway.
+
+        Blocking instead was tried and is wrong for a different reason: the writer can be
+        waiting for a lock the trainer is holding, and a trainer that blocks on a stalled
+        writer stops training.
+        """
+        with self._cond:
+            backlogged = len(self._items) >= self._queue_size
+        if backlogged and item.kind in ("anchor", "delta") and not item.payload:
+            # Encoded outside the lock: it is the slow part, and the writer needs the lock to
+            # make progress. A single producer appends, so doing the work here cannot reorder.
+            item.payload = self._payload_for(item)
+            item.arrays = {}
+            item.current = {}
+        with self._cond:
+            if backlogged:
+                self.stats.waited += 1
+            self._items.append(item)
+            self._cond.notify()
+
+    def _payload_for(self, item: _Pending) -> bytes:
+        """Encode an item's block payload, so the training thread can let the arrays go."""
+        return self._anchor_payload(item) if item.kind == "anchor" else self._delta_payload(item)
 
     def _degrade(self, exc: BaseException) -> None:
         self.stats.failed += 1
@@ -267,9 +317,12 @@ class Recorder:
             writer.write_block(BlockType.META, json.dumps(self._meta).encode())
             writer.write_block(BlockType.TENSOR_REGISTRY, self._registry_payload())
             while True:
-                item = self._queue.get()
-                if item is None:
-                    break
+                with self._cond:
+                    while not self._items and not self._stop.is_set():
+                        self._cond.wait(timeout=0.05)
+                    if not self._items:
+                        break           # stop was requested and nothing is left to write
+                    item = self._items.popleft()
                 try:
                     self._handle(writer, item)
                 except Exception as exc:  # noqa: BLE001 - one bad step, not a lost run
@@ -380,8 +433,7 @@ class Recorder:
                                json.dumps({"step": item.step, **item.context}).encode(),
                                step=item.step)
         elif item.kind in ("anchor", "delta"):
-            payload = (self._anchor_payload(item) if item.kind == "anchor"
-                       else self._delta_payload(item))
+            payload = item.payload or self._payload_for(item)
             writer.write_block(BlockType.ANCHOR if item.kind == "anchor" else BlockType.DELTA,
                                payload, step=item.step)
             # Data goes to disk right after the movement it explains, never before. The other
@@ -441,7 +493,7 @@ _DTYPE_IDS = {"f32": 0, "f16": 1, "bf16": 2, "f64": 3, "i8": 4, "i16": 5, "i32":
 
 def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray],
                         current: dict[str, np.ndarray]) -> dict[str, float]:
-    """Frobenius norm of the change, summed per region.
+    """How far each region moved, as a fraction of its own size.
 
     Regions are the only grouping that is stable across architectures, so this is the
     number a reader gets to compare between runs and between steps. Untouched tensors are
@@ -455,8 +507,21 @@ def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray
             continue
         diff = after - before
         delta = float(np.sqrt(np.dot(diff.ravel(), diff.ravel())))
-        if delta:
-            totals[entry.region] = totals.get(entry.region, 0.0) + delta
+        size = float(np.sqrt(np.dot(before.ravel(), before.ravel())))
+        # Relative to the tensor's own magnitude before the step. An absolute norm is not
+        # comparable between layers, let alone between architectures, and a threshold named
+        # `region_move_fraction` cannot meaningfully be compared against one: a 256x256
+        # layer drifts by an absolute ~2.7 every step at 1e-2 noise, which would read as
+        # "moved a lot" no matter how small that is for the layer.
+        #
+        # A tensor that was all zeros has no baseline to be a fraction of, and this is not a
+        # corner case: biases are usually zero-initialised. Measuring against its own new
+        # magnitude instead reports 100% movement on the first step and then decays as
+        # 1/sqrt(step) - above any sane threshold for thousands of steps, so the trigger
+        # would quietly store every step. Such tensors are left out of the fraction; their
+        # movement is still in the delta, and the heartbeat bounds the gap.
+        if delta and size:
+            totals[entry.region] = totals.get(entry.region, 0.0) + delta / size
     return totals
 
 

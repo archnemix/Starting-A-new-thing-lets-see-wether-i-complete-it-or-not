@@ -343,3 +343,64 @@ a step big enough to have a meaningful cost, which is where it is measured.
 - The lossless path (`max_rel_error=0.0`) rebuilds to 1e-10, and that residual is float32
   accumulation when five deltas are summed onto an anchor, not an encoding loss; with an
   anchor at the same step it is exact.
+
+---
+
+## Claim 6: the adaptive policy, measured honestly
+
+**The number I expected and the number I got are not the same, so both are written down.**
+
+At a matched byte budget (1.4% apart) on a 2000-step run with 12 irregular jumps, the adaptive
+policy stored **12 of 12** events. A fixed interval of the same size stored **1 of 12**. Median
+reconstruction error over the five steps after each event: **2.88e-03 vs 3.63e-01**, a factor of
+126. That is the claim, and it holds.
+
+It does not hold as "adaptive is more accurate". On a single-jump stationary run the fixed-12
+interval is *better* on both median (5.27e-03 vs 1.46e-02) and post-jump error (5.57e-03 vs
+9.91e-03). A fixed grid is a good estimator of a stationary run, and the adaptive policy spends
+mostly on the dense warmup and cooldown phases. The product claim is about event resolution,
+so that is what is stated; the accuracy comparison is reported next to it rather than dropped.
+
+**The policy had a floor that made "matched bytes" harder than it looked.** 1% warmup plus 1%
+cooldown are stored densely by construction, so the adaptive policy cannot be tuned below
+roughly that spend. Bisecting its heartbeat to a 700 kB budget ran into its bound and kept
+returning the same 4.1 MB run - a measurement that looked like a result until the bound was
+checked. The fix was to bisect *both* families and to compare at budgets the policy can
+actually reach.
+
+**Three benchmark bugs, each of which would have produced a flattering answer.**
+1. `anchor_every=every` on the fixed baseline made every stored step a full snapshot, so the
+   comparison was about anchor cadence.
+2. The baseline kept the default triggers, and a decaying toy loss trips the 5% loss trigger on
+   almost every early step: it stored 57 of its steps in the first third of the run. That is an
+   event-driven recorder wearing a fixed interval's name.
+3. A weight jump with no loss or gradient change is invisible to a policy that only sees loss,
+   gradients and movement. Both policies missed it and the harness measured their heartbeats.
+   An event the policy cannot observe is not a test of the policy.
+
+**Two real product bugs came out of this**, and both were worse than the benchmark being wrong:
+
+- The recorder **dropped stored steps** when the writer fell behind: `stats.failed += 1` and
+  the item was discarded. At the default `queue_size=8` a 1000-step run kept 39 steps and lost
+  13, silently. Losing history while the run continues is the one thing a recorder must never
+  do. Two repairs were tried and thrown away first - coalescing movements into the queued item
+  (the writer starves, the file begins at step 12), and re-appending the oldest item to the back
+  (same starvation). A third, a separate overflow list drained first, reordered the history and
+  the crash test caught it: the overflow holds *newer* work than what is still queued. The
+  answer is one ordered stream that never discards, where a backlog costs the trainer an encode
+  and the writer's memory stays bounded because encoded bytes replace the arrays.
+- The **movement trigger could never fire**: `decide()` was never passed a movement value. And
+  when it was wired up, the value was an absolute Frobenius norm compared against a threshold
+  named `region_move_fraction` - a 256x256 layer of weights near 0.1 drifts by an absolute ~2.7
+  per step, so every step read as an event. It is now a fraction of each tensor's own size, and
+  a zero-initialised tensor is excluded: `||delta|| / ||W||` with `W == 0` is 100% on the first
+  step, decaying like `1/sqrt(n)`, which would have kept the trigger firing for thousands of
+  steps on nothing but biases.
+
+Also fixed in passing: a gradient spike was invisible when the gradient history was flat,
+because the z-score was guarded by `std > 0`. A quiet stretch has zero variance - exactly the
+situation the trigger exists for.
+
+**Verified:** 106 tests, 0 failures, 0 errors, 0 skips locally, including new tests for the
+lost-step path, the anchor being step 0, the flat-history spike, the disabled-trigger sentinel,
+and the movement fraction (which is what found the zero-bias problem).

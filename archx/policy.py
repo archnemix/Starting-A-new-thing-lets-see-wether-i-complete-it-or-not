@@ -57,6 +57,11 @@ class PhasePolicy:
     _last_loss: float | None = None
     _grad_history: list[float] = field(default_factory=list)
     _steps_since_store: int = 0
+    #: Movement measured between the last two stored steps. It can only be seen after a
+    #: store, so the trigger fires one step late - but with a real measurement rather than
+    #: a guess. Measuring it on skipped steps would mean reading every weight every step,
+    #: which is the cost the policy exists to avoid.
+    _last_movement: float | None = None
 
     # ------------------------------------------------------------- phases
 
@@ -108,18 +113,30 @@ class PhasePolicy:
         if loss is not None and self._last_loss is not None and self._last_loss > 0:
             if (self._last_loss - loss) / self._last_loss >= t.loss_drop_fraction:
                 return True
-        if grad_norm is not None and len(self._grad_history) >= 8:
+        if t.grad_norm_zscore != float("inf") and grad_norm is not None \
+                and len(self._grad_history) >= 8:
             mean = sum(self._grad_history) / len(self._grad_history)
             var = sum((g - mean) ** 2 for g in self._grad_history) / len(self._grad_history)
             std = var ** 0.5
-            if std > 0 and (grad_norm - mean) / std >= t.grad_norm_zscore:
+            if std == 0:
+                # A perfectly flat history makes every deviation infinitely many sigmas.
+                # Guarding this with `std > 0` used to disable the trigger in exactly the
+                # run it exists for: the quiet stretch before a spike. A threshold of
+                # infinity is how a caller switches the trigger off, so it must still win.
+                if grad_norm != mean:
+                    return True
+            elif (grad_norm - mean) / std >= t.grad_norm_zscore:
                 return True
-        if region_movement is not None and region_movement >= t.region_move_fraction:
+        movement = region_movement if region_movement is not None else self._last_movement
+        if movement is not None and movement >= t.region_move_fraction:
             return True
         return False
 
-    def observe(self, *, loss: float | None = None, grad_norm: float | None = None) -> None:
+    def observe(self, *, loss: float | None = None, grad_norm: float | None = None,
+                region_movement: dict[str, float] | None = None) -> None:
         """Feed the statistics that later decisions depend on. Call after deciding."""
+        if region_movement:
+            self._last_movement = max(region_movement.values(), default=0.0)
         if loss is not None:
             self._last_loss = loss
         if grad_norm is not None:

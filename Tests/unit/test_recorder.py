@@ -8,10 +8,16 @@ import numpy as np
 import pytest
 
 from archx.container.reader import Reader
+from archx.container.values import Timeline
 from archx.container.schema import BlockType
 from archx.formats.registry import TensorRegistry
-from archx.policy import Decision, PhasePolicy
+from archx.policy import Decision, PhasePolicy, Triggers
 from archx.recorder import Recorder
+
+
+#: Switches every event trigger off, so a test can state exactly when a store happens.
+_NO_TRIGGERS = Triggers(grad_norm_zscore=float("inf"), loss_drop_fraction=float("inf"),
+                        region_move_fraction=float("inf"))
 
 
 class FakeModel:
@@ -97,7 +103,13 @@ def test_a_recorder_fault_degrades_instead_of_breaking_training(tmp_path):
         recorder.close()
 
 
-def test_backpressure_drops_detail_instead_of_blocking(tmp_path):
+def test_a_tiny_queue_records_every_step_in_order(tmp_path):
+    """Backpressure must cost the trainer time, not the history.
+
+    This used to assert the opposite: that a full queue was counted in `stats.failed` and
+    the step was thrown away. That was the recorder silently losing a third of a run's
+    stored steps at the default queue size, which is the one thing it must never do.
+    """
     model = FakeModel()
     recorder = Recorder(model.registry(), model.read, str(tmp_path / "busy.archx.mdl"),
                         policy=PhasePolicy(total_steps=10, min_warmup_steps=10), queue_size=1)
@@ -105,7 +117,13 @@ def test_backpressure_drops_detail_instead_of_blocking(tmp_path):
         recorder.step(step, loss=1.0)  # every step stores; queue is size 1
     recorder.close()
     assert recorder.stats.steps_seen == 10
-    assert recorder.stats.failed >= 1, "a full queue must be counted, not hidden"
+    assert recorder.stats.steps_stored == 10
+    assert recorder.stats.failed == 0
+
+    reader = Reader(tmp_path / "busy.archx.mdl")
+    stored = sorted({b.step for b in reader.blocks(BlockType.DELTA)}
+                    | {b.step for b in reader.blocks(BlockType.ANCHOR)})
+    assert stored == list(range(10)), "stored steps must be complete and in order"
 
 
 def test_annotations_stay_out_of_the_step_observations(tmp_path):
@@ -182,8 +200,11 @@ def test_the_file_states_the_tier_it_reached_and_what_it_could_not_see(tmp_path)
 def test_stored_delta_covers_every_skipped_step(tmp_path):
     """A skipped step must be absorbed by the next stored delta, or history loses motion."""
     model = FakeModel(seed=1, size=256)
+    # Triggers off: this test is about absorption, not about what counts as an event. The
+    # default movement trigger would fire here, because the test moves the weights by ~10%
+    # of their magnitude per step, which is a large move by any measure.
     policy = PhasePolicy(total_steps=1_000_000, warmup_fraction=0.0, min_warmup_steps=0,
-                         heartbeat_steps=1_000_000)
+                         heartbeat_steps=1_000_000, triggers=_NO_TRIGGERS)
     recorder = Recorder(model.registry(), model.read, str(tmp_path / "acc.archx.mdl"),
                         policy=policy)
     rng = np.random.default_rng(4)
@@ -272,3 +293,59 @@ def test_close_reports_the_failure_it_swallowed(tmp_path):
     recorder.step(0)
     with pytest.raises(RuntimeError):
         recorder.close()
+
+
+def test_a_full_queue_loses_no_step(tmp_path):
+    """A small queue must slow the trainer, never drop history.
+
+    At the default queue size a 300-step dense run used to lose 13 of its stored steps:
+    the writer could not keep up, `_enqueue` counted a failure and threw the item away.
+    Silently losing history breaks the one promise the product makes.
+    """
+    steps = 300
+    model = FakeModel(seed=1)
+    path = tmp_path / "tight.archx.mdl"
+    recorder = Recorder(model.registry(), model.read, str(path),
+                        policy=PhasePolicy(total_steps=steps, min_warmup_steps=steps),
+                        queue_size=2)
+    rng = np.random.default_rng(1)
+    truth = {}
+    for step in range(steps):
+        model.step(rng)
+        recorder.step(step, loss=1.0 / (step + 1))
+        truth[step] = {key: value.copy() for key, value in model.params.items()}
+    recorder.close()
+
+    assert recorder.stats.failed == 0
+    assert recorder.stats.steps_stored == steps
+
+    reader = Reader(path)
+    stored = sorted({b.step for b in reader.blocks(BlockType.DELTA)}
+                    | {b.step for b in reader.blocks(BlockType.ANCHOR)})
+    assert stored == list(range(steps)), "every step must be present exactly once"
+
+    timeline = Timeline(reader)
+    for step in range(steps):
+        rebuilt = timeline.reconstruct(step)
+        for key, expected in truth[step].items():
+            assert np.array_equal(rebuilt[key], expected), f"step {step} {key} differs"
+
+
+def test_the_first_stored_step_is_an_anchor_at_step_zero(tmp_path):
+    """Reconstruction starts somewhere; if it starts late the file's first steps are fiction."""
+    model = FakeModel(seed=2)
+    path = tmp_path / "first.archx.mdl"
+    recorder = Recorder(model.registry(), model.read, str(path),
+                        policy=PhasePolicy(total_steps=500), queue_size=8)
+    rng = np.random.default_rng(2)
+    for step in range(120):
+        model.step(rng)
+        recorder.step(step, loss=1.0)
+    recorder.close()
+
+    reader = Reader(path)
+    anchors = [b.step for b in reader.blocks(BlockType.ANCHOR)]
+    deltas = [b.step for b in reader.blocks(BlockType.DELTA)]
+    assert anchors and anchors[0] == 0
+    assert deltas and deltas[0] == 1
+    assert min(anchors + deltas) == 0

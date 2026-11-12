@@ -76,32 +76,33 @@ are also capped in practice.
 and the repo ignores `*.archx.mdl` everywhere else. Larger recordings are summarised
 as numbers (bytes, ratio, error) committed in their place.
 
-## torch cannot be imported from a plain `pip install torch` on this sandbox
+## Installing torch on this sandbox (and the trap that cost an hour)
 
-**Symptom.** `pip install torch` succeeds (2.15.0 installed), then `import torch` fails with
-`ValueError: libcublasLt.so.*[0-9] not found in the system path`. The PyPI wheel is the CUDA
-build; nothing provides the CUDA libraries on a CPU-only box.
+**What works:** plain `pip install torch`. Nothing else. It pulls `cuda-toolkit` and every
+`nvidia-*` runtime it needs, and `import torch` then succeeds. Measured 2026-11-12: 2.15.0
+(+cu132, CPU execution), ~8 GB of disk, about 70 seconds.
 
-**What does not work.** `pip install --no-deps torch` (installs torch, still unimportable), and
-the CPU wheel index (`https://download.pytorch.org/whl/cpu`) - this sandbox's TLS handshake to
-`download.pytorch.org` is closed, so pip cannot even list versions there.
+**What fails, and why the earlier note here was wrong:**
 
-**What works.** Install the CUDA libraries the wheel asks for, then import:
+| Attempt | Result |
+|---|---|
+| `pip install --no-deps torch` | installs, then `import torch` fails: `libcublasLt.so.*[0-9] not found` |
+| `pip install` the nvidia list by hand | works only if `nvidia-nvshmem-cu13` is in the list; it is easy to miss, and without it the import fails on `libnvshmem_host.so.3` |
+| `--index-url https://download.pytorch.org/whl/cpu` | unreachable from here: TLS handshake closed (`SSLZeroReturnError`), no version list |
+| plain `pip install torch` | **works** - `cuda-toolkit` brings the whole runtime set including nvshmem |
 
-```
-pip install torch nvidia-cublas nvidia-cuda-runtime nvidia-cuda-nvrtc nvidia-cudnn-cu13 \
-  nvidia-cufft nvidia-cusolver nvidia-cusparse nvidia-curand nvidia-nvjitlink \
-  nvidia-nccl-cu13 nvidia-nvtx nvidia-cuda-cupti nvidia-cusparselt-cu13 nvidia-cufile \
-  nvidia-nvshmem-cu13
-```
+The first version of this note blamed the wheel and prescribed the manual nvidia list. The
+real cause was `--no-deps`: with dependencies left to pip, the CUDA runtime arrives by itself.
+Do not hand-install the nvidia packages; do not chase the version-conflict warnings torch's
+pins produce against `setuptools` - neither affects CPU execution.
 
-`libnvshmem_host.so.3` is the one dependency pip does not pull in by itself; without
-`nvidia-nvshmem-cu13` the import fails on that library instead. pip then reports version
-conflicts against torch's pinned versions (`nvidia-nccl-cu13`, `nvidia-cusparselt-cu13`,
-`setuptools`) and torch still imports and runs - **do not chase those warnings**, they do not
-affect the CPU path used by the tests.
+**Consequence for CI.** The GitHub runners fail to install `torch` at all (see the run records:
+`pip install -e ".[test]"` with the optional torch extra is slow enough to hit the job limit,
+and the wheel is large). So `Tests/integration/test_torch_adapter.py` starts with
+`pytest.importorskip("torch")`: on a runner without torch it skips **and says why**, and the
+93 other tests still prove the container, the CLI and the crash path. Locally, with torch
+installed, the same suite is 99 tests and every adapter test runs for real.
 
-**Cost.** 8 GB of disk (torch plus the CUDA runtimes), against 20 GB available here, and about
-two minutes of download. That is why the torch test module is written with
-`pytest.importorskip("torch")`: on a runner that has no torch, it skips and says why, and the
-rest of the suite still proves the container and the CLI.
+**Cost, so it is not a surprise:** torch plus its CUDA runtimes take 8 GB of a 20 GB disk. If
+space matters more than the adapter tests, skip installing torch and read the six adapter
+tests as "verified on Linux with torch 2.15.0" rather than "verified everywhere".
