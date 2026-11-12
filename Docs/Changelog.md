@@ -48,6 +48,26 @@ Shipped on the branch:
 
 ## v1.0.0 - not released yet (Phase 9 complete on the branch)
 
+## The CI record for the v1.0 work: run 43235517057
+
+Three runners, Linux / Windows / macOS, python 3.11, torch 2.15.0 + transformers + lightning
+installed on all three:
+
+| runner | result | skipped |
+|---|---|---|
+| ubuntu-latest | 209 passed, 0 failed, 0 errors | 0 |
+| windows-latest | 209 passed, 0 failed, 0 errors | 0 |
+| macos-latest | 209 passed, 0 failed, 0 errors | 0 |
+
+The three junit files contain an **identical set of 209 test names**, which is the part that
+matters: nothing is being quietly skipped on one platform to make the others look good. That
+was not true two runs earlier - the Hugging Face and launcher tests skipped everywhere, and
+one torch test failed on Windows alone (`/tmp` does not exist there) once the runners started
+installing torch. Both are fixed in the code, not in the workflow.
+
+Before this, records for 167 tests (Phase 8) and 158 (Phase 7) were also green on all three.
+
+
 The end-to-end proof, and a format spec that is checked against the code.
 
 Added:

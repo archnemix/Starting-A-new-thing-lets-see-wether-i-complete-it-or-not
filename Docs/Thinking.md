@@ -660,3 +660,47 @@ an optimizer holds tensors, not a model, so tensors come out as `param[0][3]`. `
 reads the same optimizer steps plus everything else, for one line of code. The launcher's
 justification is the case where the code cannot be edited at all, and its honesty about tier 0
 is what keeps it from being a trap.
+
+---
+
+## What the versions of this product kept getting wrong, in one place
+
+Every phase of this project found a defect that a green test suite had been hiding, and the
+pattern is consistent enough to be worth naming.
+
+**The recorder was silently dropping history.** `_enqueue` counted a full queue as `failed`
+and threw the item away: at the default `queue_size=8`, a 1000-step run stored 39 steps and
+lost 13 of them. The fix is not a bigger queue - it is encoding the block on the training
+thread when the queue is full, so a full queue costs memory instead of data.
+
+**A queue reorder starved the writer.** Remembering the oldest item and re-appending it
+produced a file that began at step 12 with its anchor at step 19, while the counts still
+looked right.
+
+**Coalescing an anchor into a later step wrote the old weights under a new step number.**
+That is the worst shape of this bug: it looks correct in every aggregate and is wrong in
+every value.
+
+**The Hugging Face adapter's planned optimizer hook crashes.** `register_step_post_hook` on
+accelerate's `AcceleratedOptimizer` raises `AttributeError`, inside `on_train_begin`.
+
+**`on_log` attributed a window-averaged loss to the wrong step**, and let a run with
+`logging_steps=50` claim tier 1 while 49 steps in 50 had no loss.
+
+**The Lightning adapter stored one update behind**, because `on_before_optimizer_step` fires
+before `optimizer.step()`. Counts, losses and step numbers were all plausible.
+
+**A tier-2 file could not answer its own question**: 17 of 20 batches carried an empty
+`region_effects` map.
+
+**The launcher patched nothing, three separate ways**, most memorably a `sitecustomize` with a
+syntax error, which CPython reports and then ignores.
+
+**`Plan/Format_Spec.md` described a file format that had never been written.**
+
+What these have in common: each one produced *plausible output*. Every single one would have
+survived a test suite that checked shapes, counts and exit codes. What caught them was checking
+values against an independent source - the live weights of the run, the Trainer's own reported
+loss, the same seed twice, a real checkpoint on disk, or the file's own bytes parsed against its
+own spec. The lesson is not "test more"; it is that a test which only confirms the shape of the
+output cannot tell a correct recording from a confident one.
