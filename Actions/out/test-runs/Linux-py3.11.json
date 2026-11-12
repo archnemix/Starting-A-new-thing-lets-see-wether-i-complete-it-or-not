@@ -3,13 +3,13 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "241 tests: 241 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "245 tests: 245 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 241,
+    "passed": 245,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 241
+    "total": 245
   },
   "failures": [],
   "tests": [
@@ -92,6 +92,10 @@
     "Tests.integration.test_lightning_adapter::test_the_callback_is_a_real_lightning_callback",
     "Tests.integration.test_lightning_adapter::test_the_adapter_imports_without_lightning",
     "Tests.integration.test_lightning_adapter::test_the_metadata_says_which_adapter_and_model",
+    "Tests.integration.test_npm_signpost::test_the_package_exists_and_declares_the_archx_binary",
+    "Tests.integration.test_npm_signpost::test_using_it_fails_loudly_and_names_the_real_install",
+    "Tests.integration.test_npm_signpost::test_asking_about_the_package_succeeds",
+    "Tests.integration.test_npm_signpost::test_the_node_suite_itself_passes",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[1]",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[2]",
     "Tests.integration.test_recovery_property::test_any_tear_point_leaves_a_valid_prefix[3]",
@@ -255,21 +259,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T15:45:47.374049+00:00",
-  "duration_s": 31.995,
+  "started_utc": "2026-11-12T15:57:11.416900+00:00",
+  "duration_s": 36.812,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "d026a24d2fd347929203289983b196df257978c4"
+    "github_sha": "d9439a30886cb5878ee28a6e78f2df9ef509c160"
   },
   "stdout_tail": [
     "........................................................................ [ 29%]",
-    "........................................................................ [ 59%]",
-    "........................................................................ [ 89%]",
-    ".........................                                                [100%]",
+    "........................................................................ [ 58%]",
+    "........................................................................ [ 88%]",
+    ".............................                                            [100%]",
     "=============================== warnings summary ===============================",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
