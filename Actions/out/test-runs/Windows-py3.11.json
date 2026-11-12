@@ -2,21 +2,16 @@
   "purpose": "test run record written by Actions/scripts/run_tests.py",
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
-  "exit_code": 1,
-  "summary_line": "245 tests: 244 passed, 1 failed, 0 errors, 0 skipped",
+  "exit_code": 0,
+  "summary_line": "245 tests: 245 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 244,
-    "failed": 1,
+    "passed": 245,
+    "failed": 0,
     "errors": 0,
     "skipped": 0,
     "total": 245
   },
-  "failures": [
-    {
-      "test": "Tests.integration.test_npm_signpost::test_the_node_suite_itself_passes",
-      "detail": "Tests\\integration\\test_npm_signpost.py:64: in test_the_node_suite_itself_passes\n    result = subprocess.run([\"npm\", \"test\", \"--silent\"], cwd=PACKAGE, capture_output=True,\nC:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:548: in run\n    with Popen(*popenargs, **kwargs) as process:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nC:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:1026: in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\nC:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:1538: in _execute_child\n    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,\nE   FileNotFoundError: [WinError 2] The system cannot find the file specified"
-    }
-  ],
+  "failures": [],
   "tests": [
     "Tests.integration.test_arch_sweep::test_every_architecture_reaches_tier_two_and_rebuilds_its_weights",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
@@ -264,33 +259,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T15:58:24.274084+00:00",
-  "duration_s": 49.291,
+  "started_utc": "2026-11-12T16:13:28.789405+00:00",
+  "duration_s": 52.389,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "d9439a30886cb5878ee28a6e78f2df9ef509c160"
+    "github_sha": "ff6dd1636e8ee95c249b9ba42d54533ff798624e"
   },
   "stdout_tail": [
     "........................................................................ [ 29%]",
-    "..........F............................................................. [ 58%]",
+    "........................................................................ [ 58%]",
     "........................................................................ [ 88%]",
     ".............................                                            [100%]",
-    "================================== FAILURES ===================================",
-    "______________________ test_the_node_suite_itself_passes ______________________",
-    "Tests\\integration\\test_npm_signpost.py:64: in test_the_node_suite_itself_passes",
-    "    result = subprocess.run([\"npm\", \"test\", \"--silent\"], cwd=PACKAGE, capture_output=True,",
-    "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:548: in run",
-    "    with Popen(*popenargs, **kwargs) as process:",
-    "         ^^^^^^^^^^^^^^^^^^^^^^^^^^^",
-    "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:1026: in __init__",
-    "    self._execute_child(args, executable, preexec_fn, close_fds,",
-    "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\subprocess.py:1538: in _execute_child",
-    "    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,",
-    "E   FileNotFoundError: [WinError 2] The system cannot find the file specified",
     "============================== warnings summary ===============================",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
@@ -310,9 +293,7 @@
     "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
     "  C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\site-packages\\lightning\\pytorch\\trainer\\connectors\\data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.",
     "",
-    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
-    "=========================== short test summary info ===========================",
-    "FAILED Tests/integration/test_npm_signpost.py::test_the_node_suite_itself_passes - FileNotFoundError: [WinError 2] The system cannot find the file specified"
+    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
   ],
   "stderr_tail": []
 }
