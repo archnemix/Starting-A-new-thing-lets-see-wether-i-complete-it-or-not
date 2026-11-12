@@ -555,6 +555,34 @@
         "Plan/Format_Spec.md",
         "Docs/Technical.md"
       ]
+    },
+    {
+      "id": "hf-trainer-callback-reach",
+      "question": "What can a Hugging Face TrainerCallback actually see, and where must a recorder attach?",
+      "sources": [
+        "transformers 5.22.2: transformers/trainer.py _inner_training_loop lines ~1909-1955 (read from the installed package)",
+        "transformers 5.22.2: TrainerCallback signature list (on_pre_optimizer_step, on_optimizer_step, on_substep_end, on_log)",
+        "accelerate 1.15.0: accelerate/optimizer.py AcceleratedOptimizer.step (read from the installed package)",
+        "measured: Tests/integration/test_hf_adapter.py against a real Trainer on torch 2.15.0"
+      ],
+      "findings": [
+        "The loop order on a real update step is: _clip_grad_norm -> on_pre_optimizer_step -> optimizer.step() -> on_optimizer_step -> lr_scheduler.step() -> model.zero_grad() -> global_step += 1 -> on_step_end. So weights are new and gradients are alive at on_optimizer_step, and both are gone at on_step_end.",
+        "on_substep_end fires only on gradient-accumulation micro-batches (the else branch of do_sync_step), so it cannot stand in for a per-update hook - and it fires only when accumulation is configured.",
+        "state.global_step is NOT yet incremented when the step hooks fire, so it is exactly the 0-based index of the update that just happened. It is incremented before on_step_end.",
+        "Registering optimizer.register_step_post_hook on the optimizer a callback is handed raises AttributeError: that object is accelerate's AcceleratedOptimizer, which is not a torch.optim.Optimizer; the method is inherited from the Optimizer base class and reaches for _optimizer_step_post_hooks, which the wrapper lacks. It is in fact the *inner* optimizer (trainer.optimizer.optimizer) that is a real optimizer. This crashed on_train_begin, so the adapter registers no optimizer hooks and uses the callback events instead.",
+        "args.learning_rate is the initial rate; the scheduler only writes into the optimizer. The rate the update used is optimizer.param_groups[0]['lr'] read at on_pre_optimizer_step, because the scheduler is stepped after the optimizer.",
+        "Gradient norms available to any callback are the CLIPPED ones whenever max_grad_norm > 0 (default 1.0), because clipping happens before on_pre_optimizer_step. The unclipped norm is not reachable from a callback; the public per-parameter register_post_accumulate_grad_hook can reach it but never fires for a parameter whose gradient is never produced, so it would silently miss frozen or unused tensors.",
+        "on_log fires after the step record has been written and reports the MEAN loss over the whole logging window, so using it would attach a window average to the wrong step; with logging_steps=50 it would also leave 49 steps in 50 with no loss while the file still claimed tier 1. Measured: it produced losses on steps 1-3 but none on step 0, and a throttled run silently claimed tier 1 before this was fixed.",
+        "Trainer.compute_loss_func pops labels out of the inputs before the model runs, so a wrapper using that seam must rebuild the loss itself - which means guessing the loss function. Measured on a small regression model: it produced a confidently wrong number. Wrapping the instance's compute_loss instead observes the real value and leaves the run bit-identical.",
+        "A Trainer subclass that overrides compute_loss (TRL/Axolotl shape) still works, because loss_hook wraps the bound method after construction and calls it unchanged."
+      ],
+      "verdict": "ArchxCallback attaches at on_train_begin (model via accelerate.unwrap_model, no optimizer hook), reads gradients and the learning rate at on_pre_optimizer_step, and takes the step at on_optimizer_step keyed on state.global_step. The loss is not guessed and on_log is not used: loss_hook(trainer) or callback.log(loss=...) is the honest route, and without either the file reports tier 0 naming the way out. grad_norm_clipped is written into the metadata so a reader is never left to assume which norm it holds.",
+      "affects": [
+        "archx/adapters/hf.py",
+        "Tests/integration/test_hf_adapter.py",
+        "Docs/Logic.md",
+        "Plan/Architecture.md"
+      ]
     }
   ]
 }

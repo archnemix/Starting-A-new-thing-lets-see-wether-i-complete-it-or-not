@@ -75,14 +75,20 @@ Reader(path)                                       archx/container/reader.py
 
 ```
 Trainer.train()
-  ├─ on_train_begin   -> resolve model via accelerator.unwrap_model, optimizer via trainer.optimizer
-  │                      then register the same optimizer post-hook as chain 1
-  ├─ on_pre_optimizer_step (transformers >= 4.46) -> gradient norms
-  ├─ on_optimizer_step -> timestamp / skip flag from accelerator.optimizer_step_was_skipped
-  ├─ on_log           -> loss, lr
-  ├─ on_evaluate      -> eval metrics (Tier 3)
-  └─ on_train_end     -> final anchor, footer, close
+  ├─ on_train_begin        -> if not main process: do nothing at all (no recorder, no file)
+  │                          else unwrap model (accelerate.unwrap_model), build registry,
+  │                          open the recorder; annotate "resumed" if global_step > 0
+  ├─ on_pre_optimizer_step -> gradient norm (CLIPPED when max_grad_norm > 0) and the learning
+  │                          rate from optimizer.param_groups[0]["lr"], plus state.global_step
+  ├─ on_optimizer_step     -> the weights have just changed: recorder.step(...). A skipped
+  │                          (fp16 overflow) update is counted, not recorded
+  ├─ on_evaluate           -> (not used yet; tier 3 activations are not reached)
+  └─ on_train_end          -> close: flush the queue, write the capability block and footer
 ```
+
+The loss is *not* taken from `on_log`: that fires after the step has been recorded and reports a
+window mean. `loss_hook(trainer)` observes `compute_loss` instead, or the caller passes
+`callback.log(loss=...)`. With neither, the file reports tier 0 and names the way out.
 
 ## 3. `ArchxCallback(...)` - Lightning
 

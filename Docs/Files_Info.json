@@ -981,9 +981,38 @@
         "__all__ of the data helpers"
       ],
       "handles": "Nothing at import time."
+    },
+    "archx/adapters/hf.py": {
+      "purpose": "Hugging Face Trainer: one callback, no fork of the training loop.",
+      "inputs": [
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "data_level",
+        "queue_size",
+        "max_rel_error",
+        "meta"
+      ],
+      "outputs": [
+        "ArchxCallback",
+        "loss_hook(trainer) for a per-step loss",
+        "HfRecorder"
+      ],
+      "handles": "Gradients and learning rate read at on_pre_optimizer_step (the norm is the CLIPPED one when max_grad_norm > 0), the step taken at on_optimizer_step keyed on state.global_step, model unwrapped so no 'module.' prefix reaches the file, and only the main process records. No optimizer hook is registered: it raises AttributeError on accelerate's AcceleratedOptimizer. The loss is observed via loss_hook or callback.log, never taken from on_log."
+    },
+    "Tests/integration/test_hf_adapter.py": {
+      "purpose": "Proves the HF adapter against a real Trainer: steps, weights, loss parity, accumulation, ranks.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "16 tests"
+      ],
+      "handles": "Skips with a stated reason when transformers/accelerate are absent; the CI workflow installs them so the tests run rather than skip."
     }
   },
-  "_generated": "2026-11-12 - Phases 2 and 3: encoders, policy, recorder, data capture, ",
+  "_generated": "2026-11-12 - Phase 6: Hugging Face Trainer adapter, 16 integration tests",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },

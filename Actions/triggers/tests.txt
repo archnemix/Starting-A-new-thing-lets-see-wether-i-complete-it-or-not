@@ -15,3 +15,4 @@ trigger 6: phase 3 - recorder + data capture + join
 
 trigger 7: authoritative test counts via junit xml
 trigger 2026-11-12T09:17:41Z phase3 torch adapter
+2026-11-12T13:53:51Z phase6 hf trainer adapter

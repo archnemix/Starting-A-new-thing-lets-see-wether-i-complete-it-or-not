@@ -46,6 +46,56 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v0.7.0 - not released yet (Phase 6 complete on the branch)
+
+The Hugging Face `Trainer` adapter: one callback, no fork of the training loop.
+
+```python
+from archx.adapters.hf import ArchxCallback, loss_hook
+callback = ArchxCallback("run.archx.mdl")
+trainer = Trainer(..., callbacks=[callback])
+loss_hook(trainer)          # optional, one line, for a loss on every step
+trainer.train()
+```
+
+Added:
+
+- `ArchxCallback`: records every optimizer step from a plain `Trainer`, through
+  `on_pre_optimizer_step` (gradients, learning rate) and `on_optimizer_step` (the step itself).
+  Weights rebuild to 1e-5, and recording changes neither the loss curve nor the final weights
+  (both compared in `Tests/integration/test_hf_adapter.py`).
+- `loss_hook(trainer)`: the Trainer keeps the loss inside `training_step`; this observes it by
+  wrapping the instance's `compute_loss` and calling the original untouched, so a TRL-style
+  subclass that overrides `compute_loss` still works.
+- `archx.adapters.hf` imports without transformers installed: the callback binds to
+  `TrainerCallback` on first construction, so the container, CLI and plain-torch adapter keep
+  working on a machine that has no transformers.
+- Metadata records `adapter`, `transformers`/`torch` versions, `recording_rank`, the model
+  class, and `grad_norm_clipped`.
+
+Fixed / corrected:
+
+- **The plan's optimizer hook would have crashed the user's run.** `register_step_post_hook`
+  raises `AttributeError` on accelerate's `AcceleratedOptimizer` (it is not a
+  `torch.optim.Optimizer`), and it was being called inside `on_train_begin`. No optimizer hook
+  is registered at all now; the callback events that bracket the update do the work and exist on
+  every supported version.
+- **`on_log` was attributing a window-averaged loss to the wrong step**, and made a run with
+  `logging_steps=50` claim tier 1 while 49 steps in 50 had no loss. It is not used at all; a run
+  that cannot see the loss now reports tier 0 and names `loss_hook` / `callback.log` as the way
+  out.
+- **`compute_loss_func` was the wrong seam**: it pops labels out of the inputs, so the loss had
+  to be rebuilt - which means guessing the loss function. It guessed wrong on a measured model.
+- The learning rate is read from the optimizer's current group, not `args.learning_rate`, which
+  is the initial rate and never changes.
+- `data_level="segments"` is refused at construction: the Trainer hands the batch to no callback,
+  so promising segments would be a guarantee the adapter cannot keep.
+
+Known limits, stated rather than implied: the recorded gradient norm is the *clipped* one when
+`max_grad_norm > 0` (the metadata says so), a real 2-GPU run is not on the CI matrix (the
+single-writer guard is tested by simulation), and TRL/Axolotl are tested by shape, not by
+installing them.
+
 ## v0.2.0 - not released yet (Phase 2 and Phase 3 complete on the branch)
 
 Added:

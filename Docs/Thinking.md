@@ -560,3 +560,57 @@ trainable projection - and structured positions compress differently. This measu
 speak to that, and the encoder chooser does not need it to: it measures every candidate on the
 actual delta and picks the smallest one inside the budget. The lesson is about the *documentation*
 claim, not the code path.
+
+---
+
+## What a Hugging Face callback can and cannot see
+
+Phase 6 looked like the easy one: the plan already said "register the same optimizer post-hook
+as chain 1, then read gradient norms at `on_pre_optimizer_step`". Both halves of that turned
+out to be wrong, and only a real `Trainer` showed it.
+
+**The optimizer you are handed is not an optimizer.** `optimizer.register_step_post_hook(...)`
+inside `on_train_begin` raises `AttributeError: 'AcceleratedOptimizer' object has no attribute
+'_optimizer_step_post_hooks'`. The object is accelerate's wrapper, which is not a
+`torch.optim.Optimizer`; the method is inherited from the base class and reaches for state the
+wrapper never creates. It is the *inner* optimizer (`trainer.optimizer.optimizer`) that is real.
+Since that call sits inside `on_train_begin`, the failure would have killed the user's training
+run - a recorder bringing down the thing it was asked to observe.
+
+**The fallback hooked the wrong moment anyway.** The plan's second idea was `on_step_end` plus a
+hook. But the loop is `optimizer.step()` -> `lr_scheduler.step()` -> `model.zero_grad()` ->
+`global_step += 1` -> `on_step_end`, so at `on_step_end` the gradients are already zero and the
+per-step learning rate has already moved on. The events that bracket the update are
+`on_pre_optimizer_step` and `on_optimizer_step`, and they exist on every version this project
+supports. So the adapter registers no optimizer hook at all: gradients and the learning rate are
+read before the step, the step itself is taken after it, and `state.global_step` - not yet
+incremented at that moment - is exactly the 0-based index of the update that just happened.
+
+**The gradient norm in the file is the clipped one.** `Trainer` calls `_clip_grad_norm` before it
+calls any callback, so with the default `max_grad_norm=1.0` every callback sees a norm pinned at
+1.0 once the true norm exceeds it. Measured: four steps reporting `1.0, 1.0, 1.0` while the real
+norms were `3.3, 3.1, 3.7`. The public alternative, `register_post_accumulate_grad_hook`, sees the
+true value - but it fires *per parameter*, so a frozen or unused tensor never calls it at all,
+and a norm assembled from whichever hooks happened to fire is quietly wrong in a way that looks
+plausible. The honest choice is to record the clipped norm and write `grad_norm_clipped` into the
+metadata, so a reader is never left to assume which number it is holding.
+
+**The loss is the one thing a callback cannot have, and every convenient route to it lies.**
+`on_log` looks like the answer and is the worst of them: it fires *after* the step has been
+recorded, and it reports the mean over the whole logging window. Using it produced losses on
+steps 1, 2 and 3 and none on step 0 - and, worse, a run with `logging_steps=50` would have left
+49 steps in 50 with no loss while the file still claimed tier 1. The second attempt,
+`compute_loss_func`, was subtler: that seam *pops the labels out of the inputs* before the model
+runs, so the wrapper has to rebuild the loss from the logits - which means guessing whether the
+model wants a shifted cross-entropy, a plain one, an MSE or something else. It guessed, and
+produced a confidently wrong number on a small regression model.
+
+What works is observing rather than reconstructing: wrap the trainer instance's `compute_loss`,
+call the original untouched, and read the value it returns. The run stays bit-identical (the loss
+curve and the final weights are compared in the tests), and a Trainer subclass that overrides
+`compute_loss` the way TRL's do still works because the wrapper wraps *their* bound method.
+
+With none of that in place, the file says tier 0 and names the way out - `loss_hook(trainer)` or
+`callback.log(loss=...)` - instead of writing a plausible-looking average under the wrong step
+number. A recorder whose selling point is "you can see why the weights moved" cannot afford to be
+the thing that is vague about what it actually saw.

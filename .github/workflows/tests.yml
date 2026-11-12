@@ -41,12 +41,22 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      # The torch and Hugging Face adapters are tested for real, not skipped. The CPU-only
+      # index keeps the Linux runner from pulling ~2 GB of CUDA wheels it cannot use; on
+      # Windows and macOS the default index already serves CPU wheels.
       - name: Install package and test dependencies
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[test]"
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          else
+            python -m pip install torch
+          fi
+          python -m pip install "transformers>=4.46" "accelerate>=1.1"
           python -c "import pytest, sys; print('pytest', pytest.__version__, 'python', sys.version)"
+          python -c "import torch, transformers, accelerate; print('torch', torch.__version__, 'transformers', transformers.__version__, 'accelerate', accelerate.__version__)"
 
       - name: Run tests and record the result
         shell: bash

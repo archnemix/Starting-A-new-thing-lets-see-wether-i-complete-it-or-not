@@ -236,11 +236,19 @@ trainer.train()
 - **Gradient availability (verified in the inner loop):** the order is
   `optimizer.step()` -> `model.zero_grad()` -> `global_step += 1` -> `on_step_end`.
   So by `on_step_end` the gradients are already zeroed and the *previous* weights are
-  already gone. Gradient norms therefore come from `on_pre_optimizer_step` /
-  `on_optimizer_step` (transformers >= 4.46) and, as the version-independent default,
-  from an optimizer `register_step_post_hook` attached to `trainer.optimizer` at
-  `on_train_begin` - that hook fires on every version and is what sections 4 and 6.6
-  describe.
+  already gone. Gradient norms therefore come from `on_pre_optimizer_step`, where the
+  gradients are still alive, and the update is recorded at `on_optimizer_step`.
+
+  **Corrected in Phase 6, against a real Trainer:** the "version-independent default" of
+  attaching an optimizer `register_step_post_hook` at `on_train_begin` does not work. The
+  optimizer a callback is handed is accelerate's `AcceleratedOptimizer`, which is not a
+  `torch.optim.Optimizer`; the inherited method reaches for `_optimizer_step_post_hooks`
+  and raises `AttributeError`, inside `on_train_begin`, which kills the training run. It is
+  `trainer.optimizer.optimizer` that is the real optimizer. Since the two callback events
+  above bracket the update on every supported version, no optimizer hook is registered at
+  all. Also measured: `_clip_grad_norm` runs *before* `on_pre_optimizer_step`, so the norm
+  a callback can see is the clipped one whenever `max_grad_norm > 0` (the default), which
+  the file records as `grad_norm_clipped`.
 - **Accelerate / multi-GPU (honest answer to the brief's question):** the callback is
   constructed once and shared; `Trainer` is wrapped by `Accelerator`, which owns
   `model` (possibly `DistributedDataParallel`), `optimizer` (wrapped: `AcceleratedOptimizer`),
@@ -252,6 +260,14 @@ trainer.train()
   (`is_main_process`)**, otherwise N ranks append N interleaved streams to one file.
   With sharded state (FSDP/ZeRO) no single rank holds full parameters -> detection
   and degradation, as in section 7.
+  **The loss is not obtainable from a callback.** `on_log` fires after the step record and
+  reports a window mean (measured: losses on steps 1-3 and none on step 0, and a run with
+  `logging_steps=50` silently claimed tier 1 while 49 steps in 50 had no loss). The
+  `compute_loss_func` seam pops the labels out of the inputs, so it requires rebuilding the
+  loss - a guess that measured wrong on a regression model. `loss_hook(trainer)` wraps the
+  instance's `compute_loss`, calls it untouched and reads the real value; `callback.log()`
+  is the manual route. Without either, the file reports tier 0 and names both.
+
 - **TRL / Axolotl:** `SFTTrainer(_BaseTrainer)` and `DPOTrainer(_BaseTrainer)` are
   verified subclasses of the Trainer stack, so a `TrainerCallback` is accepted
   unchanged; Axolotl's `AxolotlTrainer` also subclasses the Trainer hierarchy. Plan:

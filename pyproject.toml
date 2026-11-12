@@ -21,6 +21,7 @@ dependencies = ["numpy>=1.24", "zstandard>=0.21"]
 
 [project.optional-dependencies]
 torch = ["torch>=2.1"]
+hf = ["torch>=2.1", "transformers>=4.46", "accelerate>=1.1"]
 test = ["pytest>=7.4"]
 
 [project.scripts]

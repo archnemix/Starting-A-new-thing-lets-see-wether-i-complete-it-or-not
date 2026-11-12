@@ -79,10 +79,10 @@ Status legend: `todo` / `doing` / `done`. Version tags are what the step ships i
 
 | # | Step | Done when | Status |
 |---|---|---|---|
-| 6.1 | `ArchxCallback` on transformers 4.46+ (`on_pre_optimizer_step` path) | Integration test passes | todo |
-| 6.2 | Fallback path for < 4.46 (`on_step_end` + optimizer hook) | Integration test passes | todo |
-| 6.3 | Multi-GPU/Accelerate correctness: unwrap model, wrapped optimizer, single writing rank | Documented + tested single-process; multi-process covered by CI if feasible | todo |
-| 6.4 | TRL `SFTTrainer` and `DPOTrainer` accepted unchanged; Axolotl subclass accepted | Matrix test, no code fork | todo |
+| 6.1 | `ArchxCallback` on transformers 4.46+ (`on_pre_optimizer_step` path) | Integration test passes | done - `archx/adapters/hf.py`, 16 tests in `Tests/integration/test_hf_adapter.py` against a real `Trainer` (torch 2.15.0 / transformers 5.22.2 / accelerate 1.15.0): every optimizer step recorded, weights rebuild to 1e-5, and the recorded loss is the Trainer's own number, not a recomputation |
+| 6.2 | Fallback path for < 4.46 (`on_step_end` + optimizer hook) | Integration test passes | done, with a correction: the fallback was impractical and was replaced. `register_step_post_hook` **crashes** on the optimizer a callback is handed (accelerate's `AcceleratedOptimizer` is not a `torch.optim.Optimizer`), and `on_step_end` fires after `zero_grad()`, so gradients are gone. The adapter therefore uses no optimizer hook at all: gradients and learning rate are read at `on_pre_optimizer_step`, the step is taken at `on_optimizer_step`, and both exist on every supported version (verified in `trainer.py` lines ~1909-1955). A documentation-only 4.46 split would have shipped a crash |
+| 6.3 | Multi-GPU/Accelerate correctness: unwrap model, wrapped optimizer, single writing rank | Documented + tested single-process; multi-process covered by CI if feasible | done - `accelerate.unwrap_model` is used so no `module.` prefix reaches the file; the single-writer guard is pinned by `test_only_the_main_rank_writes_a_file` (non-main rank opens no recorder, writes no file, training still finishes) and `recording_rank` is written into the metadata. A real 2-GPU run is not available on the CI matrix and is not claimed |
+| 6.4 | TRL `SFTTrainer` and `DPOTrainer` accepted unchanged; Axolotl subclass accepted | Matrix test, no code fork | done - `test_a_trl_style_subclass_takes_the_callback_unchanged` runs a `Trainer` subclass that overrides `compute_loss` the way TRL's do, under `loss_hook`, and gets correct steps and losses. TRL and Axolotl are not installed in CI, so the shape is tested rather than the packages; that limit is stated here rather than implied |
 
 ## Phase 7 - Zero-code launcher investigation (v0.8)
 

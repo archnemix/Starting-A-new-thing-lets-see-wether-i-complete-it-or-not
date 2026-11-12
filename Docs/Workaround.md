@@ -88,7 +88,8 @@ as numbers (bytes, ratio, error) committed in their place.
 |---|---|
 | `pip install --no-deps torch` | installs, then `import torch` fails: `libcublasLt.so.*[0-9] not found` |
 | `pip install` the nvidia list by hand | works only if `nvidia-nvshmem-cu13` is in the list; it is easy to miss, and without it the import fails on `libnvshmem_host.so.3` |
-| `--index-url https://download.pytorch.org/whl/cpu` | unreachable from here: TLS handshake closed (`SSLZeroReturnError`), no version list |
+| `--index-url https://download.pytorch.org/whl/cpu` | unreachable **from this sandbox**: TLS handshake closed (`SSLZeroReturnError`). The GitHub Linux runner reaches it fine, and uses it |
+| `pip install transformers accelerate` | works; `Trainer` **requires** `accelerate>=1.1` and raises `ImportError` without it, so both are installed together |
 | plain `pip install torch` | **works** - `cuda-toolkit` brings the whole runtime set including nvshmem |
 
 The first version of this note blamed the wheel and prescribed the manual nvidia list. The
@@ -96,12 +97,20 @@ real cause was `--no-deps`: with dependencies left to pip, the CUDA runtime arri
 Do not hand-install the nvidia packages; do not chase the version-conflict warnings torch's
 pins produce against `setuptools` - neither affects CPU execution.
 
-**Consequence for CI.** The GitHub runners fail to install `torch` at all (see the run records:
-`pip install -e ".[test]"` with the optional torch extra is slow enough to hit the job limit,
-and the wheel is large). So `Tests/integration/test_torch_adapter.py` starts with
-`pytest.importorskip("torch")`: on a runner without torch it skips **and says why**, and the
-93 other tests still prove the container, the CLI and the crash path. Locally, with torch
-installed, the same suite is 99 tests and every adapter test runs for real.
+**Consequence for CI (changed in Phase 6).** The earlier note here said the runners could not
+install torch and that the adapter tests therefore skip in CI. That was a workaround, and the
+standing instruction was to stop settling for it: the workflow now installs torch, transformers
+and accelerate on all three runners, so the adapter tests **run** rather than skip.
+
+The Linux runner uses the CPU-only index (`--index-url https://download.pytorch.org/whl/cpu`)
+to avoid ~2 GB of CUDA wheels it cannot use; Windows and macOS take the default wheel, which is
+already CPU. The sandbox cannot reach that index (TLS), which is why the local recipe above is
+the plain install - the two environments need different answers and both are written down.
+
+`pytest.importorskip` stays in the adapter tests. It is not there to hide a failure: on a
+machine without torch it reports "torch is not installed on this runner" as a skip with a
+reason, and the rest of the suite still proves the container, the CLI and the crash path.
+A skip in a CI record is therefore a signal that the install step broke, not a normal state.
 
 **Cost, so it is not a surprise:** torch plus its CUDA runtimes take 8 GB of a 20 GB disk. If
 space matters more than the adapter tests, skip installing torch and read the six adapter
