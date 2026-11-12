@@ -107,15 +107,15 @@
     "Tests.unit.test_recorder::test_stored_delta_covers_every_skipped_step",
     "Tests.unit.test_recorder::test_close_reports_the_failure_it_swallowed"
   ],
-  "started_utc": "2026-11-12T09:19:02.391832+00:00",
-  "duration_s": 1.781,
+  "started_utc": "2026-11-12T09:20:32.589806+00:00",
+  "duration_s": 2.961,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "317cb3429117d88a5735b1b74543a22c4977dd64"
+    "github_sha": "d513934078fb9bd942cbd776c203c97bfe9d9534"
   },
   "stdout_tail": [
     "........................................................................ [ 78%]",
