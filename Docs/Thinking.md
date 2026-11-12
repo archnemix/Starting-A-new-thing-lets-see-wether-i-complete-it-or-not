@@ -533,3 +533,28 @@ on reshape. The recorder wrote a file that its own reader rejected - the worst p
 this bug, and it existed for the ten minutes between adding int16 and running the benchmark.
 The width now comes from the block's value dtype, and `Tests/unit/encoders/test_quantization_path.py`
 pins the window where int16 is chosen.
+
+---
+
+## The sparse encoder at a realistic size
+
+An open question sat in the notes for a while: does the sparse encoder still win at 4096x4096,
+or was the 256x256 table an artefact of small layers? Measured, the answer is that sparse was
+never really winning - **zstd was**.
+
+At 4096² with 1% of entries moved, exact sparse costs 842 KB and int8 quantization costs
+509 KB at 1.1e-2 relative error. int8 is smaller than *exact* sparse, because a quantized delta
+is mostly zeros and zstd collapses them; sparse spells out which entries are non-zero and then
+pays for their values. The same ordering holds at 3% and 10% density.
+
+Sparse's real comparison is against compressed raw float32, and there it is 1.5x at 1% and
+1.35x at 10% - a real but modest saving, not the order of magnitude the phrase "sparse layer"
+suggests. At matched error, sparse (exact, 842 KB) and int16 (4.2e-5, 790 KB) are within 7% of
+each other.
+
+The caveat that matters: the synthetic delta places moved entries at random positions. Real
+sparse movement can be structured - whole rows, whole attention heads, a frozen block with one
+trainable projection - and structured positions compress differently. This measurement cannot
+speak to that, and the encoder chooser does not need it to: it measures every candidate on the
+actual delta and picks the smallest one inside the budget. The lesson is about the *documentation*
+claim, not the code path.

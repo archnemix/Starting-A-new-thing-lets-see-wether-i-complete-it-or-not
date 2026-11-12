@@ -513,6 +513,27 @@
         "Docs/Technical.md",
         "Plan/Roadmap.md"
       ]
+    },
+    {
+      "id": "sparse-threshold-at-real-layer-size",
+      "question": "Does the sparse encoder still win once layers are a realistic size (4096x4096)?",
+      "sources": [
+        "measured locally with archx/encoders on numpy float32 deltas, zstd compression",
+        "Docs/Research.json delta-encoder-measurements (the 256x256 table)"
+      ],
+      "findings": [
+        "At 4096x4096 (64 MiB of float32) with 1% of entries moved, exact sparse costs 842,049 B but int8 quantization costs 508,556 B at 1.1e-2 relative error. int8 is *smaller* than exact sparse, because zstd already collapses the quantized zeros that sparse encodes explicitly.",
+        "Same ordering at 3% and 10% density: int8 is 1.7-2.1x smaller than sparse at every density tested.",
+        "Compact raw float32 is also far smaller than the input: 1.25 MB for 64 MiB at 1% density, so \"raw\" is really \"zstd on the raw delta\" and the sparse encoder's advantage over it is only 1.5x at 1% and 1.35x at 10%.",
+        "At equal error the two are close: sparse (exact) 842 KB against int16 quantization (4.2e-5) 790 KB.",
+        "Caveat: the synthetic delta puts moved entries at random positions. A real sparse delta with structured positions (whole rows or columns) may compress differently, and this measurement cannot speak to that."
+      ],
+      "verdict": "The sparse encoder is worth choosing when the budget is very tight (exact or at most a few times 1e-5) and int16 is not available; it is not a size win on its own. The chooser already measures rather than assumes, so no threshold needs to be invented - but the docs no longer claim sparse is the best option for MoE or frozen-ish layers at realistic sizes.",
+      "affects": [
+        "archx/encoders/sparse.py",
+        "Docs/Technical.md",
+        "Docs/Research.json"
+      ]
     }
   ]
 }
