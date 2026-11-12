@@ -24,3 +24,4 @@ trigger 2026-11-12T09:17:41Z phase3 torch adapter
 2026-11-12T15:58:08Z ci: record-commit race - backoff + continue-on-error
 2026-11-12T16:06:32Z fix: npm.cmd is not executable from subprocess on Windows
 2026-11-12T16:16:42Z fix: node TAP reporter prefix is not stable
+2026-11-12T16:30:55Z fix: overhead is a difference, not a ratio; dedupe as_bytes

@@ -747,6 +747,15 @@ the one nobody would check, and it was the one that kept none of the evidence it
 Found by opening a `none` recording and asking it which batches it had seen: it could not
 answer, and it was not supposed to have to guess.
 
+**A test that measured the runner's mood.** The data-overhead assertion compared one run
+against another with a 20% budget, and the quantity it was chasing is 1% of the step. It
+passed on Windows, then failed on Windows at a commit that changed only a test's matching
+string - proof on its own that nothing under test had moved. The lesson is not "loosen the
+threshold": it is that a *ratio* of two noisy measurements cannot detect a small effect, while
+a *difference* between two runs that share the noise can. The assertion now asks whether the
+copy costs anything at all and prints the number, because "0.03 to 0.10 ms" is a fact and
+"under 20%" was a guess with a stopwatch.
+
 The common thread with the eight defects above: none of them crashed, none of them turned a
 test red, and every one of them produced output that a careful reader would have accepted. The
 difference this time is that the suspicious numbers were *impossible* rather than merely

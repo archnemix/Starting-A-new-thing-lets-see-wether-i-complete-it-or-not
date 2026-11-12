@@ -839,6 +839,26 @@
         "Tests/integration/test_npm_signpost.py",
         ".github/workflows/npm.yml"
       ]
+    },
+    {
+      "id": "batch-copy-cost-is-a-difference",
+      "question": "What does copying one batch into the recorder actually cost per step, and how should that be asserted without a flaky threshold?",
+      "sources": [
+        "Tests/integration/test_torch_adapter.py (overhead fixtures)",
+        "run 43256908848 (Windows: 244 passed, 1 failed at 33.1%)",
+        "Bench/claim13_capture_levels.py"
+      ],
+      "findings": [
+        "The failing assertion compared the median of one `segments` run against the median of one plain run with a 20% budget. It passed on Windows at commit d026a24 and failed at commit 88c15c0 - which changes only a test's string matching - so the code under test had not moved.",
+        "The cause is that the quantity is tiny and the denominator is noisy. On this sandbox the same configuration produced 14.0 ms and 21.4 ms on consecutive runs: a 50% swing, far larger than the 0.8 ms being attributed to data capture.",
+        "Charging `Recorder.log` + `Recorder.step` directly, measured against the same loop with weights only: data costs 0.026-0.098 ms per step over three runs, i.e. ~1% of a 17 ms step end to end. That is the honest number, and it is two orders of magnitude from the 3.78 ms the failing assertion reported.",
+        "The fix is structural, not a looser threshold: measure the *difference* between the weights path and the weights+data path, which cancels framework dispatch, allocator and machine load, and take a median of medians. The remaining assertion is only that the difference is non-negative and smaller than the whole step; the number itself is printed and recorded rather than turned into a budget that a busy runner can fail."
+      ],
+      "verdict": "Assert differences, not ratios, when the effect is a few percent of a noisy measurement. Keep a hard budget only where the claim is large compared with the noise (the <5% weight claim holds at 0.107 ms of 17.2 ms).",
+      "affects": [
+        "Tests/integration/test_torch_adapter.py",
+        "archx/recorder.py"
+      ]
     }
   ]
 }

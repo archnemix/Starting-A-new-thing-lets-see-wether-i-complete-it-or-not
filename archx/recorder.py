@@ -603,25 +603,22 @@ _DTYPE_IDS = {"f32": 0, "f16": 1, "bf16": 2, "f64": 3, "i8": 4, "i16": 5, "i32":
 
 
 def _as_bytes(data: Any) -> bytes | None:
-    """Accept what a user would naturally pass as a batch: bytes, a numpy array, or a tensor.
+    """Turn whatever was logged as a batch into bytes.
 
-    `log(data=...)` is documented as taking bytes, but a batch is a tensor far more often than
-    it is bytes, and `content_id` needs bytes to hash. Converting here means the last-batch
-    flush cannot fail on the shape a user actually has.
+    The conversion rules live in `archx.adapters.torch.as_bytes`, next to the framework they
+    belong to, and this defers to them rather than keeping a second copy: a duplicate here
+    already drifted once (it returned a tensor's raw buffer without a CPU/detach step, and
+    could not represent a str or a list). torch is imported lazily, so a container-only
+    install still works - without it, only bytes and buffer objects are understood.
     """
-    if data is None:
-        return None
-    if isinstance(data, (bytes, bytearray, memoryview)):
-        return bytes(data)
-    tobytes = getattr(data, "tobytes", None)
-    if tobytes is not None:
-        try:
-            return tobytes()
-        except Exception:  # noqa: BLE001 - a tensor needing .numpy()/detach() first
-            pass
-    for step in ("detach", "cpu", "numpy"):
-        data = getattr(data, step)() if hasattr(data, step) else data
-    return data.tobytes() if hasattr(data, "tobytes") else None
+    if data is None or isinstance(data, (bytes, bytearray, memoryview)):
+        return None if data is None else bytes(data)
+    try:
+        from .adapters.torch import as_bytes
+    except ImportError:                        # no torch: the buffer path is all there is
+        tobytes = getattr(data, "tobytes", None)
+        return tobytes() if tobytes is not None else None
+    return as_bytes(data)
 
 
 def _movement_by_region(registry: TensorRegistry, previous: dict[str, np.ndarray],
