@@ -3,13 +3,13 @@
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "110 tests: 107 passed, 0 failed, 0 errors, 3 skipped",
+  "summary_line": "114 tests: 107 passed, 0 failed, 0 errors, 7 skipped",
   "counts": {
     "passed": 107,
     "failed": 0,
     "errors": 0,
-    "skipped": 3,
-    "total": 110
+    "skipped": 7,
+    "total": 114
   },
   "failures": [],
   "tests": [
@@ -43,6 +43,10 @@
     "Tests.unit.cli.test_cli::test_reconstruct_writes_weights_that_match_the_live_run",
     "Tests.unit.cli.test_cli::test_reconstruct_defaults_to_the_last_step_and_refuses_unknown_steps",
     "Tests.unit.cli.test_cli::test_events_lists_the_annotation_and_the_segment",
+    "Tests.unit.cli.test_cli::test_diff_between_two_steps_names_the_tensors_that_moved",
+    "Tests.unit.cli.test_cli::test_diff_refuses_a_step_the_file_does_not_have",
+    "Tests.unit.cli.test_cli::test_two_identical_runs_diff_as_identical",
+    "Tests.unit.cli.test_cli::test_diff_between_two_runs_finds_the_first_disagreement",
     "Tests.unit.container.test_reader::test_rejects_a_foreign_file",
     "Tests.unit.container.test_reader::test_rejects_a_newer_major_version",
     "Tests.unit.container.test_reader::test_detects_a_bit_flip_in_a_block_payload",
@@ -124,23 +128,24 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T10:51:19.695896+00:00",
-  "duration_s": 4.173,
+  "started_utc": "2026-11-12T10:53:55.787411+00:00",
+  "duration_s": 4.452,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "46f518e6a6a3ddbb162144e7bf8e8994ee4992ba"
+    "github_sha": "1833a70d8cb579e4c2f3ab142697845456b1b5ef"
   },
   "stdout_tail": [
-    "........................................................................ [ 67%]",
-    "...................................                                      [100%]",
+    "...........................ssss......................................... [ 64%]",
+    ".......................................                                  [100%]",
     "=========================== short test summary info ===========================",
     "SKIPPED [1] Tests\\integration\\test_arch_sweep.py:20: torch is not installed on this runner",
     "SKIPPED [1] Tests\\integration\\test_hook_reach.py:15: torch is not installed on this runner",
-    "SKIPPED [1] Tests\\integration\\test_torch_adapter.py:23: torch is not installed on this runner"
+    "SKIPPED [1] Tests\\integration\\test_torch_adapter.py:23: torch is not installed on this runner",
+    "SKIPPED [4] Tests\\unit\\cli\\test_cli.py:134: torch is not installed on this runner"
   ],
   "stderr_tail": []
 }
