@@ -149,7 +149,7 @@
     "Tests.unit.data.test_capture::test_the_same_shard_seen_twice_is_stored_once",
     "Tests.unit.data.test_capture::test_observe_does_no_expensive_work_so_a_training_step_never_waits",
     "Tests.unit.data.test_capture::test_an_epoch_over_the_same_data_costs_pointers_not_copies",
-    "Tests.unit.data.test_capture::test_level_none_keeps_nothing_but_still_reports",
+    "Tests.unit.data.test_capture::test_level_none_keeps_the_hash_and_count_but_no_content",
     "Tests.unit.data.test_capture::test_level_pointers_keeps_no_content_but_records_characteristics",
     "Tests.unit.data.test_capture::test_sensitive_shards_keep_hash_and_characteristics_only",
     "Tests.unit.data.test_capture::test_a_byte_cap_degrades_to_pointers_instead_of_truncating",
@@ -255,15 +255,15 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T15:42:31.705983+00:00",
-  "duration_s": 28.537,
+  "started_utc": "2026-11-12T15:45:47.374049+00:00",
+  "duration_s": 31.995,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "e5c14172535408ed464237deaaf9299dae8abed6"
+    "github_sha": "d026a24d2fd347929203289983b196df257978c4"
   },
   "stdout_tail": [
     "........................................................................ [ 29%]",
