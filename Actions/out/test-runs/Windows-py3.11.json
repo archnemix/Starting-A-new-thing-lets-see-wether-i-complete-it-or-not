@@ -2,21 +2,16 @@
   "purpose": "test run record written by Actions/scripts/run_tests.py",
   "label": "Windows-py3.11",
   "command": "C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\python.exe -m pytest Tests -q -ra --tb=short --junitxml=D:\\a\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Starting-A-new-thing-lets-see-wether-i-complete-it-or-not\\Actions\\out\\test-runs\\Windows-py3.11.junit.xml",
-  "exit_code": 1,
-  "summary_line": "245 tests: 244 passed, 1 failed, 0 errors, 0 skipped",
+  "exit_code": 0,
+  "summary_line": "245 tests: 245 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 244,
-    "failed": 1,
+    "passed": 245,
+    "failed": 0,
     "errors": 0,
     "skipped": 0,
     "total": 245
   },
-  "failures": [
-    {
-      "test": "Tests.integration.test_torch_adapter::test_the_overhead_of_storing_the_training_data_is_reported_honestly",
-      "detail": "Tests\\integration\\test_torch_adapter.py:296: in test_the_overhead_of_storing_the_training_data_is_reported_honestly\n    assert charged / plain < 0.20, (\nE   AssertionError: storing data cost 33.1% per step; data_level='pointers' is the documented escape hatch\nE   assert (3.783523999998124 / 11.425500000029842) < 0.2"
-    }
-  ],
+  "failures": [],
   "tests": [
     "Tests.integration.test_arch_sweep::test_every_architecture_reaches_tier_two_and_rebuilds_its_weights",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
@@ -264,29 +259,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T16:22:01.950696+00:00",
-  "duration_s": 47.427,
+  "started_utc": "2026-11-12T16:33:06.833222+00:00",
+  "duration_s": 52.773,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "88c15c0747b6af72b086540b1948b0958496af08"
+    "github_sha": "81bc8ff7cbd8ab707860bff7b559dd2550a6bc88"
   },
   "stdout_tail": [
     "........................................................................ [ 29%]",
-    "........................F............................................... [ 58%]",
+    "........................................................................ [ 58%]",
     "........................................................................ [ 88%]",
     ".............................                                            [100%]",
-    "================================== FAILURES ===================================",
-    "_____ test_the_overhead_of_storing_the_training_data_is_reported_honestly _____",
-    "Tests\\integration\\test_torch_adapter.py:296: in test_the_overhead_of_storing_the_training_data_is_reported_honestly",
-    "    assert charged / plain < 0.20, (",
-    "E   AssertionError: storing data cost 33.1% per step; data_level='pointers' is the documented escape hatch",
-    "E   assert (3.783523999998124 / 11.425500000029842) < 0.2",
-    "---------------------------- Captured stdout call -----------------------------",
-    "weights + data: charged 3.784 ms of a 11.43 ms step (33.1%)",
     "============================== warnings summary ===============================",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
@@ -306,10 +293,7 @@
     "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
     "  C:\\hostedtoolcache\\windows\\Python\\3.11.9\\x64\\Lib\\site-packages\\lightning\\pytorch\\trainer\\connectors\\data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=3` in the `DataLoader` to improve performance.",
     "",
-    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
-    "=========================== short test summary info ===========================",
-    "FAILED Tests/integration/test_torch_adapter.py::test_the_overhead_of_storing_the_training_data_is_reported_honestly - AssertionError: storing data cost 33.1% per step; data_level='pointers' is the documented escape hatch",
-    "assert (3.783523999998124 / 11.425500000029842) < 0.2"
+    "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
   ],
   "stderr_tail": []
 }
