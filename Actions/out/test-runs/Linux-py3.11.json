@@ -3,17 +3,18 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "102 tests: 100 passed, 0 failed, 0 errors, 2 skipped",
+  "summary_line": "106 tests: 103 passed, 0 failed, 0 errors, 3 skipped",
   "counts": {
-    "passed": 100,
+    "passed": 103,
     "failed": 0,
     "errors": 0,
-    "skipped": 2,
-    "total": 102
+    "skipped": 3,
+    "total": 106
   },
   "failures": [],
   "tests": [
     "::Tests.integration.test_arch_sweep",
+    "::Tests.integration.test_hook_reach",
     "::Tests.integration.test_torch_adapter",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
     "Tests.integration.test_container_end_to_end::test_process_killed_mid_run_leaves_a_recoverable_file",
@@ -88,6 +89,9 @@
     "Tests.unit.formats.test_registry::test_dtypes_are_recorded_in_wire_form",
     "Tests.unit.formats.test_registry::test_components_come_from_the_longest_matching_prefix",
     "Tests.unit.formats.test_registry::test_frozen_entries_can_be_built_from_triples",
+    "Tests.unit.test_capabilities::test_a_field_the_run_recorded_is_never_reported_missing",
+    "Tests.unit.test_capabilities::test_a_missing_lower_tier_explains_why_higher_fields_were_lost",
+    "Tests.unit.test_capabilities::test_offering_a_field_after_denial_promotes_it_back",
     "Tests.unit.test_policy::test_short_run_is_all_warmup_then_cooldown_never_stuck",
     "Tests.unit.test_policy::test_unknown_total_only_leaves_warmup_after_the_minimum",
     "Tests.unit.test_policy::test_first_step_is_an_anchor",
@@ -116,21 +120,22 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T10:47:04.292670+00:00",
-  "duration_s": 1.831,
+  "started_utc": "2026-11-12T10:48:48.810593+00:00",
+  "duration_s": 2.053,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "19889a9522446c501ce1b4cbb9c4063a62b650cb"
+    "github_sha": "4fb696f4f8b7d2df0b5c48a52dd5d3e895fd0ca0"
   },
   "stdout_tail": [
-    "........................................................................ [ 72%]",
-    "............................                                             [100%]",
+    "........................................................................ [ 69%]",
+    "...............................                                          [100%]",
     "=========================== short test summary info ============================",
     "SKIPPED [1] Tests/integration/test_arch_sweep.py:20: torch is not installed on this runner",
+    "SKIPPED [1] Tests/integration/test_hook_reach.py:15: torch is not installed on this runner",
     "SKIPPED [1] Tests/integration/test_torch_adapter.py:23: torch is not installed on this runner"
   ],
   "stderr_tail": []
