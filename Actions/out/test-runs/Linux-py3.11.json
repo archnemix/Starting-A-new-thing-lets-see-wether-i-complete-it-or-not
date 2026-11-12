@@ -3,13 +3,13 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "93 tests: 92 passed, 0 failed, 0 errors, 1 skipped",
+  "summary_line": "100 tests: 99 passed, 0 failed, 0 errors, 1 skipped",
   "counts": {
-    "passed": 92,
+    "passed": 99,
     "failed": 0,
     "errors": 0,
     "skipped": 1,
-    "total": 93
+    "total": 100
   },
   "failures": [],
   "tests": [
@@ -96,30 +96,37 @@
     "Tests.unit.test_policy::test_a_gradient_spike_triggers_storage_once_a_baseline_exists",
     "Tests.unit.test_policy::test_a_big_region_move_triggers_storage",
     "Tests.unit.test_policy::test_explicit_events_and_anchors_win_over_the_phase",
+    "Tests.unit.test_policy::test_a_gradient_spike_is_seen_even_when_history_is_flat",
+    "Tests.unit.test_policy::test_an_infinite_threshold_disables_the_trigger_even_when_history_is_flat",
+    "Tests.unit.test_policy::test_a_region_move_observed_after_a_store_triggers_the_next_step",
+    "Tests.unit.test_policy::test_region_movement_is_a_fraction_of_the_tensor_not_an_absolute_norm",
+    "Tests.unit.test_policy::test_a_zero_initialised_tensor_does_not_report_permanent_movement",
     "Tests.unit.test_recorder::test_recording_writes_a_readable_file_with_meta_and_registry",
     "Tests.unit.test_recorder::test_recording_never_changes_the_weights",
     "Tests.unit.test_recorder::test_a_recorder_fault_degrades_instead_of_breaking_training",
-    "Tests.unit.test_recorder::test_backpressure_drops_detail_instead_of_blocking",
+    "Tests.unit.test_recorder::test_a_tiny_queue_records_every_step_in_order",
     "Tests.unit.test_recorder::test_annotations_stay_out_of_the_step_observations",
     "Tests.unit.test_recorder::test_a_stored_step_keeps_the_loss_the_gradient_norm_and_the_movement",
     "Tests.unit.test_recorder::test_log_carries_the_loss_and_is_not_reused_by_the_next_step",
     "Tests.unit.test_recorder::test_the_file_states_the_tier_it_reached_and_what_it_could_not_see",
     "Tests.unit.test_recorder::test_stored_delta_covers_every_skipped_step",
-    "Tests.unit.test_recorder::test_close_reports_the_failure_it_swallowed"
+    "Tests.unit.test_recorder::test_close_reports_the_failure_it_swallowed",
+    "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
+    "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-12T09:20:03.345035+00:00",
-  "duration_s": 0.983,
+  "started_utc": "2026-11-12T10:41:59.862758+00:00",
+  "duration_s": 1.983,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "d513934078fb9bd942cbd776c203c97bfe9d9534"
+    "github_sha": "57db661b1f6f1218844d41acaafeaa673eac3a68"
   },
   "stdout_tail": [
-    "........................................................................ [ 78%]",
-    "....................                                                     [100%]",
+    "........................................................................ [ 72%]",
+    "...........................                                              [100%]",
     "=========================== short test summary info ============================",
     "SKIPPED [1] Tests/integration/test_torch_adapter.py:23: torch is not installed on this runner"
   ],
