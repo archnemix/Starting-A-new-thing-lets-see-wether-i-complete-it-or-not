@@ -6,7 +6,7 @@
     "layers": 3,
     "heads": 4,
     "out": 4,
-    "architecture": "causal transformer, 5 pre-norm blocks"
+    "architecture": "causal transformer, 3 pre-norm blocks"
   },
   "training": {
     "steps": 40,
@@ -14,13 +14,13 @@
     "loss_first": 1.393838882446289,
     "loss_last": 0.005165506154298782,
     "loss_drop": 1.3886733762919903,
-    "wall_seconds": 5.4953573749999975,
-    "step_ms_median": 11.715124999994941
+    "wall_seconds": 5.896707374999977,
+    "step_ms_median": 10.692708500002368
   },
   "recording": {
-    "path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/archx-1m-rplc4hge/transformer-1m.archx.mdl",
-    "bytes": 77022647,
-    "bytes_per_parameter": 76.70233803636016,
+    "path": "Bench/out/transformer-1m.archx.mdl",
+    "bytes": 77022650,
+    "bytes_per_parameter": 76.70234102388426,
     "steps_stored": 28,
     "steps_seen": 40,
     "store_ratio": 0.7,
@@ -51,17 +51,17 @@
   },
   "comparison": {
     "checkpoint_bytes_one_save": 4028021,
-    "recording_bytes": 77022647,
-    "ratio_recording_over_checkpoint": 19.12170939525886,
-    "bytes_per_stored_step": 2750808.8214285714,
-    "ratio_per_step": 0.6829181926878165,
+    "recording_bytes": 77022650,
+    "ratio_recording_over_checkpoint": 19.121710140041476,
+    "bytes_per_stored_step": 2750808.9285714286,
+    "ratio_per_step": 0.6829182192871955,
     "note": "the checkpoint figure is ONE step; the recording holds every stored step, so the per-step ratio is the like-for-like number and the total is not"
   },
   "overhead": {
-    "recorder_encode_seconds": 5.819470419999902,
-    "recorder_copy_seconds": 0.01877716799992868,
+    "recorder_encode_seconds": 6.67670454200001,
+    "recorder_copy_seconds": 0.025589164000052733,
     "blocks_written": 28,
-    "waited": 5
+    "waited": 3
   },
   "activations": {
     "summaries": 784,
