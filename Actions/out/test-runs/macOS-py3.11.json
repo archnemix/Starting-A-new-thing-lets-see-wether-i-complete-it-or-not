@@ -3,13 +3,13 @@
   "label": "macOS-py3.11",
   "command": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/Users/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/macOS-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "282 tests: 282 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "286 tests: 286 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 282,
+    "passed": 286,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 282
+    "total": 286
   },
   "failures": [],
   "tests": [
@@ -45,6 +45,9 @@
     "Tests.integration.test_example_gradients::test_dense_history_examples_and_sgd_update",
     "Tests.integration.test_example_gradients::test_trace_rejects_incorrect_loss_and_budget",
     "Tests.integration.test_example_gradients::test_trace_requires_dense_mode",
+    "Tests.integration.test_example_gradients::test_shuffle_lossless_and_legacy_and_new_blocks",
+    "Tests.integration.test_example_gradients::test_shuffled_trace_corruption_is_rejected",
+    "Tests.integration.test_example_gradients::test_deep_trace_waits_when_writer_falls_behind_without_losing_steps",
     "Tests.integration.test_file_map::test_every_tracked_file_has_an_entry",
     "Tests.integration.test_file_map::test_no_entry_describes_a_file_that_no_longer_exists",
     "Tests.integration.test_file_map::test_every_entry_has_the_four_fields_the_rules_list",
@@ -173,6 +176,7 @@
     "Tests.unit.container.test_writer::test_blocks_roundtrip_and_footer_is_written",
     "Tests.unit.container.test_writer::test_block_prefix_records_raw_and_stored_lengths",
     "Tests.unit.container.test_writer::test_abort_leaves_a_readable_file_without_footer",
+    "Tests.unit.container.test_writer::test_best_block_uses_smallest_lossless_candidate_and_raw_fallback",
     "Tests.unit.data.test_activations::test_a_summary_matches_the_exact_statistics_of_its_tensor",
     "Tests.unit.data.test_activations::test_several_forwards_combine_without_keeping_any_of_them",
     "Tests.unit.data.test_activations::test_a_strided_sample_still_describes_the_whole_tensor",
@@ -296,21 +300,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-13T16:15:03.615693+00:00",
-  "duration_s": 30.118,
+  "started_utc": "2026-11-13T17:08:54.045891+00:00",
+  "duration_s": 53.913,
   "runner": {
     "os": "macOS-26.7.2-arm64-arm-64bit",
     "github_os": "macOS",
     "github_arch": "ARM64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "659bab81a18618e1453ca68fd51c7880d722184c"
+    "github_sha": "661ccc75e044a60b5f833e737720f2ac8a6dec3d"
   },
   "stdout_tail": [
     "........................................................................ [ 25%]",
-    "........................................................................ [ 51%]",
-    "........................................................................ [ 76%]",
-    "..................................................................       [100%]",
+    "........................................................................ [ 50%]",
+    "........................................................................ [ 75%]",
+    "......................................................................   [100%]",
     "=============================== warnings summary ===============================",
     "../../../../../Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31",
     "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31: UserWarning: Skipping device Apple Paravirtual device that does not support Metal 2.0 (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/mps/MPSDevice.mm:28.)",
@@ -332,7 +336,7 @@
     "Tests/integration/test_lightning_adapter.py::test_gradient_accumulation_gives_one_store_point_per_update",
     "Tests/integration/test_lightning_adapter.py::test_an_explicit_policy_reaches_the_recorder",
     "Tests/integration/test_lightning_adapter.py::test_the_metadata_says_which_adapter_and_model",
-    "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=4` in the `DataLoader` to improve performance.",
+    "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/lightning/pytorch/trainer/connectors/data_connector.py:434: The 'train_dataloader' does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` to `num_workers=2` in the `DataLoader` to improve performance.",
     "",
     "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html"
   ],
