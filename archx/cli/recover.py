@@ -20,4 +20,14 @@ def run_recover(path: str, *, out: str | None = None) -> int:
     print(f"blocks kept    {report.blocks_kept}")
     print(f"bytes dropped  {report.bytes_truncated}")
     print("footer         written")
+    # Without this line the run's own capability statement is simply gone from a recovered
+    # file, and `archx info` reports the floor tier for a recording that is entirely intact
+    # except for its tail. Say what was rebuilt, and show the tier it settled on.
+    if report.capability_written:
+        from ..container.reader import Reader
+
+        tier = Reader(report.path).capabilities().get("capability_tier")
+        print(f"capabilities   rebuilt from the blocks that survived; tier {tier}")
+    else:
+        print("capabilities   kept as the run wrote them")
     return 0

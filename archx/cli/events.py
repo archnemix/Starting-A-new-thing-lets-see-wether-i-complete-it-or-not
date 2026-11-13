@@ -32,13 +32,24 @@ def run_events(path: str, *, as_json: bool = False) -> int:
                          indent=2, sort_keys=True))
         return 0
 
+    # A region with no name is not a region. The launcher (adapter=launcher) cannot see
+    # module names, so every one of its tensors registers with region "", and this column
+    # printed `moved ` - an empty label that reads as a formatting glitch rather than the
+    # honest answer, which is that this recording has no region information at all. The
+    # warning `archx run` prints already says so; the table must not pretend otherwise.
+    unnamed_regions = not any(info.region for info in timeline.tensors)
     print(f"steps          {len(timeline.steps)}")
     print(f"observations   {len(observations)}")
     for event in observations[:50]:
         loss = event.get("loss")
         grad = event.get("grad_norm")
         regions = event.get("regions") or {}
-        moved = max(regions.items(), key=lambda item: item[1])[0] if regions else ""
+        if unnamed_regions:
+            moved = "(no region names in this file)"
+        elif not regions:
+            moved = "(nothing recorded)"
+        else:
+            moved = max(regions.items(), key=lambda item: item[1])[0] or "(unnamed)"
         print(f"  step {event.get('step'):>6}  loss {_num(loss):>10}  "
               f"grad {_num(grad):>10}  moved {moved}")
     print(f"annotations    {len(annotations)}")

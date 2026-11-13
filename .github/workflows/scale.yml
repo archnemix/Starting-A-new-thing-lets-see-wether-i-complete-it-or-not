@@ -87,8 +87,14 @@ jobs:
           set -euo pipefail
           mkdir -p Actions/out/scale
           label="${RUNNER_OS}-py${{ matrix.python }}"
+          # --out puts the recording in a path this job controls, and --hand-test runs the
+          # shipped CLI against it. The scheduler's own temp directory is not a place CI can
+          # read back from (the Ubuntu artifact step failed on /tmp/snap-private-tmp), and a
+          # scale test whose only output is a JSON summary has not shown the product working -
+          # it has shown the library working.
           python Bench/scale_1m_parameters.py \
-            --steps "$STEPS" --batch "$BATCH" \
+            --steps "$STEPS" --batch "$BATCH" --hand-test \
+            --out "Bench/out/transformer-1m.archx.mdl" \
             --json-out "Actions/out/scale/${label}.json" \
             | tee "Actions/out/scale/${label}.txt"
 
@@ -132,6 +138,23 @@ jobs:
                 f"error {fidelity['max_abs_error_vs_live']:.2e}, "
                 f"{comparison['ratio_per_step']:.2f}x a checkpoint per step, "
                 f"{recording['bytes']:,} bytes")
+
+          # The library's own numbers are asserted above. This is the product's: the
+          # transcript next to the JSON must show every hand-test check passing. The count is
+          # read from the transcript rather than pinned here, so adding a check to the bench
+          # does not make this assertion wrong - only a failing one can.
+          import re
+
+          transcript = Path(f"Actions/out/scale/{label}.txt").read_text()
+          assert "hand test        the shipped CLI, on this file" in transcript, (
+              "the run did not hand-test the file with the shipped CLI")
+          tail = transcript.split("hand test", 1)[1]
+          assert "FAIL" not in tail, tail[-2000:]
+          summary = re.search(r"^\s+(\d+)/(\d+) pass$", tail, re.M)
+          assert summary, f"the hand test printed no summary:\n{tail[-2000:]}"
+          passed, total = int(summary.group(1)), int(summary.group(2))
+          assert passed == total and total >= 8, (
+              f"the hand test passed {passed} of {total} checks")
           PY
 
       - name: Keep the recording as an artifact
@@ -142,11 +165,16 @@ jobs:
           # expensive for anyone who clones. The facts are what is committed; the file is
           # available for a week if somebody wants to open it.
           name: recording-1m-${{ matrix.os }}
+          # The bench writes here, not to the system temp directory. Globbing /tmp was the
+          # whole failure: on the Ubuntu runner `actions/upload-artifact` cannot scandir
+          # /tmp/snap-private-tmp and the step died with EACCES, so a green scale test had no
+          # file behind it. The two files are the recording and the reconstruction of one of
+          # its own steps, which is what a reader would want to open first.
           path: |
-            /tmp/**/*.archx.mdl
-            ${{ runner.temp }}/**/*.archx.mdl
+            Bench/out/*.archx.mdl
+            Bench/out/*.npz
           retention-days: 7
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       - name: Record the result
         if: always()

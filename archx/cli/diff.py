@@ -48,8 +48,18 @@ def _diff_steps(path: str, step_a: int | None, step_b: int | None, *, as_json: b
     step_b = steps[-1] if step_b is None else step_b
     for name in (step_a, step_b):
         if name not in steps:
-            print(f"archx: step {name} is not stored, and cannot be rebuilt from the file; "
-                  f"stored steps are {_span(steps)}", file=sys.stderr)
+            # Not "cannot be rebuilt": the file *can* answer a step between two store points
+            # (that is `archx reconstruct`, and it is the format's headline promise). This
+            # command compares store points, so the honest refusal names the wrong thing and
+            # points at the command that does answer it - the earlier wording contradicted
+            # the library it belongs to.
+            if steps[0] < name < steps[-1]:
+                print(f"archx: step {name} is not a store point, so there is no recorded "
+                      f"movement to compare at it; stored steps are {_span(steps)}. "
+                      f"For the weights at step {name}, use `archx reconstruct`.", file=sys.stderr)
+            else:
+                print(f"archx: step {name} is outside the recorded range {steps[0]}-{steps[-1]}; "
+                      f"stored steps are {_span(steps)}", file=sys.stderr)
             return 1
 
     before = timeline.reconstruct(step_a)
@@ -80,7 +90,13 @@ def _diff_steps(path: str, step_a: int | None, step_b: int | None, *, as_json: b
         "path": path,
         "step_a": step_a,
         "step_b": step_b,
-        "steps_between": len([s for s in steps if step_a < s <= step_b]),
+        # The number of recorded updates the difference is the sum of, so that `moved` can be
+        # read per update. It used to be called "steps_between" and printed as "8 stored
+        # steps in the file between them" for step 0 -> 19 with 9 store points in the file:
+        # eight is the count of intervals, not of steps in between (seven), and the label
+        # said the wrong one of the two true numbers.
+        "updates_folded": len([s for s in steps if step_a < s <= step_b]),
+        "steps_between": len([s for s in steps if step_a < s < step_b]),
         "tensors": rows,
         "total_moved": total_moved,
     }
@@ -89,7 +105,7 @@ def _diff_steps(path: str, step_a: int | None, step_b: int | None, *, as_json: b
         return 0
 
     print(f"comparing  step {step_a} -> step {step_b}  "
-          f"({payload['steps_between']} stored step(s) in the file between them)")
+          f"({payload['updates_folded']} recorded update(s) folded into the difference)")
     print(f"{'tensor':<44}{'shape':>14}{'moved':>12}{'relative':>11}  region")
     print("-" * 92)
     for row in rows[:25]:
@@ -114,6 +130,7 @@ def _diff_files(path: str, other: str, *, as_json: bool) -> int:
     # step differs because it inherited the difference, and listing them all says nothing new.
     first_difference = None
     rows = []
+    compared = 0
     for step in common:
         left, right = first.reconstruct(step), second.reconstruct(step)
         worst = None
@@ -124,6 +141,7 @@ def _diff_files(path: str, other: str, *, as_json: bool) -> int:
             b = np.asarray(right[key], dtype=np.float64).ravel()
             if a.size != b.size:
                 continue
+            compared += 1
             size = float(np.linalg.norm(a))
             relative = float(np.linalg.norm(b - a)) / size if size else 0.0
             if relative and (worst is None or relative > worst["relative"]):
@@ -133,12 +151,20 @@ def _diff_files(path: str, other: str, *, as_json: bool) -> int:
             if first_difference is None:
                 first_difference = {"step": step, **worst}
 
+    # Two files recorded by different adapters name their tensors differently (`embed.weight`
+    # against `param[0][0]`), so they can share step numbers and compare nothing. The emptiness
+    # check above read as "they agree at every shared step" - the strongest verdict this
+    # command can give - on zero comparisons. It is not a difference and it is not agreement;
+    # it is a file pair this command cannot answer, and it has to say so.
+    shared_keys = {info.key for info in first.tensors} & {info.key for info in second.tensors}
     payload = {
         "a": path,
         "b": other,
         "steps_a": len(first.steps),
         "steps_b": len(second.steps),
         "common_steps": len(common),
+        "compared_values": compared,
+        "shared_tensors": len(shared_keys),
         "only_in_a": only_first,
         "only_in_b": only_second,
         "first_difference": first_difference,
@@ -155,8 +181,14 @@ def _diff_files(path: str, other: str, *, as_json: bool) -> int:
         print(f"only in a      {_span(only_first)}")
     if only_second:
         print(f"only in b      {_span(only_second)}")
+    if compared == 0:
+        print(f"shared tensors 0 of {len(first.tensors)} and {len(second.tensors)}: the two files "
+              f"name their weights differently")
+        print("verdict        cannot compare - no tensor name is present in both files")
+        return 0
     if first_difference is None:
-        print("verdict        identical at every common step")
+        print(f"verdict        identical at every common step "
+              f"({compared:,} values compared)")
         return 0
     print(f"verdict        first difference at step {first_difference['step']}: "
           f"{first_difference['tensor']} by {first_difference['relative']:.3e} "

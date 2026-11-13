@@ -163,7 +163,6 @@ class Recorder:
             "attribution": "observational",
             "data_level": self.data.level.value,
             "tensors": len(registry),
-            "activation_capture": bool(activations),
             "ties": sum(1 for e in registry if e.tie_group),
             **(meta or {}),
         }

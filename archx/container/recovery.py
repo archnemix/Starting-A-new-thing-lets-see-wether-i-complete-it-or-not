@@ -6,16 +6,20 @@ an existing container, and it only ever truncates and re-appends.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..capabilities import Capabilities
 from ..errors import CorruptBlockError, FormatError
+from .compress import decompress
 from .reader import Reader, read_header
 from .schema import (
     BLOCK,
+    Codec,
     BLOCK_CRC_SPAN,
     BLOCK_SIZE,
     STEP_NONE,
@@ -37,6 +41,8 @@ class RecoveryReport:
     bytes_truncated: int
     had_footer: bool
     recovered: bool
+    #: True when recovery had to state the tier itself, because the crash came before close.
+    capability_written: bool = False
 
 
 def _good_prefix_end(data: bytes, max_block_bytes: int) -> tuple[int, int]:
@@ -73,8 +79,9 @@ def recover_in_place(path: str | os.PathLike[str], *, max_block_bytes: int = 2 *
     with open(p, "r+b") as fh:
         fh.truncate(end)
         # block count is not tracked separately: the index is rebuilt from what survived.
+        capsule = _append_capabilities(fh, data[:end])
         index_payload = _rebuild_index(data[:end])
-        fh.seek(end)
+        fh.seek(0, os.SEEK_END)
         index_offset = fh.tell()
         stored = index_payload
         prefix = _block_prefix(BlockType.INDEX, len(stored), zlib_crc32(stored))
@@ -84,7 +91,7 @@ def recover_in_place(path: str | os.PathLike[str], *, max_block_bytes: int = 2 *
         fh.write(footer_bytes(
             index_offset=index_offset,
             index_len=index_len,
-            block_count=kept + 1,
+            block_count=kept + 1 + capsule,
             step_count=0,
             anchor_count=0,
         ))
@@ -93,13 +100,73 @@ def recover_in_place(path: str | os.PathLike[str], *, max_block_bytes: int = 2 *
 
     _set_recovered_flag(p)
     return RecoveryReport(str(p), blocks_kept=kept, bytes_truncated=truncated,
-                          had_footer=had_footer, recovered=True)
+                          had_footer=had_footer, recovered=True, capability_written=bool(capsule))
 
 
 def recover_copy(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> RecoveryReport:
     """Recover into a new file and leave the original untouched."""
     shutil.copyfile(src, dst)
     return recover_in_place(dst)
+
+
+def _append_capabilities(fh, data: bytes) -> int:
+    """Rewrite the capability block from the blocks that survived. Returns blocks written.
+
+    A crash happens *before* close, and the capability block is written at close - so a
+    recovered file had none, and `archx info` fell back to META's `capability_tier: 0`, the
+    floor. A 150-step tier-3 recording, torn at the tail and then recovered exactly as
+    `archx recover` promises, went on to describe itself as a file with nothing but step
+    counters. The tier is a measured fact about the run, and every measurement it is derived
+    from is still on disk: loss and gradient norms in the events, data segments, activation
+    summaries. So it is recomputed here from what survived, never copied from what was lost.
+
+    If the file already has a capability block, it is left exactly as written: the run's own
+    statement about itself outranks a second opinion computed from blocks.
+    """
+    available: set[str] = {"steps", "deltas"}
+    offset = HEADER_SIZE
+    total = len(data)
+    while offset + BLOCK_SIZE <= total:
+        block_type, codec, _flags, _step, raw_len, payload_len, _pcrc, _bcrc = BLOCK.unpack(
+            data[offset:offset + BLOCK_SIZE]
+        )
+        end = offset + BLOCK_SIZE + payload_len
+        if end > total:
+            break
+        try:
+            body = decompress(data[offset + BLOCK_SIZE:end], Codec(codec), raw_len=raw_len)
+        except Exception:                       # noqa: BLE001 - an unreadable block says nothing
+            offset = end
+            continue
+        offset = end
+        if block_type == int(BlockType.EVENT):
+            try:
+                event = json.loads(body)
+            except ValueError:
+                continue
+            if event.get("loss") is not None:
+                available.add("loss")
+            if event.get("grad_norm") is not None:
+                available.add("grad_norms")
+            if event.get("lr") is not None:
+                available.add("learning_rate")
+        elif block_type == int(BlockType.DATA_SEGMENT):
+            available.add("data_segments")
+        elif block_type == int(BlockType.ACTIVATION):
+            available.add("activations")
+        elif block_type == int(BlockType.INFO):
+            try:
+                if json.loads(body).get("event") == "capabilities":
+                    return 0          # the run closed its own statement; do not overrule it
+            except ValueError:
+                continue
+    payload = {"event": "capabilities", **Capabilities(available).resolve().to_dict(),
+               "recomputed_by_recovery": True}
+    encoded = json.dumps(payload).encode()
+    fh.seek(0, os.SEEK_END)
+    fh.write(_block_prefix(BlockType.INFO, len(encoded), zlib_crc32(encoded)))
+    fh.write(encoded)
+    return 1
 
 
 def _block_prefix(block_type: BlockType, payload_len: int, payload_crc: int) -> bytes:

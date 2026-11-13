@@ -786,3 +786,69 @@ test red, and every one of them produced output that a careful reader would have
 difference this time is that the suspicious numbers were *impossible* rather than merely
 unexpected, so the measurement argued with itself.
 
+## Scale test: the first file big enough to argue back
+
+Three phases of work measured everything on models of 6,000-18,000 parameters, because that is
+what fits in a unit test and runs in a second. The instruction was to train a million-parameter
+model and hand-test the product on it, on GitHub Actions. That is 60x the parameters and 3.7x the
+bytes per checkpoint, and both halves - the run and the test - produced defects that no smaller
+model could have.
+
+**A parameter budget by hand is a guess wearing a number.** The first shape was worked out on
+paper: embeddings plus `4d²` of attention plus `2d²` of MLP per block, which came to 1,002,292.
+`count_parameters` on the real module said **1,244,732** - 25% over the target, because the
+arithmetic had no LayerNorms and no attention out-projection. The shape that actually measures
+1,004,176 (d=164, three blocks, vocab 2100) was found by sweeping the real counter. The comment
+in the bench keeps the wrong number, because the wrong number is the reason the code looks the
+way it does.
+
+**The scale claim survived; the file size claim needed a denominator.** The recording rebuilds all
+1,004,176 values to 9.31e-10 on Linux, Windows and macOS, and costs **0.64-0.68x a checkpoint per
+stored step**. The first version of the bench printed `recording / one_checkpoint` instead, which
+was 7.16x at 10 stored steps and reads as "the recorder is seven times a checkpoint". Both numbers
+are true; only one of them is the like-for-like comparison, and the bench now prints both with the
+label that says which is which. A ratio whose denominator is a different *quantity* is the data
+layer's capture-overhead mistake in another costume.
+
+**Hand-testing found what unit tests structurally cannot.** The suite had 240 tests, all green,
+and every one of them called the library. A user calls the CLI. Running the five shipped commands
+against a real 1M file found, in order:
+
+1. `archx reconstruct --step 2` exited 1 - "step 2 is not recorded" - while
+   `Timeline.reconstruct(2)` returned all 1,004,176 values. The command refused the product's
+   headline promise *on the product's own file*, and the test suite agreed with the command
+   because the suite only ever asked for stored steps.
+2. `archx diff --other` compared two files that share step numbers and no tensor names, compared
+   zero values, and printed "identical at every common step" - its strongest possible verdict - on
+   nothing. The emptiness check read as agreement.
+3. `archx recover` closed a crashed file and left it reporting `capability_tier 0`, because the
+   capability block is written at close and the crash happened before close. A 20-step tier-3 run
+   became, after recovery, a file that claimed it could see nothing but a step counter.
+4. `archx info` read that same crashed file while `archx reconstruct` refused it - two commands
+   disagreeing about what the same bytes were, and the stricter one was the one with the answer.
+5. `archx diff` labelled 8 intervals as "8 stored steps in between" when 7 steps are between.
+6. `archx events` printed an empty `moved ` column for launcher recordings, which have no region
+   names - a blank where the honest answer ("this file has no region names") belongs.
+7. Every tier-3 file this project ever wrote said `activation_capture: false` in META while
+   holding hundreds of summaries, because the field was `bool(ActivationCapture)` and that object
+   is falsy until something has been captured - which is *after* the moment META is written. Two
+   halves of the same file disagreeing, and nothing read the field, so nothing could notice.
+
+**Eight statements, one shape.** Every one of them is a sentence in the product that is not true,
+and none of them crashed or turned a test red. The suite tests what the code *returns*; a user
+reads what the product *says*. That gap is where all eight lived, and the difference from the
+earlier rounds is that this time the products were large enough for the sentences to be about
+something - 1,004,176 parameters, a 134 MB file, 150 steps of history - which is exactly where a
+wrong sentence stops being cosmetic.
+
+**CI could not keep the evidence.** The Ubuntu artifact step failed with
+`EACCES: permission denied, scandir '/tmp/snap-private-tmp'` because the workflow globbed
+`/tmp/**/*.archx.mdl` and the bench wrote its recording to a `mkdtemp()`. The scale test was green
+in every step that measured anything and had no file behind it. The recording now goes to
+`Bench/out/`, the artifact step fails loudly if it is missing, and the hand test runs *inside the
+bench* so the workflow asserts on the CLI's text rather than trusting that it was run.
+
+**What is still a promise and not a measurement.** `Plan/Architecture.md` §6.11 lists tier 3 as
+including eval metrics. No adapter records them, and until this round every tier-3 file said so
+anyway. The file no longer claims it; the architecture still plans it. That gap is deliberate and
+named, which is the only honest state for it.

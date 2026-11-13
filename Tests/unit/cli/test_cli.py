@@ -80,6 +80,38 @@ class _Toy:
         return self.params[key]
 
 
+def _record_with_gaps(tmp_path, steps=6):
+    """A recording that stores some steps and skips the rest, so gaps are a fact.
+
+    Every other fixture here stores every step (short runs stay in warmup), which is why the
+    gap tests need their own: what the product promises about a skipped step is the whole
+    point of the format, and a fixture with no skipped step proves nothing about it.
+    """
+    from archx.policy import PhasePolicy, Triggers
+    from archx.recorder import Recorder
+
+    model = _Toy()
+    path = tmp_path / "gaps.archx.mdl"
+    recorder = Recorder(model.registry(), model.read, str(path),
+                        policy=PhasePolicy(total_steps=steps, min_warmup_steps=2,
+                                           heartbeat_steps=2,
+                                           triggers=Triggers(region_move_fraction=1e9,
+                                                             loss_drop_fraction=1e9,
+                                                             grad_norm_zscore=1e9)))
+    for step in range(steps):
+        model.params["w"] += np.float32(0.01) * step
+        recorder.step(step, loss=1.0 / (step + 1), data=b"batch text " * 4)
+    recorder.close()
+
+    from archx.container.reader import Reader
+    from archx.container.values import Timeline
+
+    stored = Timeline(Reader(path)).steps
+    assert [s for s in range(stored[0], stored[-1] + 1) if s not in stored], (
+        f"the policy stored every step ({stored}); the fixture is not exercising a gap")
+    return path
+
+
 def _make_run(tmp_path, steps=3):
     from archx.policy import PhasePolicy
     from archx.recorder import Recorder
@@ -112,12 +144,35 @@ def test_reconstruct_writes_weights_that_match_the_live_run(tmp_path, capsys):
     assert "written" in capsys.readouterr().out
 
 
-def test_reconstruct_defaults_to_the_last_step_and_refuses_unknown_steps(tmp_path, capsys):
+def test_reconstruct_defaults_to_the_last_step_and_refuses_steps_outside_the_file(
+        tmp_path, capsys):
     path, _live = _make_run(tmp_path, steps=2)
     out = tmp_path / "last.npz"
     assert main(["reconstruct", str(path), "--out", str(out)]) == 0
     assert main(["reconstruct", str(path), "--step", "99"]) == 1
-    assert "not recorded" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "outside it" in error and "0-1" in error, error
+
+
+def test_reconstruct_answers_a_step_between_two_store_points(tmp_path, capsys):
+    """The format's headline promise, reached through the CLI rather than the library.
+
+    `archx reconstruct --step 2` on a 20-step 1M recording exited 1 with "step 2 is not
+    recorded" while `Timeline.reconstruct(2)` returned all 1,004,176 values: a command that
+    refused the one thing the product exists to do. A store point is the exception, not the
+    rule - the policy skips most steps in the middle of a run.
+    """
+    from archx.container.reader import Reader
+    from archx.container.values import Timeline
+
+    path = _record_with_gaps(tmp_path)
+    stored = Timeline(Reader(path)).steps
+    target = max(s for s in range(stored[0], stored[-1] + 1) if s not in stored)
+    assert main(["reconstruct", str(path), "--step", str(target),
+                 "--out", str(tmp_path / "gap.npz")]) == 0
+    printed = capsys.readouterr().out
+    assert "stored         no" in printed
+    assert f"anchor at step {max(s for s in stored if s <= target)}" in printed
 
 
 def test_events_lists_the_annotation_and_the_segment(tmp_path, capsys):
@@ -175,8 +230,56 @@ def test_diff_refuses_a_step_the_file_does_not_have(tmp_path, capsys):
     path = _record_two(tmp_path)
     assert main(["diff", str(path), "--step", "10000"]) == 1
     message = capsys.readouterr().err
-    assert "not stored" in message
-    assert "cannot be rebuilt" in message
+    assert "outside the recorded range" in message
+    assert "stored steps are" in message
+    # It must not claim the step cannot be rebuilt: `archx reconstruct` does exactly that.
+    assert "cannot be rebuilt" not in message
+
+
+def test_diff_at_an_unstored_step_points_at_reconstruct_instead_of_lying(tmp_path, capsys):
+    """A gap step has weights, but no recorded *movement* to compare.
+
+    The old refusal said the step "cannot be rebuilt from the file", which is false for every
+    step between two store points - and the same binary answers those through
+    `archx reconstruct`. So the refusal names the real limitation and the command that helps.
+    """
+    from archx.cli.main import main
+    from archx.container.reader import Reader
+    from archx.container.values import Timeline
+
+    path = _record_with_gaps(tmp_path)
+    stored = Timeline(Reader(path)).steps
+    gap = [s for s in range(stored[0], stored[-1] + 1) if s not in stored]
+    assert main(["diff", str(path), "--step", str(gap[0])]) == 1
+    message = capsys.readouterr().err
+    assert "not a store point" in message
+    assert "archx reconstruct" in message
+
+
+def test_diff_between_files_that_share_no_tensor_names_says_so(tmp_path, capsys):
+    """Two adapters, one step numbering, no shared tensor name.
+
+    `diff --other` compared only names present in both files, found nothing to disagree on,
+    and printed "identical at every common step" - its strongest verdict - having compared
+    zero values. A launcher recording (param[0][0]) against an attach recording
+    (embed.weight) hits this every time, and the verdict was the opposite of the truth: the
+    command had answered nothing at all.
+    """
+    from archx.cli.main import main
+
+    named = _record_two(tmp_path, name="named.archx.mdl")      # 0.weight, 0.bias, ...
+    bare, _live = _make_run(tmp_path)                          # one tensor, named "w"
+    assert main(["diff", str(named), "--other", str(bare), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["common_steps"] > 0, "the test needs shared step numbers to mean anything"
+    assert payload["shared_tensors"] == 0
+    assert payload["compared_values"] == 0
+    assert payload["first_difference"] is None
+
+    assert main(["diff", str(named), "--other", str(bare)]) == 0
+    printed = capsys.readouterr().out
+    assert "cannot compare" in printed
+    assert "identical at every common step" not in printed
 
 
 def test_two_identical_runs_diff_as_identical(tmp_path, capsys):
@@ -224,3 +327,70 @@ def test_run_needs_a_command():
     from archx.cli.main import main
 
     assert main(["run", "--"]) == 2
+
+
+def test_events_says_when_a_file_has_no_region_names(tmp_path, capsys):
+    """The launcher cannot see module names, so every tensor registers with region "".
+
+    The table printed `moved ` - an empty label, which reads as a formatting glitch instead of
+    the honest answer, that this recording has no region information at all.
+    """
+    from archx.policy import PhasePolicy
+    from archx.recorder import Recorder
+
+    class _Bare:
+        """No region at all: what the launcher's hook produces."""
+
+        def __init__(self):
+            self.params = {"param[0][0]": np.zeros((4, 4), dtype=np.float32)}
+
+        def registry(self):
+            from archx.formats.registry import TensorRegistry
+
+            reg = TensorRegistry()
+            for key, array in self.params.items():
+                reg.add(key, array)
+            return reg
+
+        def read(self, key):
+            return self.params[key]
+
+    model = _Bare()
+    path = tmp_path / "bare.archx.mdl"
+    recorder = Recorder(model.registry(), model.read, str(path),
+                        policy=PhasePolicy(total_steps=3, min_warmup_steps=3))
+    for step in range(3):
+        model.params["param[0][0]"] += np.float32(0.01)
+        recorder.step(step, loss=1.0 / (step + 1), grad_norm=2.0, data=b"batch " * 8)
+    recorder.close()
+
+    assert main(["events", str(path)]) == 0
+    printed = capsys.readouterr().out
+    assert "no region names in this file" in printed
+    # An empty `moved ` column is what a formatting bug looks like; it must not be there.
+    for line in printed.splitlines():
+        assert not line.rstrip().endswith("moved"), line
+
+
+def test_diff_says_how_many_recorded_updates_it_folded_together(tmp_path, capsys):
+    """Eight intervals is not "8 stored steps between" step 0 and step 19.
+
+    `moved` is the sum of every recorded update in the span, and the old label counted the
+    intervals while calling them steps. Both numbers are true; only one of them is what the
+    moved column contains, and the label named the other one.
+    """
+    path = _record_with_gaps(tmp_path)
+    from archx.container.reader import Reader
+    from archx.container.values import Timeline
+
+    steps = Timeline(Reader(path)).steps
+    assert main(["diff", str(path), "--step", str(steps[0]), "--step-b", str(steps[-1]),
+                 "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["updates_folded"] == len(steps) - 1, steps
+    assert payload["steps_between"] == len(steps) - 2, steps
+
+    assert main(["diff", str(path), "--step", str(steps[0]), "--step-b", str(steps[-1])]) == 0
+    printed = capsys.readouterr().out
+    assert f"({len(steps) - 1} recorded update(s) folded into the difference)" in printed
+    assert "stored step(s) in the file between them" not in printed

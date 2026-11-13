@@ -302,6 +302,92 @@ list cannot tell that apart from a real failure.
 Tests: **245 passed** locally (241 python + 4 signpost), including 21 codec tests, 5 join
 round-trip tests and the npm package's own 8.
 
+## v1.0.2 - not released yet (a 1M-parameter model trained on CI, and the CLI tested on it)
+
+The first time anything in this project met a model whose weights are megabytes, and the first
+time the shipped commands were run against one. Both halves found defects.
+
+### A 1,004,176-parameter transformer, trained and recorded on GitHub runners
+
+`Bench/scale_1m_parameters.py`, workflow `.github/workflows/scale.yml`, run `43437641445`
+(Linux 150 steps, Windows and macOS 40 steps each, Python 3.11, CPU).
+
+| | Linux | Windows | macOS |
+|---|---|---|---|
+| parameters | 1,004,176 | 1,004,176 | 1,004,176 |
+| loss, first -> last | 1.3938 -> 0.0014 | -> 0.0052 | -> 0.0052 |
+| stored steps | 52/150 | 28/40 | 28/40 |
+| recording | 134,264,929 B | 77,021,687 B | 77,022,647 B |
+| rebuild, max abs error | 9.31e-10 | 9.31e-10 | 9.31e-10 |
+| values rebuilt / parameters | 1,004,176 / 1,004,176 | same | same |
+| per stored step vs one checkpoint | 0.64x | 0.68x | 0.68x |
+| tier | 3 | 3 | 3 |
+
+- The claim the whole project rests on - a recording rebuilds the live weights at a store point -
+  holds at 1M parameters on a runner that is not this sandbox: every one of the 1,004,176 values,
+  to float32 rounding.
+- **0.64x a checkpoint per stored step**, where the checkpoints are 6,000-18,000-parameter models
+  elsewhere in this repo. The ratio is stable across a 3.7x size increase and three operating
+  systems, which is the first evidence that it is a property of the format rather than of a small
+  model.
+- 0 dead summaries, 0 saturated, 1,456 activation summaries on Linux. The transformer is not
+  secretly broken at 1M.
+- The bench writes to `Bench/out/` now, not to a `mkdtemp()` under `/tmp`: the Ubuntu artifact
+  step failed with `EACCES: permission denied, scandir '/tmp/snap-private-tmp'`, so the run that
+  proves the scale claim left no file behind it. Globbing `/tmp` for artifacts was the error.
+
+### Hand-tested: the shipped CLI, on the 1M file, for the first time
+
+`python Bench/scale_1m_parameters.py --hand-test` drives `archx info`, `events`, `activations`,
+`reconstruct` and `diff` as subprocesses against the recording the run just produced, and asserts
+on their text. 11/11 pass on all three runners, and the workflow fails if any check fails. Six
+defects came out of doing it at this size, all of them statements in the product that were not
+true:
+
+1. **`archx reconstruct` refused steps the library answers.** `--step 2` on a 20-step run exited
+   1 with "step 2 is not recorded" while `Timeline.reconstruct(2)` returned all 1,004,176
+   values. Skipping steps is the recorder's normal behaviour, so the product's headline command
+   was unable to do the product's headline job. It now answers any step inside the recorded
+   range, prints `stored no (rebuilt from the anchor at step N)`, and points at `archx recover`
+   when the file is torn.
+2. **`archx diff` prided itself on comparing nothing.** Two files that share step numbers but no
+   tensor names - a launcher recording (`param[0][0]`) against an attach recording
+   (`embed.weight`) - compared zero values and printed "identical at every common step", its
+   strongest verdict. It now reports `shared_tensors: 0` and `verdict: cannot compare`.
+3. **`archx diff` mislabelled its own count.** Step 0 -> 19 on a 9-store-point file printed "8
+   stored step(s) in the file between them": eight is the number of *intervals* folded into the
+   difference, and the steps strictly between the two are seven. It now says "8 recorded
+   update(s) folded into the difference", with `updates_folded` and `steps_between` both in
+   `--json`.
+4. **Recovery threw away the tier.** The capability block is written at close; a crash happens
+   before close; so `archx recover` produced a file that reported `capability_tier 0` (META's
+   floor) for a run that had recorded loss, data and 1,456 activation summaries. Recovery now
+   recomputes the tier from the blocks that survived, marks it `recomputed_by_recovery: true`,
+   and never overrules a capability block the run itself wrote.
+5. **`archx reconstruct` could not read a crashed file that `archx info` had just read.**
+   `info` used `allow_torn=True` and reported nine recoverable steps; `reconstruct` refused the
+   same bytes. It now reads them and prints a warning.
+6. **Every tier-3 file said its activation capture was off.** META carried
+   `activation_capture: bool(activations)`, and `ActivationCapture.__bool__` is "has anything
+   been captured yet" - false at attach, which is when META is written. So the header
+   contradicted the body in every tier-3 file this project produced, and nothing read the field,
+   which is how it survived every release. The field is no longer written; `Reader.
+   activation_capture()` answers from the blocks, and `archx info` prints the answer and names
+   the contradiction in old files instead of repeating it.
+
+Also fixed: tier 3's description said "activation statistics, **eval results**" in every file's
+capability block, and no adapter has ever recorded an eval result. The promise is gone from the
+file until there is a block to back it (`test_every_tier_meaning_describes_exactly_the_fields_
+that_tier_promises` is the mechanical guard). `archx events` printed an empty `moved ` column for
+launcher recordings, which have no region names; it now says so. And the bench claimed its model
+was "causal transformer, 5 pre-norm blocks" in the JSON it committed to CI, where the model has
+three - a hand-counted constant that outlived the shape it described.
+
+Tests: 251 collected and green locally (2 skipped: the Hugging Face and Lightning modules, whose
+libraries are not installed here), where `HEAD` before the change collected 240. The 11 new ones
+assert statements in the product's *output* rather than return values, because output is what a
+user has.
+
 ## v1.0.0 - not released yet (Phase 9 complete on the branch)
 
 ## The CI record for the v1.0 work: run 43235517057

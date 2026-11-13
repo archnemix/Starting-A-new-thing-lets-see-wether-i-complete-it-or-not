@@ -18,11 +18,16 @@ TIER_FIELDS = {
     3: ("activations",),
 }
 
+#: What each tier means, as this build can honestly say it. Tier 3 used to read "activation
+#: statistics, eval results", and no adapter has ever recorded an eval result - so every
+#: tier-3 file carried a promise in its own capability block that nothing in the build could
+#: keep. The planned field is named in Architecture §6.11 and in the changelog; it is not
+#: claimed here until there is a block to back it.
 TIER_MEANING = {
     0: "step counter, weight deltas, timing",
     1: "loss, learning rate, gradient norms",
     2: "data segments and their effects on the weights",
-    3: "activation statistics, eval results",
+    3: "activation statistics",
 }
 
 

@@ -6,7 +6,7 @@ recorder that costs 1% of a 2 ms step might cost 40% of a real one, and the "1.3
 than a checkpoint" comparison means something different at a size where the weights are
 megabytes.
 
-This script trains a 1,002,292-parameter causal transformer on a synthetic sequence task and
+This script trains a 1,004,176-parameter causal transformer on a synthetic sequence task and
 records the whole run, then answers the product's questions from the file alone:
 
 * does the recording rebuild the live weights?
@@ -18,9 +18,18 @@ records the whole run, then answers the product's questions from the file alone:
 Every number printed here is also written to JSON so CI can commit it.
 
     python Bench/scale_1m_parameters.py --steps 100
+    python Bench/scale_1m_parameters.py --steps 30 --hand-test    # also drive the CLI
+
+`--hand-test` runs the shipped `archx` commands - `info`, `events`, `activations`, `reconstruct`,
+`diff` - as subprocesses against the file this run produced, and asserts on their text. That is
+the half that a unit test cannot do: the suite calls the library, and a user calls the CLI. The
+first time it ran at this size it found six statements in the product that were not true
+(`Docs/Changelog.md`, v1.0.2).
 
 Runs on CPU in about a minute. No downloads: the "dataset" is generated in-process, so a claim
-cannot die because a URL moved.
+cannot die because a URL moved. The recording is written to `Bench/out/` so that a CI artifact
+step can keep it; a path under the system temp directory is not readable by that step on all
+runners.
 """
 
 from __future__ import annotations
@@ -30,7 +39,6 @@ import json
 import math
 import statistics
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -131,8 +139,12 @@ def make_data(torch, *, steps: int, batch: int, seq: int = 48, seed: int = 0):
 
 def train_and_record(*, steps: int = 100, batch: int = 32, lr: float = 3e-4,
                      activations: bool = True, out: Path | None = None,
-                     heartbeat: int = 10) -> dict:
-    """Train, record, and read the recording back. Returns the measured facts."""
+                     heartbeat: int = 10) -> tuple[dict, Path]:
+    """Train, record, and read the recording back.
+
+    Returns the measured facts and the path they were measured on, so a caller can run the
+    product's own commands against the file this run produced.
+    """
     try:
         torch = _torch()
     except ImportError as exc:                       # pragma: no cover
@@ -151,8 +163,16 @@ def train_and_record(*, steps: int = 100, batch: int = 32, lr: float = 3e-4,
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     batches = make_data(torch, steps=steps, batch=batch)
 
-    directory = Path(tempfile.mkdtemp(prefix="archx-1m-"))
-    path = out or directory / "transformer-1m.archx.mdl"
+    # The recording lands next to the script unless told otherwise, not in the system temp
+    # directory. It used to be a mkdtemp() under /tmp, which CI could not upload: the artifact
+    # step globbed /tmp/**/*.archx.mdl, and on the Ubuntu runner the upload failed with
+    # "EACCES: permission denied, scandir '/tmp/snap-private-tmp'" - a directory owned by the
+    # packaging sandbox that the artifact action cannot walk. The run that proves the product
+    # works at 1M parameters left no file behind it as a result, and the job went red on the
+    # step that exists to keep the evidence.
+    directory = Path(__file__).resolve().parent / "out"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = Path(out) if out else directory / "transformer-1m.archx.mdl"
 
     recorder = archx.attach(
         model, optimizer, str(path),
@@ -240,7 +260,7 @@ def train_and_record(*, steps: int = 100, batch: int = 32, lr: float = 3e-4,
         "model": {
             "parameters": parameters,
             "vocab": VOCAB, "dim": DIM, "layers": LAYERS, "heads": HEADS, "out": OUT,
-            "architecture": "causal transformer, 5 pre-norm blocks",
+            "architecture": f"causal transformer, {LAYERS} pre-norm blocks",
         },
         "training": {
             "steps": steps,
@@ -298,7 +318,7 @@ def train_and_record(*, steps: int = 100, batch: int = 32, lr: float = 3e-4,
             "saturated_summaries": len(saturated),
         },
     }
-    return result
+    return result, path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -309,12 +329,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="record without tier 3, to isolate its cost")
     parser.add_argument("--out", help="keep the recording at this path")
     parser.add_argument("--json-out", help="write the measured facts here")
+    parser.add_argument("--hand-test", action="store_true",
+                        help="run the product's own commands on the file this run produced")
     args = parser.parse_args(argv)
 
     try:
-        result = train_and_record(steps=args.steps, batch=args.batch,
-                                  activations=not args.no_activations,
-                                  out=Path(args.out) if args.out else None)
+        result, path = train_and_record(steps=args.steps, batch=args.batch,
+                                        activations=not args.no_activations,
+                                        out=Path(args.out) if args.out else None)
     except SkipBench as exc:
         print(f"SKIP: {exc}")
         return 0
@@ -365,10 +387,89 @@ def main(argv: list[str] | None = None) -> int:
           f"worst {acts['worst_zero_fraction'] * 100:.1f}%")
     print(f"saturated         {acts['saturated_summaries']} summaries at >=50% |x|>=4")
 
+    if args.hand_test:
+        if not hand_test(path):
+            return 1
+
     if args.json_out:
         Path(args.json_out).write_text(json.dumps(result, indent=2) + "\n")
         print(f"\nwritten to {args.json_out}")
     return 0
+
+
+def hand_test(path: Path) -> bool:
+    """Run the shipped CLI against the file this bench just produced, and read the answers.
+
+    The measurements above come from the library. A user does not have the library; they have
+    `archx info`, `archx events`, `archx activations`, `archx diff` and `archx reconstruct`.
+    So this drives those, as a subprocess, on a 1M-parameter recording - which is the only place
+    the CLI meets a file big enough for the answers to be about something.
+
+    Every check here is an assertion about *output text*, because that text is the product.
+    """
+    import subprocess
+
+    print()
+    print("hand test        the shipped CLI, on this file")
+    failures = []
+
+    def archx(*arguments: str) -> str:
+        completed = subprocess.run([sys.executable, "-m", "archx", *arguments],
+                                   capture_output=True, text=True, timeout=900)
+        if completed.returncode != 0:
+            failures.append(f"archx {' '.join(arguments)} exited {completed.returncode}: "
+                            f"{completed.stderr.strip()[:400]}")
+        return completed.stdout
+
+    info = archx("info", str(path))
+    checks = [
+        ("info names the tier", "capability_tier  3" in info),
+        ("info says tier 3's records", "activations" in info),
+        ("info says capture was on", "activation_capture yes" in info),
+        # The tier sentence must describe a field the build records. It promised "eval
+        # results" for every release with no adapter that could produce one.
+        ("info does not promise eval results", "eval" not in info),
+    ]
+
+    events = archx("events", str(path))
+    checks.append(("events lists stored steps", "observations" in events))
+    checks.append(("events names a region", "moved transformer" in events
+                   or "moved embed" in events))
+
+    acts = archx("activations", str(path))
+    checks.append(("activations lists layers", "layers" in acts and "summaries" in acts))
+
+    # The middle of the file, not a store point: this is what the format exists to answer.
+    from archx.container.reader import Reader
+    from archx.container.values import Timeline
+
+    timeline = Timeline(Reader(path))
+    stored = timeline.steps
+    gaps = [step for step in range(stored[0], stored[-1]) if step not in stored]
+    if gaps:
+        rebuilt = archx("reconstruct", str(path), "--step", str(gaps[len(gaps) // 2]),
+                        "--out", str(path.with_suffix(".gap.npz")))
+        checks.append(("reconstruct answers an unstored step", "written" in rebuilt))
+        checks.append(("reconstruct says the step was not stored", "stored         no" in rebuilt))
+    else:
+        failures.append("this run stored every step, so the unstored-step answer is untested")
+
+    if len(stored) > 1:
+        compared = archx("diff", str(path), "--step", str(stored[0]), "--step-b", str(stored[-1]))
+        checks.append(("diff folds the recorded updates", "recorded update(s)" in compared))
+        checks.append(("diff names the biggest mover", "transformer" in compared or "embed" in compared))
+
+    for name, ok in checks:
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+        if not ok:
+            failures.append(name)
+    if failures:
+        print("\nhand test failures:")
+        for failure in failures:
+            print(f"  - {failure}")
+        return False
+    print(f"  {len(checks)}/{len(checks)} pass")
+    return True
 
 
 if __name__ == "__main__":

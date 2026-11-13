@@ -45,3 +45,67 @@ def test_offering_a_field_after_denial_promotes_it_back():
     capabilities.resolve()
     assert capabilities.have("loss")
     assert "loss" not in capabilities.missing
+
+
+def test_tier_three_does_not_promise_eval_results():
+    """The capability block is the file's statement about itself, so every word counts.
+
+    Tier 3 read "activation statistics, eval results" in every file this build wrote, and no
+    adapter has ever recorded an eval result - the field is planned (Architecture §6.11) and
+    unimplemented. A promise in the file that nothing in the build can keep is exactly what
+    this module exists to prevent, so the claim is gone until there is a block to back it.
+    """
+    from archx.capabilities import TIER_MEANING
+
+    capabilities = Capabilities()
+    for name in ("steps", "deltas", "loss", "grad_norms", "data_segments", "activations"):
+        capabilities.offer(name)
+    assert capabilities.tier == 3
+    for detail in (TIER_MEANING[3], capabilities.resolve().to_dict()["capability_detail"]):
+        assert "eval" not in detail, detail
+        assert "activation statistics" in detail
+
+
+#: How each recorded field is worded in TIER_MEANING. Written out rather than split from the
+#: field name because the prose is for people: "grad_norms" reads as "gradient norms" there.
+#: Adding a word to a tier's description means adding it here, deliberately.
+FIELD_WORDING = {
+    "steps": "step counter",
+    "deltas": "weight deltas",
+    "loss": "loss",
+    "learning_rate": "learning rate",
+    "grad_norms": "gradient norms",
+    "data_segments": "data segments",
+    "activations": "activation statistics",
+}
+
+#: Prose that is allowed to describe a tier without naming a field. Kept to what is true of
+#: the recording itself, so nothing here can turn into a claim about data it does not hold.
+EXTRA_PROSE = {"timing", "and their effects on the weights"}
+
+
+def test_every_tier_meaning_describes_exactly_the_fields_that_tier_promises():
+    """A tier's prose may not name anything the tier does not record.
+
+    Tier 3 said "activation statistics, eval results" for the whole life of this build, and no
+    adapter recorded an eval result: every tier-3 file promised, in its own capability block,
+    something the build could not produce. This is the mechanical form of that review - build
+    the sentence from the fields, then look at what is left over.
+    """
+    from archx.capabilities import TIER_FIELDS, TIER_MEANING
+
+    for tier, fields in TIER_FIELDS.items():
+        meaning = TIER_MEANING[tier]
+        remaining = meaning
+        # learning_rate is part of tier 1's promise and not a TIER_FIELDS entry, so it is
+        # named on the tier that carries it rather than tolerated as leftover prose.
+        expected = (*fields, "learning_rate") if tier == 1 else fields
+        for field in expected:
+            assert FIELD_WORDING[field] in meaning, (
+                f"tier {tier} does not describe {field!r} anywhere: {meaning!r}")
+            remaining = remaining.replace(FIELD_WORDING[field], "")
+        for phrase in EXTRA_PROSE:
+            remaining = remaining.replace(phrase, "")
+        leftover = remaining.replace(",", " ").split()
+        assert not leftover, (
+            f"tier {tier} describes {leftover}, which is not a field it records: {meaning!r}")

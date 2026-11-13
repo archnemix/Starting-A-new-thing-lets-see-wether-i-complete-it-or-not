@@ -159,3 +159,68 @@ def test_an_unclosed_file_claims_no_tier_at_all(tmp_path):
     assert not [l for l in result.stdout.splitlines() if l.startswith("capability_tier")], (
         "no tier may be reported for a run that recorded none")
     recorder.close()       # let the writer thread finish so the test leaves no daemon behind
+
+
+def test_a_tier_three_file_says_its_capture_is_on(recorded):
+    """META said `activation_capture: false` in every tier-3 recording ever written.
+
+    `ActivationCapture.__bool__` is "has anything been captured yet", which is false at attach
+    - before a single forward pass - and META is written at attach, so the header recorded the
+    wrong fact and then contradicted the body it belonged to. Nothing read the field, which is
+    how it stayed wrong through every release.
+
+    The fix is not a better guess at attach time: whether summaries arrived is unknown until
+    the run ends. The field is no longer written, and `Reader.activation_capture()` answers
+    from the blocks - so every file, old or new, gives one answer and it is the true one.
+    """
+    from archx.container.reader import Reader
+
+    reader = Reader(recorded)
+    assert "activation_capture" not in reader.meta(), reader.meta()
+    assert reader.activation_capture() is True
+    assert reader.capabilities()["capability_tier"] == 3
+
+    result = cli("info", str(recorded))
+    assert result.returncode == 0, result.stderr
+    assert "activation_capture yes" in result.stdout
+    assert "warning" not in result.stdout, (
+        "a file written by this build must not warn about its own META block")
+
+
+def test_info_flags_the_contradiction_in_a_file_written_before_the_fix(tmp_path):
+    """Old files keep their wrong META field, and `info` names it instead of repeating it.
+
+    The file is made the way the old recorder made it: a real tier-3 run whose META carries
+    `activation_capture: false`. Nothing is patched by hand, so the bytes are exactly what a
+    user upgrading from an earlier version would have on disk.
+    """
+    import archx
+
+    torch.manual_seed(0)
+    # Sequential, not a bare module: the activation hooks attach to named submodules, and the
+    # root module is skipped by design ("the root is not a layer").
+    model = torch.nn.Sequential(torch.nn.Linear(8, 16), torch.nn.ReLU(), torch.nn.Linear(16, 4))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-2)
+    path = tmp_path / "old.archx.mdl"
+    recorder = archx.attach(model, optimizer, str(path), activations=True,
+                            meta={"activation_capture": False})
+    generator = torch.Generator().manual_seed(0)
+    for _ in range(4):
+        x = torch.randn(8, 8, generator=generator)
+        y = torch.randint(0, 4, (8,), generator=generator)
+        optimizer.zero_grad()
+        loss = torch.nn.functional.cross_entropy(model(x), y)
+        loss.backward()
+        recorder.log(loss=float(loss.detach()), data=x)
+        optimizer.step()
+    recorder.close()
+
+    from archx.container.reader import Reader
+
+    assert Reader(path).meta()["activation_capture"] is False, "the fixture must state false"
+    assert Reader(path).activation_capture() is True, "the body contradicts the header"
+
+    result = cli("info", str(path))
+    assert result.returncode == 0, result.stderr
+    assert "activation_capture yes" in result.stdout, result.stdout
+    assert "META says activation_capture false" in result.stdout

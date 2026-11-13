@@ -12,6 +12,9 @@ dist/
 # Recordings: binary run data, never committed (see Docs/Workaround.md W6)
 *.archx.mdl
 !Actions/out/**/*.archx.mdl
+# Benchmarks leave their files here so a CI artifact step can pick them up: a recording in the
+# system temp directory could not be uploaded (see Bench/scale_1m_parameters.py).
+Bench/out/
 
 # Local-only material: the user's verbatim origin chat. Kept in the working tree,
 # never pushed anywhere (rule 25, Docs/Rules.md).

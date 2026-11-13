@@ -37,6 +37,17 @@ def run_info(path: str, *, as_json: bool = False) -> int:
         for key in ("adapter", "data_level", "attribution"):
             if key in meta:
                 print(f"{key:<16} {meta[key]}")
+        # Whether activation summaries are actually in the file, answered from the blocks.
+        # Files written before this line existed said `activation_capture: false` in META
+        # while holding hundreds of summaries - a header contradicting its own body - so a
+        # stored `false` is not repeated here as fact.
+        if capabilities.get("capabilities_present") and "activations" in capabilities[
+                "capabilities_present"]:
+            print(f"{'activation_capture':<16} yes")
+            if reader.meta_activation_capture_disagrees():
+                print(f"{'warning':<16} META says activation_capture false, but this file "
+                      "holds activation summaries; its META block predates the fix and is "
+                      "the wrong half of the contradiction")
         # The *achieved* tier comes from the capabilities block written at close, not from
         # META. META carries 0 - the floor, true by construction at open, before a single step
         # has happened - and this command printed that instead. A tier-3 recording therefore

@@ -7,7 +7,6 @@ unknown block type is skipped rather than treated as an error, per the format sp
 from __future__ import annotations
 
 import json
-import json
 import os
 import struct
 from dataclasses import dataclass, field
@@ -201,6 +200,32 @@ class Reader:
         for block in self.blocks(BlockType.META):
             return json.loads(block.payload.decode("utf-8"))
         return {}
+
+    def activation_capture(self) -> bool:
+        """Whether the file holds activation summaries. The blocks decide; META only fills in.
+
+        The recorder wrote `activation_capture: bool(activations)`, and
+        `ActivationCapture.__bool__` is "has anything been captured yet" - false at attach,
+        before a single forward pass - while META is written at attach. Every tier-3 file this
+        project produced therefore said `false` in its header while its body held hundreds of
+        summaries, and nothing read the field, which is how it stayed wrong through every
+        release.
+
+        The fix is not a better guess at attach time: whether summaries arrive is unknown
+        until the run ends. So META no longer carries the field, and this answers from the
+        blocks. A stored value is used only when the body has no summaries to offer - an old
+        file that really did record nothing - and `meta_activation_capture_disagrees` is how a
+        caller finds out the two halves of such a file contradict each other.
+        """
+        if any(True for _ in self.blocks(BlockType.ACTIVATION)):
+            return True
+        stored = self.meta().get("activation_capture")
+        return stored if isinstance(stored, bool) else False
+
+    def meta_activation_capture_disagrees(self) -> bool:
+        """True when an old file's META says `false` but its body holds summaries."""
+        stored = self.meta().get("activation_capture")
+        return stored is False and any(True for _ in self.blocks(BlockType.ACTIVATION))
 
     def capabilities(self) -> dict:
         """The capability facts the writer recorded at close, or an empty dict.

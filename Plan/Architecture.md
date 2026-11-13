@@ -169,7 +169,8 @@ The recorder observes a *step* (one optimizer update) and stores:
 | global grad norm, loss, learning rate | hook payload or `recorder.log()` | Tier 1+ |
 | data segment fingerprint | `recorder.log(data_id=...)` or adapter plumbing | Tier 2 |
 | active/frozen mask, region tags, component id | `requires_grad`, config | all adapters |
-| eval metrics, activation/attention statistics | adapter-specific | Tier 3 |
+| activation statistics | built in, `activations=True` | Tier 3 |
+| eval metrics, attention statistics | adapter-specific | Tier 3, **planned** (not recorded) |
 
 **[DECIDED] The delta must be computed from a copy taken at the previous step, not
 from the weights at the moment of the hook.** This is the single most important
@@ -614,15 +615,26 @@ must not make it require retraining. Three requirements follow:
 
 ### 6.11 Capability tiers (recorded in every file)
 
-| Tier | Contents |
-|---|---|
-| 0 | step counter, weight deltas, timing |
-| 1 | + loss, learning rate, gradient norms |
-| 2 | + data segment fingerprints and user tags |
-| 3 | + activation statistics, per-head attention statistics, eval/benchmark results |
+| Tier | Contents | State |
+|---|---|---|
+| 0 | step counter, weight deltas, timing | recorded |
+| 1 | + loss, learning rate, gradient norms | recorded |
+| 2 | + data segment fingerprints and user tags | recorded |
+| 3 | + activation statistics | recorded |
+| 3 | + per-head attention statistics | **planned, not recorded** |
+| 3 | + eval/benchmark results | **planned, not recorded** |
 
 Tier is a recorded fact, not a request: the file says which tier was actually reached
 and which fields were unavailable.
+
+The last two rows are the reason this table gained a "State" column. Until v1.0.2 the capability
+block in every file said tier 3 meant "activation statistics, eval results", and no adapter had
+ever recorded an eval result: every tier-3 recording promised, in its own header, something the
+build could not produce. A planned field belongs in the plan, not in the file, so the file now
+says only what it holds. When there is a block for attention statistics or eval results, it is
+added to `TIER_FIELDS` and to this row's state at the same time -
+`test_every_tier_meaning_describes_exactly_the_fields_that_tier_promises` fails if the prose runs
+ahead of the code again.
 
 ---
 
