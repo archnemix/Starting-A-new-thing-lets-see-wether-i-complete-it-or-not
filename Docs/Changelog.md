@@ -383,10 +383,16 @@ launcher recordings, which have no region names; it now says so. And the bench c
 was "causal transformer, 5 pre-norm blocks" in the JSON it committed to CI, where the model has
 three - a hand-counted constant that outlived the shape it described.
 
-Tests: 251 collected and green locally (2 skipped: the Hugging Face and Lightning modules, whose
-libraries are not installed here), where `HEAD` before the change collected 240. The 11 new ones
+Tests: 254 collected and green locally (2 skipped: the Hugging Face and Lightning modules, whose
+libraries are not installed here), where `HEAD` before this round collected 240. The 14 new ones
 assert statements in the product's *output* rather than return values, because output is what a
 user has.
+
+`Docs/Files_Info.json` also stopped being a map nobody checked: it listed 126 of 170 tracked files,
+missing every benchmark from claims 3-8, `archx/cli/diff.py` and the scale trigger. It now lists
+all of them, and `Tests/integration/test_file_map.py` fails when a tracked file has no entry, when
+an entry describes a deleted file, or when an entry is missing one of the four fields its own rules
+require. It caught the new test file itself before I committed it, which is the behaviour I wanted.
 
 ### The CI record: run 43441026689
 

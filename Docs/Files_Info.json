@@ -16,187 +16,50 @@
     ".github/workflows/": "CI definitions. Each workflow is started by editing its trigger file."
   },
   "files": {
-    "README.md": {
-      "purpose": "Entry point: what the product is, status, and where to start reading.",
+    ".github/workflows/npm.yml": {
+      "purpose": "Packs the signpost, installs the tarball into a scratch project, and proves the failure behaviour on Linux/Windows/macOS x node 18/20.",
+      "inputs": [
+        "Actions/triggers/npm.txt",
+        "npm/**"
+      ],
+      "outputs": [
+        "Actions/out/npm/*.json",
+        "CI records committed back to the branch"
+      ],
+      "handles": "Tests the packed tarball rather than the working tree: a wrong `files` list would ship no bin, which is the failure this job exists to catch."
+    },
+    ".github/workflows/scale.yml": {
+      "purpose": "The 1M-parameter scale test on three runners: train, record, assert the numbers, hand-test the CLI, keep the recording as an artifact, commit the facts.",
+      "inputs": [
+        "push touching Actions/triggers/scale.txt or Bench/scale_1m_parameters.py",
+        "workflow_dispatch"
+      ],
+      "outputs": [
+        "Actions/out/scale/{Linux,Windows,macOS}-py3.11.{json,txt} committed to the branch",
+        "recording-1m-ubuntu-latest artifact (7 days)"
+      ],
+      "handles": "Linux runs 150 steps as the reference and uploads the artifact; Windows and macOS run 40. The assertion step reads the transcript for the hand-test summary, so a CLI regression fails the job. Artifacts come from Bench/out/, not /tmp: upload-artifact cannot scandir the packaging sandbox's temp directory."
+    },
+    ".github/workflows/tests.yml": {
+      "purpose": "Runner check matrix (ubuntu, windows, macos) that records each environment and commits results.",
+      "inputs": [
+        "push touching Actions/triggers/tests.txt",
+        "workflow_dispatch"
+      ],
+      "outputs": [
+        "Actions/out/test-runs/*.json and *.junit.xml committed to the branch"
+      ],
+      "handles": "Matrix of 3 (under the 5-runner cap), contents: write, no artifacts."
+    },
+    ".gitignore": {
+      "purpose": "Keeps build noise and binary recordings out of git, with a narrow exception for tiny CI outputs.",
       "inputs": [
         "none"
       ],
       "outputs": [
         "none"
       ],
-      "handles": "Orientation only. Points to Plan/Architecture.md and Docs/Rules.md."
-    },
-    "Docs/Rules.md": {
-      "purpose": "The binding working rules: structure, process, testing, CI workaround, environment limits.",
-      "inputs": [
-        "user directives"
-      ],
-      "outputs": [
-        "constraints every change must satisfy"
-      ],
-      "handles": "Must be read before any change. Numbered rules are referenced from other docs."
-    },
-    "Docs/Thinking.md": {
-      "purpose": "Reasoning log: why something was built or changed, what broke, how it was split and solved.",
-      "inputs": [
-        "problems met during a round of work"
-      ],
-      "outputs": [
-        "one dated section per round"
-      ],
-      "handles": "Decision history. Updated after every round."
-    },
-    "Docs/Technical.md": {
-      "purpose": "Technical reference: stack, repository layout, per-file roles, glossary, environment facts.",
-      "inputs": [
-        "the codebase and the environment"
-      ],
-      "outputs": [
-        "human-readable reference"
-      ],
-      "handles": "The 'why'; Files_Info.json is the machine-readable 'what'."
-    },
-    "Docs/Logic.md": {
-      "purpose": "Call chains from a user entry point down to files, plus failure paths.",
-      "inputs": [
-        "implemented call chains"
-      ],
-      "outputs": [
-        "traceable flow per feature"
-      ],
-      "handles": "Breakage tracing. Updated whenever a call chain changes."
-    },
-    "Docs/Changelog.md": {
-      "purpose": "What each version shipped and what changed between versions.",
-      "inputs": [
-        "completed roadmap phases"
-      ],
-      "outputs": [
-        "release notes per version"
-      ],
-      "handles": "Features only; no implementation notes."
-    },
-    "Docs/Change.md": {
-      "purpose": "Inbox for user-requested additions and changes, each with an effect on the roadmap.",
-      "inputs": [
-        "new user requests"
-      ],
-      "outputs": [
-        "roadmap edits or a documented decline"
-      ],
-      "handles": "Nothing here is silently dropped."
-    },
-    "Docs/Workaround.md": {
-      "purpose": "Environment limitations and the exact workaround for each.",
-      "inputs": [
-        "failures caused by the sandbox, token or runner limits"
-      ],
-      "outputs": [
-        "repeatable instructions"
-      ],
-      "handles": "Rust toolchain, Actions logs, raw.githubusercontent.com, heavy installs, runner cap, binary recordings."
-    },
-    "Docs/Secrets.md": {
-      "purpose": "Exact name and purpose of every GitHub Actions secret the project needs.",
-      "inputs": [
-        "workflow requirements"
-      ],
-      "outputs": [
-        "names the user sets in repository settings"
-      ],
-      "handles": "The assistant never sets a secret; names must match character for character."
-    },
-    "Docs/Files_Info.json": {
-      "purpose": "This file: the per-file map used instead of re-reading the codebase.",
-      "inputs": [
-        "the current tree and each file's role"
-      ],
-      "outputs": [
-        "purpose, inputs, outputs, handles per path"
-      ],
-      "handles": "Must be updated in the same change that adds or edits a file."
-    },
-    "Docs/Research.json": {
-      "purpose": "Every lookup that influenced a decision, with sources and verdict.",
-      "inputs": [
-        "library/API research, measurements"
-      ],
-      "outputs": [
-        "findings plus exact URLs"
-      ],
-      "handles": "Prevents re-researching the same thing. Sources are GitHub API URLs because raw and docs hosts are blocked."
-    },
-    "Plan/Architecture.md": {
-      "purpose": "The decided design: observer model, adapters per setup, storage, tiers, non-goals, risks.",
-      "inputs": [
-        "the project brief",
-        "verified framework behaviour"
-      ],
-      "outputs": [
-        "scope the roadmap is derived from"
-      ],
-      "handles": "Every decision is marked DECIDED (mine to defend) or ASK (user's)."
-    },
-    "Plan/Roadmap.md": {
-      "purpose": "Ordered work list by phase and version; one step at a time.",
-      "inputs": [
-        "Architecture.md",
-        "Docs/Change.md"
-      ],
-      "outputs": [
-        "what to build next and its acceptance test"
-      ],
-      "handles": "Status column is the source of truth for progress."
-    },
-    "Plan/Format_Spec.md": {
-      "purpose": "Normative byte-level specification of the .archx.mdl container (format 1.0, draft).",
-      "inputs": [
-        "storage design decisions"
-      ],
-      "outputs": [
-        "header, block, payload, footer layouts and reader rules"
-      ],
-      "handles": "Frozen by roadmap step 1.1; code must match it or the spec is amended."
-    },
-    "Plan/Open_Questions.md": {
-      "purpose": "Decisions waiting on the user, with recommendation and evidence.",
-      "inputs": [
-        "ambiguities found while writing the plan"
-      ],
-      "outputs": [
-        "numbered questions to answer"
-      ],
-      "handles": "Unanswered question means the dependent step is not started."
-    },
-    "Plan/README.md": {
-      "purpose": "Folder README: what belongs in Plan/ and what does not.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Structure discoverability."
-    },
-    "Tests/README.md": {
-      "purpose": "Folder README: test layers, when each runs, where records go.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Test policy in practice."
-    },
-    "Tests/Records/README.md": {
-      "purpose": "Naming, shape and retention rules for recorded test runs.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "record schema"
-      ],
-      "handles": "Version folders; keep current plus two."
+      "handles": "*.archx.mdl is ignored everywhere except Actions/out."
     },
     "Actions/README.md": {
       "purpose": "Folder README: layout and rules for CI inputs and committed outputs.",
@@ -228,16 +91,6 @@
       ],
       "handles": "One purpose per script."
     },
-    "Actions/scripts/env_probe.py": {
-      "purpose": "Writes one JSON describing the runner (OS, Python, CPU, refs) to prove all three runners work and can commit.",
-      "inputs": [
-        "output path argument"
-      ],
-      "outputs": [
-        "JSON record on disk"
-      ],
-      "handles": "Reads GITHUB_* environment variables; writes nothing else."
-    },
     "Actions/scripts/commit_results.sh": {
       "purpose": "Commits Actions/out/ and Actions/triggers/ back into the branch from a workflow runner.",
       "inputs": [
@@ -250,258 +103,15 @@
       ],
       "handles": "Up to six runners share one branch since the npm workflow exists, so this retries eight times with jittered backoff and rebases explicitly. Safe to rebase because the only thing a job changes here is its own record file."
     },
-    "Actions/triggers/README.md": {
-      "purpose": "How trigger files start workflows, and why.",
+    "Actions/scripts/env_probe.py": {
+      "purpose": "Writes one JSON describing the runner (OS, Python, CPU, refs) to prove all three runners work and can commit.",
       "inputs": [
-        "none"
+        "output path argument"
       ],
       "outputs": [
-        "none"
+        "JSON record on disk"
       ],
-      "handles": "One trigger file per workflow."
-    },
-    "Actions/triggers/tests.txt": {
-      "purpose": "Trigger file for .github/workflows/tests.yml; editing it starts a run.",
-      "inputs": [
-        "human edits"
-      ],
-      "outputs": [
-        "a workflow run; last line echoed into the log"
-      ],
-      "handles": "Free text only, never configuration."
-    },
-    ".github/workflows/tests.yml": {
-      "purpose": "Runner check matrix (ubuntu, windows, macos) that records each environment and commits results.",
-      "inputs": [
-        "push touching Actions/triggers/tests.txt, or manual dispatch"
-      ],
-      "outputs": [
-        "Actions/out/latest-env/*.json and *.log committed to the branch"
-      ],
-      "handles": "Matrix of 3 (under the 5-runner cap), contents: write, no artifacts."
-    },
-    ".gitignore": {
-      "purpose": "Keeps build noise and binary recordings out of git, with a narrow exception for tiny CI outputs.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "*.archx.mdl is ignored everywhere except Actions/out."
-    },
-    "examples/README.md": {
-      "purpose": "Folder README: example contract (one folder, runs on CPU, writes its own recording).",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Empty until the API exists."
-    },
-    "internels/README.md": {
-      "purpose": "Folder README: what non-public helper material is allowed here.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Nothing here is imported by the package."
-    },
-    "internels/skills/README.md": {
-      "purpose": "Skill file format: when to use, steps, pitfalls.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Skills are added only when reused."
-    },
-    "Docs/README.md": {
-      "purpose": "Folder README for Docs/: what belongs here and what does not.",
-      "inputs": [
-        "none"
-      ],
-      "outputs": [
-        "none"
-      ],
-      "handles": "Points each kind of document at its home folder."
-    },
-    "Plan/Origin_Chat.md": {
-      "purpose": "Durable extraction of the user's origin conversation: pipeline lineage, format wishlist, requirements the later brief omitted, and where the two disagree.",
-      "inputs": [
-        "internels/chat/2026-11-10-to-11-11_origin-chat.md (local only)"
-      ],
-      "outputs": [
-        "requirement changes in Plan/ and Docs/Change.md",
-        "questions Q17-Q19"
-      ],
-      "handles": "Replaces the raw chat as a reference; the raw chat is never committed."
-    },
-    "internels/chat/README.md": {
-      "purpose": "Folder README for local-only chat exports: the rule, why they are kept, what is in here.",
-      "inputs": [],
-      "outputs": [],
-      "handles": "Committed on purpose; the chat bodies next to it are not."
-    },
-    "pyproject.toml": {
-      "purpose": "Packaging: distribution `archx.mdl`, import `archx`, CLI `archx`, MIT, py>=3.10, deps numpy+zstandard.",
-      "inputs": [
-        "build backend"
-      ],
-      "outputs": [
-        "sdist/wheel",
-        "console script"
-      ],
-      "handles": "Version is duplicated in archx/version.py by design (build backend needs it statically); both move together at release."
-    },
-    "LICENSE": {
-      "purpose": "MIT license text.",
-      "inputs": [],
-      "outputs": [],
-      "handles": "Chosen by the user (2026-11-11)."
-    },
-    "archx/__init__.py": {
-      "purpose": "Public package surface; exposes __version__ and FORMAT_VERSION only.",
-      "inputs": [],
-      "outputs": [
-        "__version__",
-        "FORMAT_VERSION"
-      ],
-      "handles": "Stays tiny on purpose."
-    },
-    "archx/version.py": {
-      "purpose": "Single source of version and format constants (MAGIC, END_MAGIC, FORMAT_MAJOR/MINOR).",
-      "inputs": [],
-      "outputs": [
-        "__version__",
-        "FORMAT_MAJOR",
-        "FORMAT_MINOR",
-        "MAGIC",
-        "END_MAGIC"
-      ],
-      "handles": "Imported by schema, reader, writer and the CLI."
-    },
-    "archx/errors.py": {
-      "purpose": "Typed exceptions so callers can degrade selectively.",
-      "inputs": [],
-      "outputs": [
-        "ArchxError and subclasses"
-      ],
-      "handles": "FormatError, CorruptBlockError, TruncatedFileError, UnsupportedVersionError, DependencyMissingError."
-    },
-    "archx/container/__init__.py": {
-      "purpose": "Container package surface: Reader, Writer, BlockType, read_header.",
-      "inputs": [],
-      "outputs": [
-        "Reader",
-        "Writer",
-        "BlockType",
-        "read_header"
-      ],
-      "handles": "Re-exports only."
-    },
-    "archx/container/schema.py": {
-      "purpose": "Byte-level layout: header/block/footer structs, block-type ids, codec ids, flag bits, CRC helpers.",
-      "inputs": [],
-      "outputs": [
-        "HEADER/BLOCK/FOOTER structs and sizes",
-        "header_bytes()",
-        "footer_bytes()",
-        "zlib_crc32()"
-      ],
-      "handles": "The only file where byte offsets live. Block prefix is 28 bytes: type, codec, flags, step, raw_len, payload_len, payload_crc, block_crc(over 0..23)."
-    },
-    "archx/container/compress.py": {
-      "purpose": "Per-block compression: zstandard if installed, else stdlib compression.zstd (3.14+), else zlib/none.",
-      "inputs": [
-        "bytes",
-        "Codec"
-      ],
-      "outputs": [
-        "compressed or decompressed bytes"
-      ],
-      "handles": "effective_codec() downgrades ZSTD to ZLIB when no zstd exists; NONE always works."
-    },
-    "archx/container/writer.py": {
-      "purpose": "Append-only block writer with batched fsync, index block and footer.",
-      "inputs": [
-        "output path",
-        "block type + payload + optional step"
-      ],
-      "outputs": [
-        ".archx.mdl bytes on disk"
-      ],
-      "handles": "Torn-write safety (header first, footer last), CLOSED/RECOVERED flags, index of (step, offset, length)."
-    },
-    "archx/container/reader.py": {
-      "purpose": "Validating reader: header checks, prefix CRCs, length caps, payload CRCs, footer detection, index decode.",
-      "inputs": [
-        "path",
-        "max_block_bytes",
-        "allow_torn"
-      ],
-      "outputs": [
-        "Header",
-        "Container(blocks, footer)",
-        "meta()",
-        "info()"
-      ],
-      "handles": "Refuses foreign files, newer majors, absurd lengths, bad CRCs; skips unknown block types; reports torn tails instead of trusting them."
-    },
-    "archx/container/recovery.py": {
-      "purpose": "Rebuild a crashed file: keep whole blocks, truncate the tail, rebuild the index, append a footer.",
-      "inputs": [
-        "path (in place or copy)"
-      ],
-      "outputs": [
-        "RecoveryReport",
-        "a closed, indexed file"
-      ],
-      "handles": "Steps are read from block prefixes, so no decompression is needed. Only truncates and re-appends; never rewrites block bytes."
-    },
-    "archx/cli/__init__.py": {
-      "purpose": "CLI package surface with a lazy import so `import archx` stays cheap.",
-      "inputs": [],
-      "outputs": [
-        "main()"
-      ],
-      "handles": "Console script target is archx.cli.main:main."
-    },
-    "archx/cli/main.py": {
-      "purpose": "Argument parsing and dispatch only.",
-      "inputs": [
-        "argv"
-      ],
-      "outputs": [
-        "exit code"
-      ],
-      "handles": "--version, info, recover; new commands are added as their modules land."
-    },
-    "archx/cli/info.py": {
-      "purpose": "`archx info`: summarize a recording (format, size, closure, blocks, key META fields).",
-      "inputs": [
-        "path",
-        "--json"
-      ],
-      "outputs": [
-        "human or JSON text, exit code"
-      ],
-      "handles": "Reads metadata only; never loads tensor payloads."
-    },
-    "archx/cli/recover.py": {
-      "purpose": "`archx recover`: close a crashed recording, in place or into a copy.",
-      "inputs": [
-        "path",
-        "--out"
-      ],
-      "outputs": [
-        "report text, exit code"
-      ],
-      "handles": "Delegates to container/recovery.py."
+      "handles": "Reads GITHUB_* environment variables; writes nothing else."
     },
     "Actions/scripts/run_tests.py": {
       "purpose": "Run pytest and write a machine-readable record of the run.",
@@ -514,170 +124,45 @@
       ],
       "handles": "Captures exit code, counts (parsed from the dot line), versions, commit and output tails; writes one JSON per runner."
     },
-    "Tests/unit/container/test_schema.py": {
-      "purpose": "Unit tests for struct sizes and CRC placement.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Header 40, block 28, footer 56; header CRC over bytes 0..19, footer over 0..47."
-    },
-    "Tests/unit/container/test_writer.py": {
-      "purpose": "Unit tests for the writer: roundtrip, real compression, abort behaviour.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Proves stored_len < raw_len for compressible input and that abort leaves no footer."
-    },
-    "Tests/unit/container/test_reader.py": {
-      "purpose": "Unit tests for hostile/damaged files: foreign magic, newer major, bit flip, absurd length, torn tail, unknown block type.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Each test asserts a specific typed error."
-    },
-    "Tests/unit/container/test_recovery.py": {
-      "purpose": "Unit tests for recovery: whole blocks kept, index rebuilt, copy mode, no-op on healthy files.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Crash is simulated by truncation, SIGKILL is covered in integration."
-    },
-    "Tests/unit/cli/test_cli.py": {
-      "purpose": "Unit tests for the CLI surface through the real entry point.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "--version/help exit codes, info JSON, broken-file error path, recover."
-    },
-    "Tests/integration/test_container_end_to_end.py": {
-      "purpose": "Integration: writer -> crash -> recovery -> reader -> CLI as one flow, including a real SIGKILLed subprocess.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Proves the modules still agree when wired together."
-    },
-    "Tests/integration/test_recovery_property.py": {
-      "purpose": "Property test over 8 seeds: any tear point leaves a valid, ordered prefix and a rebuilt index that matches.",
-      "inputs": [],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Documents that a tear inside META loses META but never corrupts it."
-    },
-    "archx/formats/__init__.py": {
-      "purpose": "Format-level value types shared by file, encoders and reader.",
-      "inputs": [],
-      "outputs": [
-        "DType",
-        "to_numpy",
-        "from_numpy",
-        "name_of"
-      ],
-      "handles": "Re-exports only."
-    },
-    "archx/formats/dtype.py": {
-      "purpose": "The one-byte dtype ids from the spec mapped to numpy.",
+    "Actions/triggers/README.md": {
+      "purpose": "How trigger files start workflows, and why.",
       "inputs": [
-        "wire name or numpy dtype"
+        "none"
       ],
       "outputs": [
-        "numpy dtype or wire id"
+        "none"
       ],
-      "handles": "bf16 is refused at decode (no numpy equivalent); everything else round-trips."
+      "handles": "One trigger file per workflow."
     },
-    "archx/encoders/__init__.py": {
-      "purpose": "Encoder package surface.",
-      "inputs": [],
-      "outputs": [
-        "encoder classes",
-        "choose_encoder"
-      ],
-      "handles": "Re-exports only."
-    },
-    "archx/encoders/base.py": {
-      "purpose": "Encoder contract, the Encoded result, and smallest-under-budget choice.",
+    "Actions/triggers/npm.txt": {
+      "purpose": "Trigger file for the npm-signpost workflow.",
       "inputs": [
-        "np.ndarray delta"
+        "a new line"
       ],
       "outputs": [
-        "Encoded(encoding, body, nnz_or_rank, value_dtype, max_abs_error, rel_error)"
+        "an npm CI run on three runners"
       ],
-      "handles": "relative_error() is the single definition of error used everywhere."
+      "handles": "Same convention as Actions/triggers/tests.txt."
     },
-    "archx/encoders/unchanged.py": {
-      "purpose": "Encoding 0: zero delta, zero bytes.",
+    "Actions/triggers/scale.txt": {
+      "purpose": "Trigger file for the 1M-parameter scale workflow; editing it is how that run is started.",
       "inputs": [
-        "delta",
-        "atol"
+        "a dated line describing what the next run is for"
       ],
       "outputs": [
-        "Encoded or None"
+        "a push that matches .github/workflows/scale.yml paths"
       ],
-      "handles": "Tied and frozen parameters hit this every step."
+      "handles": "One line per run, newest last, so the file is also a short log of why each scale run happened."
     },
-    "archx/encoders/sparse.py": {
-      "purpose": "Encoding 1: index-gap + value compression for deltas with few moved entries.",
+    "Actions/triggers/tests.txt": {
+      "purpose": "Trigger file for .github/workflows/tests.yml; editing it starts a run.",
       "inputs": [
-        "delta",
-        "threshold",
-        "codec"
+        "human edits"
       ],
       "outputs": [
-        "Encoded (exact)"
+        "a workflow run; last line echoed into the log"
       ],
-      "handles": "Refuses when more than half the entries moved, because index cost then beats density."
-    },
-    "archx/encoders/dense.py": {
-      "purpose": "Encoding 2: symmetric int8/int16 quantization of a dense delta.",
-      "inputs": [
-        "delta",
-        "bits"
-      ],
-      "outputs": [
-        "Encoded (lossy, error measured by re-decoding)"
-      ],
-      "handles": "Error is computed from the decoded array, not from pre-decode values."
-    },
-    "archx/encoders/lowrank.py": {
-      "purpose": "Encoding 3: truncated SVD of a 2-D delta at the smallest rank meeting the error budget.",
-      "inputs": [
-        "delta (2-D)",
-        "max_rank",
-        "max_rel_error"
-      ],
-      "outputs": [
-        "Encoded or None"
-      ],
-      "handles": "Refuses non-2-D tensors and refuses noise, which is the honest behaviour."
-    },
-    "archx/encoders/dense_raw.py": {
-      "purpose": "Encoding 4: the lossless fallback, raw (optionally shuffled) bytes through zstd.",
-      "inputs": [
-        "delta",
-        "codec",
-        "shuffle_planes"
-      ],
-      "outputs": [
-        "Encoded (exact)"
-      ],
-      "handles": "Guarantees every tensor has an exact option; shuffle is opt-in because it measured badly."
-    },
-    "archx/encoders/plane.py": {
-      "purpose": "Reversible byte-plane shuffle and XOR-against-previous helper.",
-      "inputs": [
-        "raw bytes",
-        "itemsize"
-      ],
-      "outputs": [
-        "reordered bytes"
-      ],
-      "handles": "Measured to hurt zero-heavy data; used only where it helps."
+      "handles": "Free text only, never configuration."
     },
     "Bench/README.md": {
       "purpose": "Index of the measurement scripts and the claim each one measures.",
@@ -710,6 +195,119 @@
       ],
       "handles": "The two columns are the finding: lossy and exact answers differ below full density."
     },
+    "Bench/claim03_anchor_spacing.py": {
+      "purpose": "Claim 3: chained-delta error as a function of anchor spacing.",
+      "inputs": [
+        "a synthetic model and a sweep of anchor intervals"
+      ],
+      "outputs": [
+        "Docs/Research.json (claim 3 rows)"
+      ],
+      "handles": "Shows where accumulated delta error stops being acceptable, which is what sets the anchor interval."
+    },
+    "Bench/claim04_long_run.py": {
+      "purpose": "Claim 4, second half: the cost of a recording over a long run.",
+      "inputs": [
+        "a 1000-step run, with and without a coarse checkpoint interval"
+      ],
+      "outputs": [
+        "Docs/Research.json (claim 4 rows)"
+      ],
+      "handles": "Answers the long-run half of claim 4; the short sweep is claim04_storage_vs_checkpoints.py. Both numbers are published even where checkpoints win."
+    },
+    "Bench/claim04_storage_vs_checkpoints.py": {
+      "purpose": "Claim 4, first half: recording versus checkpointing at matched accuracy.",
+      "inputs": [
+        "a 40-step run, several checkpoint intervals"
+      ],
+      "outputs": [
+        "Docs/Research.json (claim 4 rows)"
+      ],
+      "handles": "States the comparison so it cannot flatter the product: matched accuracy, not matched step count."
+    },
+    "Bench/claim05_overhead.py": {
+      "purpose": "Claim 5: what recording costs per step, against the same loop with no recorder.",
+      "inputs": [
+        "synthetic training loops",
+        "policy settings"
+      ],
+      "outputs": [
+        "median step time, bytes written, stored/skipped counts"
+      ],
+      "handles": "Measurement only. The adapter-level version lives in the torch integration test."
+    },
+    "Bench/claim06_adaptive_vs_fixed.py": {
+      "purpose": "Claim 6: the phase-adaptive policy versus a fixed interval at equal storage.",
+      "inputs": [
+        "the same run recorded by both policies"
+      ],
+      "outputs": [
+        "Docs/Research.json (claim 6 rows)"
+      ],
+      "handles": "Compares usefulness per byte, not bytes; reports the case where fixed wins (a single-jump run) as well as where adaptive does."
+    },
+    "Bench/claim07_hook_reach.py": {
+      "purpose": "Claim 7: what an optimizer step hook can reach, and what one log() call adds.",
+      "inputs": [
+        "a bare hook attachment, then the same run with loss and data logged"
+      ],
+      "outputs": [
+        "Docs/Research.json (claim 7 rows)"
+      ],
+      "handles": "Draws the boundary of \"attach in one line\": the hook sees weights and gradients, not the loss or the batch."
+    },
+    "Bench/claim08_torch_versions.py": {
+      "purpose": "Claim 8: does the plain-torch adapter depend on a torch version, and where is the floor?",
+      "inputs": [
+        "the installed torch, plus the recorded matrix"
+      ],
+      "outputs": [
+        "Docs/torch_matrix.json"
+      ],
+      "handles": "Evidence for the supported-version floor instead of an assurance; register_step_post_hook is the mechanism under test."
+    },
+    "Bench/claim11_codecs.py": {
+      "purpose": "Claim 11-12 bench: storage ratio, exactness and CRC per data type, plus the dictionary comparison that justified removing `text-dict`.",
+      "inputs": [
+        "synthetic prose, code, token-id arrays, pixel arrays and float weights"
+      ],
+      "outputs": [
+        "Docs/codec_results.json",
+        "a printed ratio/exactness table"
+      ],
+      "handles": "Chooses nothing itself - it measures `choose_data_codec` + `encode_shard`/`decode_shard` and reports what they did. `--dictionary` re-runs the losing comparison."
+    },
+    "Bench/claim13_capture_levels.py": {
+      "purpose": "Claim 13-14 bench: recorder overhead per data level, charged to log()+step(), and a join round-trip checked against the bytes.",
+      "inputs": [
+        "a tiny torch model, synthetic batches, four data levels"
+      ],
+      "outputs": [
+        "Docs/capture_levels.json",
+        "a printed per-level table and join report"
+      ],
+      "handles": "Keeps the optimizer out of the timed region (timing it measured AdamW instead of the recorder). Reports the catch-up tail separately, and verifies every shard by re-decoding it rather than trusting the header."
+    },
+    "Bench/claim15_activations.py": {
+      "purpose": "Claim 15: the cost of tier 3 (forward pass and whole step) plus a detection probe on a deliberately sick model.",
+      "inputs": [
+        "a synthetic 4-block stack, with and without activations"
+      ],
+      "outputs": [
+        "Docs/activation_results.json"
+      ],
+      "handles": "Times the forward with no writer thread running; the first version timed step() too and reported +208% then +503% for the same code."
+    },
+    "Bench/claim_arch_sweep.py": {
+      "purpose": "Phase 4.5: one recorder over six architectures with no model-specific code.",
+      "inputs": [
+        "transformer, CNN, LSTM, state-space, mixture-of-experts and multi-tower models"
+      ],
+      "outputs": [
+        "Docs/Research.json (architecture sweep rows)"
+      ],
+      "handles": "Tests that nothing in the adapter or recorder needs to know what the model is; also covered by Tests/integration/test_arch_sweep.py."
+    },
     "Bench/claim_plane_shuffle.py": {
       "purpose": "Does byte-plane shuffling help? Measured, not assumed.",
       "inputs": [
@@ -720,6 +318,548 @@
       ],
       "handles": "Result: hurts sparse, barely helps dense, identity on all-zero."
     },
+    "Bench/phase09_end_to_end.py": {
+      "purpose": "The v1.0 end-to-end proof: a transformer, a CNN and an RNN trained, recorded and measured.",
+      "inputs": [
+        "--steps",
+        "--out",
+        "--keep"
+      ],
+      "outputs": [
+        "fidelity table",
+        "storage table",
+        "A/B table",
+        "JSON"
+      ],
+      "handles": "Anchors exact, chained error, weight-bytes-vs-checkpoint at matched resolution, and a same-seed A/B that proves recording changes nothing."
+    },
+    "Bench/scale_1m_parameters.py": {
+      "purpose": "Scale test: train and record a 1,004,176-parameter causal transformer, then answer the product's questions from the file alone, and optionally hand-test the shipped CLI on it.",
+      "inputs": [
+        "--steps",
+        "--batch",
+        "--no-activations",
+        "--out",
+        "--json-out",
+        "--hand-test"
+      ],
+      "outputs": [
+        "Actions/out/scale/<os>-py<ver>.json and .txt (CI)",
+        "Bench/out/transformer-1m.archx.mdl (the recording, uploaded as an artifact)",
+        "stdout: parameters, loss, recording size, rebuild error, per-stored-step ratio, dead/saturated units"
+      ],
+      "handles": "Parameter budget swept with real count_parameters, never computed by hand (the first shape was 25% over). Both size ratios are printed with the denominator named, because the like-for-like number is per stored step. --hand-test runs the CLI as a subprocess and asserts on its text."
+    },
+    "Docs/Change.md": {
+      "purpose": "Inbox for user-requested additions and changes, each with an effect on the roadmap.",
+      "inputs": [
+        "new user requests"
+      ],
+      "outputs": [
+        "roadmap edits or a documented decline"
+      ],
+      "handles": "Nothing here is silently dropped."
+    },
+    "Docs/Changelog.md": {
+      "purpose": "What each version shipped and what changed between versions.",
+      "inputs": [
+        "completed roadmap phases"
+      ],
+      "outputs": [
+        "release notes per version"
+      ],
+      "handles": "Features only; no implementation notes."
+    },
+    "Docs/Files_Info.json": {
+      "purpose": "This file: the per-file map used instead of re-reading the codebase.",
+      "inputs": [
+        "the current tree and each file's role"
+      ],
+      "outputs": [
+        "purpose, inputs, outputs, handles per path"
+      ],
+      "handles": "Must be updated in the same change that adds or edits a file."
+    },
+    "Docs/Logic.md": {
+      "purpose": "Call chains from a user entry point down to files, plus failure paths.",
+      "inputs": [
+        "implemented call chains"
+      ],
+      "outputs": [
+        "traceable flow per feature"
+      ],
+      "handles": "Breakage tracing. Updated whenever a call chain changes."
+    },
+    "Docs/README.md": {
+      "purpose": "Folder README for Docs/: what belongs here and what does not.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Points each kind of document at its home folder."
+    },
+    "Docs/Research.json": {
+      "purpose": "Every lookup that influenced a decision, with sources and verdict.",
+      "inputs": [
+        "library/API research, measurements"
+      ],
+      "outputs": [
+        "findings plus exact URLs"
+      ],
+      "handles": "Prevents re-researching the same thing. Sources are GitHub API URLs because raw and docs hosts are blocked."
+    },
+    "Docs/Rules.md": {
+      "purpose": "The binding working rules: structure, process, testing, CI workaround, environment limits.",
+      "inputs": [
+        "user directives"
+      ],
+      "outputs": [
+        "constraints every change must satisfy"
+      ],
+      "handles": "Must be read before any change. Numbered rules are referenced from other docs."
+    },
+    "Docs/Secrets.md": {
+      "purpose": "Exact name and purpose of every GitHub Actions secret the project needs.",
+      "inputs": [
+        "workflow requirements"
+      ],
+      "outputs": [
+        "names the user sets in repository settings"
+      ],
+      "handles": "The assistant never sets a secret; names must match character for character."
+    },
+    "Docs/Technical.md": {
+      "purpose": "Technical reference: stack, repository layout, per-file roles, glossary, environment facts.",
+      "inputs": [
+        "the codebase and the environment"
+      ],
+      "outputs": [
+        "human-readable reference"
+      ],
+      "handles": "The 'why'; Files_Info.json is the machine-readable 'what'."
+    },
+    "Docs/Thinking.md": {
+      "purpose": "Reasoning log: why something was built or changed, what broke, how it was split and solved.",
+      "inputs": [
+        "problems met during a round of work"
+      ],
+      "outputs": [
+        "one dated section per round"
+      ],
+      "handles": "Decision history. Updated after every round."
+    },
+    "Docs/Workaround.md": {
+      "purpose": "Environment limitations and the exact workaround for each.",
+      "inputs": [
+        "failures caused by the sandbox, token or runner limits"
+      ],
+      "outputs": [
+        "repeatable instructions"
+      ],
+      "handles": "Rust toolchain, Actions logs, raw.githubusercontent.com, heavy installs, runner cap, binary recordings."
+    },
+    "Docs/activation_results.json": {
+      "purpose": "The recorded tier-3 numbers: added cost per forward, batch-scaling plateau, and the detection probe.",
+      "inputs": [
+        "Bench/claim15_activations.py"
+      ],
+      "outputs": [
+        "the cost figures cited in Plan/Roadmap.md and Docs/Research.json"
+      ],
+      "handles": "Generated output, committed so the overhead claim is checkable."
+    },
+    "Docs/capture_levels.json": {
+      "purpose": "The recorded Claim 13-14 numbers: per-level bytes, median/p95/max step cost, catch-up share, seal time, and the join report with verified-shard counts.",
+      "inputs": [
+        "Bench/claim13_capture_levels.py"
+      ],
+      "outputs": [
+        "the table in Plan/Roadmap.md"
+      ],
+      "handles": "Generated output, committed so the overhead claim is checkable."
+    },
+    "Docs/codec_results.json": {
+      "purpose": "The recorded Claim 11-12 table: per-case raw/stored bytes, ratio, chosen codec, exactness and CRC agreement.",
+      "inputs": [
+        "Bench/claim11_codecs.py"
+      ],
+      "outputs": [
+        "claimed numbers cited in Plan/Roadmap.md and Docs/Research.json"
+      ],
+      "handles": "Generated output, committed so a reader can check a claim without rerunning the bench."
+    },
+    "Docs/phase09_results.json": {
+      "purpose": "Committed numbers for the Phase 9 work (adapter breadth and the end-to-end proof).",
+      "inputs": [
+        "Bench runs from Phase 9"
+      ],
+      "outputs": [
+        "the figures quoted in Docs/Changelog.md"
+      ],
+      "handles": "A record, not a source: the benches produce it, the changelog cites it."
+    },
+    "Docs/torch_matrix.json": {
+      "purpose": "Which torch versions were actually exercised, and what each could record.",
+      "inputs": [
+        "Bench/claim08_torch_versions.py"
+      ],
+      "outputs": [
+        "the supported-version floor quoted in the changelog"
+      ],
+      "handles": "Version claims are read from here rather than from the intent to support them."
+    },
+    "LICENSE": {
+      "purpose": "MIT license text.",
+      "inputs": [],
+      "outputs": [],
+      "handles": "Chosen by the user (2026-11-11)."
+    },
+    "Plan/Architecture.md": {
+      "purpose": "The decided design: observer model, adapters per setup, storage, tiers, non-goals, risks.",
+      "inputs": [
+        "the project brief",
+        "verified framework behaviour"
+      ],
+      "outputs": [
+        "scope the roadmap is derived from"
+      ],
+      "handles": "Every decision is marked DECIDED (mine to defend) or ASK (user's)."
+    },
+    "Plan/Format_Spec.md": {
+      "purpose": "Normative byte-level specification of the .archx.mdl container (format 1.0, draft).",
+      "inputs": [
+        "storage design decisions"
+      ],
+      "outputs": [
+        "header, block, payload, footer layouts and reader rules"
+      ],
+      "handles": "Frozen by roadmap step 1.1; code must match it or the spec is amended."
+    },
+    "Plan/Open_Questions.md": {
+      "purpose": "Decisions waiting on the user, with recommendation and evidence.",
+      "inputs": [
+        "ambiguities found while writing the plan"
+      ],
+      "outputs": [
+        "numbered questions to answer"
+      ],
+      "handles": "Unanswered question means the dependent step is not started."
+    },
+    "Plan/Origin_Chat.md": {
+      "purpose": "Durable extraction of the user's origin conversation: pipeline lineage, format wishlist, requirements the later brief omitted, and where the two disagree.",
+      "inputs": [
+        "internels/chat/2026-11-10-to-11-11_origin-chat.md (local only)"
+      ],
+      "outputs": [
+        "requirement changes in Plan/ and Docs/Change.md",
+        "questions Q17-Q19"
+      ],
+      "handles": "Replaces the raw chat as a reference; the raw chat is never committed."
+    },
+    "Plan/README.md": {
+      "purpose": "Folder README: what belongs in Plan/ and what does not.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Structure discoverability."
+    },
+    "Plan/Roadmap.md": {
+      "purpose": "Ordered work list by phase and version; one step at a time.",
+      "inputs": [
+        "Architecture.md",
+        "Docs/Change.md"
+      ],
+      "outputs": [
+        "what to build next and its acceptance test"
+      ],
+      "handles": "Status column is the source of truth for progress."
+    },
+    "README.md": {
+      "purpose": "Entry point: what the product is, status, and where to start reading.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Orientation only. Points to Plan/Architecture.md and Docs/Rules.md."
+    },
+    "Tests/README.md": {
+      "purpose": "Folder README: test layers, when each runs, where records go.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "none"
+      ],
+      "handles": "Test policy in practice."
+    },
+    "Tests/Records/README.md": {
+      "purpose": "Naming, shape and retention rules for recorded test runs.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "record schema"
+      ],
+      "handles": "Version folders; keep current plus two."
+    },
+    "Tests/integration/test_arch_sweep.py": {
+      "purpose": "Integration: six architectures record through one adapter and reach the same tier.",
+      "inputs": [
+        "torch"
+      ],
+      "outputs": [
+        "pass/fail, and the per-architecture tier in the assertion message"
+      ],
+      "handles": "The regression guard for Bench/claim_arch_sweep.py; skips when torch is absent."
+    },
+    "Tests/integration/test_cli_activations.py": {
+      "purpose": "The two tier-3 CLI commands through `python -m archx`: demo output, refusal to overwrite, JSON shape, filters, and the no-activations explanation.",
+      "inputs": [
+        "a real recording made by `archx demo`"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Uses the real entry point, because the contract a user has is the command and its exit code."
+    },
+    "Tests/integration/test_container_end_to_end.py": {
+      "purpose": "Integration: writer -> crash -> recovery -> reader -> CLI as one flow, including a real SIGKILLed subprocess.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Proves the modules still agree when wired together."
+    },
+    "Tests/integration/test_crash_recovery.py": {
+      "purpose": "Integration: kill a training process mid-run, then recover its history from the file.",
+      "inputs": [
+        "a child process running a real recorder"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That a crash costs the step in flight and not the history, that data written before the kill survives, and that recovering a copy leaves the evidence untouched."
+    },
+    "Tests/integration/test_end_to_end_proof.py": {
+      "purpose": "Pins the v1.0 promises on three real trainings.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "12 tests"
+      ],
+      "handles": "Bit-identical results, exact anchors, tier 2 with gaps named, unstored steps answerable, data joined to the weights it moved."
+    },
+    "Tests/integration/test_file_map.py": {
+      "purpose": "Integration: Docs/Files_Info.json lists every tracked file, describes nothing that was deleted, and gives each entry the four fields its own rules require.",
+      "inputs": [
+        "git ls-files",
+        "Docs/Files_Info.json"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The map's instruction to update itself is now a test rather than a habit; it listed 126 of 170 tracked files before this existed."
+    },
+    "Tests/integration/test_format_spec_matches_code.py": {
+      "purpose": "Parses real files against Plan/Format_Spec.md so the spec cannot drift.",
+      "inputs": [
+        "a real recording"
+      ],
+      "outputs": [
+        "12 tests"
+      ],
+      "handles": "Registry byte layout, anchor body, delta prefix, every JSON block's documented keys, and a rebuild using the spec alone."
+    },
+    "Tests/integration/test_forward_compat.py": {
+      "purpose": "Integration: a file written by a newer minor version is read with a warning, and a newer major is refused naming both versions.",
+      "inputs": [
+        "hand-built headers with a bumped format version"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The rule is also written in Plan/Format_Spec.md; this is the test that keeps the rule and the reader in step."
+    },
+    "Tests/integration/test_hf_adapter.py": {
+      "purpose": "Proves the HF adapter against a real Trainer: steps, weights, loss parity, accumulation, ranks.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "16 tests"
+      ],
+      "handles": "Skips with a stated reason when transformers/accelerate are absent; the CI workflow installs them so the tests run rather than skip."
+    },
+    "Tests/integration/test_hook_reach.py": {
+      "purpose": "Integration: what the optimizer hook alone records, and what log() adds.",
+      "inputs": [
+        "torch"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The regression guard for Bench/claim07_hook_reach.py."
+    },
+    "Tests/integration/test_join.py": {
+      "purpose": "Integration: the join - this data moved these weights at these steps - from the file alone.",
+      "inputs": [
+        "a recorded synthetic run"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The product's core claim, asserted through the container rather than the recorder."
+    },
+    "Tests/integration/test_join_round_trip.py": {
+      "purpose": "Claim 14 as a test: the file alone answers which data, at which step, and what movement - with every shard re-decoded and hash-verified.",
+      "inputs": [
+        "a recorded .archx.mdl from a toy model at each data level"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Also covers JOIN_INCOMPLETE, unsynced_log, and the effect_step invariant (movement must land on a step the file actually holds)."
+    },
+    "Tests/integration/test_launcher.py": {
+      "purpose": "Proves the launcher records a real script and fails loudly when it cannot.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "10 tests"
+      ],
+      "handles": "Runs real subprocesses; pins the three silent failures (torch not importable, AdamW has no step, a broken sitecustomize is ignored)."
+    },
+    "Tests/integration/test_lightning_adapter.py": {
+      "purpose": "Proves the Lightning adapter against a real pl.Trainer.",
+      "inputs": [
+        "tmp_path"
+      ],
+      "outputs": [
+        "9 tests"
+      ],
+      "handles": "Compares every reconstructed step against the weights observed at the matching batch end, which is what caught the off-by-one-update store point."
+    },
+    "Tests/integration/test_npm_signpost.py": {
+      "purpose": "Runs the signpost from pytest: install shape, loud failure, --version parity, and the node suite.",
+      "inputs": [
+        "npm/archx"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Skips with a stated reason when node is absent - never fakes a pass, since the whole point is that a wrong install cannot look like a working one."
+    },
+    "Tests/integration/test_recovery_property.py": {
+      "purpose": "Property test over 8 seeds: any tear point leaves a valid, ordered prefix and a rebuilt index that matches.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Documents that a tear inside META loses META but never corrupts it."
+    },
+    "Tests/integration/test_torch_adapter.py": {
+      "purpose": "Integration: a real nn.Module and SGD, attached, read back, and timed.",
+      "inputs": [
+        "torch",
+        "archx.attach"
+      ],
+      "outputs": [
+        "pass/fail",
+        "measured overhead printed"
+      ],
+      "handles": "Reconstruction, numerics unchanged with the same seed, the join after a real optimizer step, tier reporting, and the overhead budget. Skips with a reason when torch is absent."
+    },
+    "Tests/unit/cli/test_cli.py": {
+      "purpose": "Unit tests for the CLI surface through the real entry point.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "--version/help exit codes, info JSON, broken-file error path, recover."
+    },
+    "Tests/unit/container/test_reader.py": {
+      "purpose": "Unit tests for hostile/damaged files: foreign magic, newer major, bit flip, absurd length, torn tail, unknown block type.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Each test asserts a specific typed error."
+    },
+    "Tests/unit/container/test_recovery.py": {
+      "purpose": "Unit tests for recovery: whole blocks kept, index rebuilt, copy mode, no-op on healthy files.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Crash is simulated by truncation, SIGKILL is covered in integration."
+    },
+    "Tests/unit/container/test_schema.py": {
+      "purpose": "Unit tests for struct sizes and CRC placement.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Header 40, block 28, footer 56; header CRC over bytes 0..19, footer over 0..47."
+    },
+    "Tests/unit/container/test_values.py": {
+      "purpose": "Unit tests for reading a recording back as values, events and ties.",
+      "inputs": [
+        "Timeline",
+        "Reader"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That reconstruction matches live weights within the encoder budget and that tied names come back identical."
+    },
+    "Tests/unit/container/test_writer.py": {
+      "purpose": "Unit tests for the writer: roundtrip, real compression, abort behaviour.",
+      "inputs": [],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Proves stored_len < raw_len for compressible input and that abort leaves no footer."
+    },
+    "Tests/unit/data/test_activations.py": {
+      "purpose": "12 tests: exact statistics, forward accumulation, stride sampling, non-finite handling, the layer cap, tier 3 end to end, and that recording changes no number.",
+      "inputs": [
+        "synthetic tensors and a real recorded run"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Asserts the sampled mean stays close to the exact mean on a tensor whose halves differ wildly - the case a truncating sample gets wrong."
+    },
+    "Tests/unit/data/test_capture.py": {
+      "purpose": "Unit tests for data capture: dedup, levels, sensitivity, caps, codecs, exact round-trip.",
+      "inputs": [
+        "DataCapture",
+        "codec helpers"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That an epoch over the same data costs no new bytes, that observe does no expensive work, and that every shipped codec is lossless."
+    },
+    "Tests/unit/data/test_codecs.py": {
+      "purpose": "Unit tests for shard codecs: lossless round-trip, CRC identity, varint boundaries, realistic-token detection, incompressible honesty, and the absence of the removed dictionary codec.",
+      "inputs": [
+        "synthetic shard payloads of each supported shape"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Asserts that a codec which cannot compress (pixels, weights) says so with a ratio near or above 1 instead of pretending."
+    },
     "Tests/unit/encoders/test_encoders.py": {
       "purpose": "Unit tests for the encoders: exactness where promised, measured error elsewhere.",
       "inputs": [],
@@ -727,6 +867,564 @@
         "pass/fail"
       ],
       "handles": "Also pins the measured shuffle behaviour so the finding cannot silently regress."
+    },
+    "Tests/unit/encoders/test_quantization_path.py": {
+      "purpose": "Unit: int16 quantization is offered only where its error fits the budget, and decodes back at the right width.",
+      "inputs": [
+        "synthetic tensors at several reconstruction budgets"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Watches the defect where an int16 delta was decoded as int8 and came back at half length."
+    },
+    "Tests/unit/formats/test_registry.py": {
+      "purpose": "Unit tests for the tensor registry: stable indices, tie groups, prefixes.",
+      "inputs": [
+        "TensorRegistry"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That tied weights are one storage unit and that region/component labels use the longest matching prefix."
+    },
+    "Tests/unit/test_capabilities.py": {
+      "purpose": "Unit: the tier ladder, the reasons attached to missing fields, and the rule that a tier's description names only fields that tier records.",
+      "inputs": [
+        "fields offered and denied in various orders"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Includes the guard that tier 3's prose cannot get ahead of the blocks - it promised eval results for every release without an adapter that produced any."
+    },
+    "Tests/unit/test_parallel_detection.py": {
+      "purpose": "Sharded models are recognised and refused, on stubbed engines.",
+      "inputs": [
+        "fake wrappers"
+      ],
+      "outputs": [
+        "18 tests"
+      ],
+      "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself."
+    },
+    "Tests/unit/test_policy.py": {
+      "purpose": "Unit tests for the phase policy: phases, triggers, heartbeat, anchors.",
+      "inputs": [
+        "PhasePolicy"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That density follows the stage of the run and that explicit events win over the phase."
+    },
+    "Tests/unit/test_reconstruction_guarantee.py": {
+      "purpose": "Unit: exact at anchors, float32 rounding between them, and the anchor spacing that guarantee depends on.",
+      "inputs": [
+        "a small model recorded with and without forced anchor spacing"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "The two halves of the promise are asserted separately, because reporting only one of them would overstate or understate what a step gives you."
+    },
+    "Tests/unit/test_recorder.py": {
+      "purpose": "Unit tests for the recorder: observation, no mutation, degradation, observations written.",
+      "inputs": [
+        "Recorder",
+        "TemporaryDirectory"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "That the recorder never alters a weight, never raises into training, drops detail under backpressure, and writes what it promised into the file."
+    },
+    "archx/__init__.py": {
+      "purpose": "Public package surface; exposes __version__ and FORMAT_VERSION only.",
+      "inputs": [],
+      "outputs": [
+        "__version__",
+        "FORMAT_VERSION"
+      ],
+      "handles": "Stays tiny on purpose."
+    },
+    "archx/__main__.py": {
+      "purpose": "`python -m archx`, the same CLI as the `archx` script.",
+      "inputs": [
+        "argv"
+      ],
+      "outputs": [
+        "process exit code"
+      ],
+      "handles": "Exists so the tool works from a clone without an editable install on PATH; no logic of its own."
+    },
+    "archx/_launcher_hook.py": {
+      "purpose": "The injected sitecustomize: patches torch optimizers once torch.optim loads.",
+      "inputs": [
+        "ARCHX_LAUNCHER_PATH"
+      ],
+      "outputs": [
+        "a tier-0 recording named param[group][position]"
+      ],
+      "handles": "Installed via sys.meta_path because torch is not importable at start-up; wraps every optimizer class that defines its own step because AdamW does not define one; never raises into the user's training job."
+    },
+    "archx/adapters/__init__.py": {
+      "purpose": "Marks the adapters package; one file per framework.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "__all__ of planned adapters"
+      ],
+      "handles": "Nothing at import time: torch is optional."
+    },
+    "archx/adapters/hf.py": {
+      "purpose": "Hugging Face Trainer: one callback, no fork of the training loop.",
+      "inputs": [
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "data_level",
+        "queue_size",
+        "max_rel_error",
+        "meta"
+      ],
+      "outputs": [
+        "ArchxCallback",
+        "loss_hook(trainer) for a per-step loss",
+        "HfRecorder"
+      ],
+      "handles": "Gradients and learning rate read at on_pre_optimizer_step (the norm is the CLIPPED one when max_grad_norm > 0), the step taken at on_optimizer_step keyed on state.global_step, model unwrapped so no 'module.' prefix reaches the file, and only the main process records. No optimizer hook is registered: it raises AttributeError on accelerate's AcceleratedOptimizer. The loss is observed via loss_hook or callback.log, never taken from on_log."
+    },
+    "archx/adapters/lightning.py": {
+      "purpose": "PyTorch Lightning: one callback, tier 1 with no user code.",
+      "inputs": [
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "queue_size",
+        "max_rel_error",
+        "meta"
+      ],
+      "outputs": [
+        "ArchxCallback",
+        "LightningRecorder"
+      ],
+      "handles": "Stores at on_train_batch_end (weights are new there) keyed on trainer.global_step, which advances only on a real update; gradient norm and lr are cached at on_before_optimizer_step, where the weights are still old. Loss comes free from outputs['loss']."
+    },
+    "archx/adapters/torch.py": {
+      "purpose": "Raw PyTorch: attach in one line via optimizer.register_step_post_hook.",
+      "inputs": [
+        "model",
+        "optimizer",
+        "path",
+        "policy",
+        "regions",
+        "components",
+        "data_level"
+      ],
+      "outputs": [
+        "TorchRecorder",
+        "as_bytes() for any batch type"
+      ],
+      "handles": "Global gradient norm read before zero_grad(), tied parameters kept via remove_duplicate=False, and the batch converted in exactly one place."
+    },
+    "archx/capabilities.py": {
+      "purpose": "What a run could actually see: the tier reached and every field it could not see.",
+      "inputs": [
+        "fields offered as facts arrive"
+      ],
+      "outputs": [
+        "capability_tier",
+        "capabilities_missing with a reason per field"
+      ],
+      "handles": "A tier is measured, never requested; a tier cannot be reached above a missing lower tier. TIER_MEANING names only fields the build records - tier 3 promised eval results for every release without an adapter that produced any."
+    },
+    "archx/cli/__init__.py": {
+      "purpose": "CLI package surface with a lazy import so `import archx` stays cheap.",
+      "inputs": [],
+      "outputs": [
+        "main()"
+      ],
+      "handles": "Console script target is archx.cli.main:main."
+    },
+    "archx/cli/activations.py": {
+      "purpose": "`archx activations`: print the layer summaries, and flag dead or saturated layers.",
+      "inputs": [
+        ".archx.mdl path",
+        "--layer / --step / --json"
+      ],
+      "outputs": [
+        "a table, JSON, or an explanation of why the file has no tier-3 data"
+      ],
+      "handles": "A file below tier 3 exits 0 with the reason from its own capability block - absence is not an error, silence would be."
+    },
+    "archx/cli/demo.py": {
+      "purpose": "`archx demo`: record a small run so a new install has a real file to inspect.",
+      "inputs": [
+        "--out, --steps"
+      ],
+      "outputs": [
+        "a recorded .archx.mdl and the commands to read it"
+      ],
+      "handles": "Refuses to overwrite an existing file, and needs torch (says so and exits 1 without it)."
+    },
+    "archx/cli/diff.py": {
+      "purpose": "archx diff: what changed between two steps of one run, or between two recordings.",
+      "inputs": [
+        "recording path",
+        "optional --other",
+        "--step",
+        "--step-b",
+        "--json"
+      ],
+      "outputs": [
+        "per-tensor movement, absolute and relative to each tensor's own size, by region",
+        "exit code"
+      ],
+      "handles": "Compares store points only. Two files that share no tensor name report 'cannot compare' rather than the strongest verdict on zero comparisons, and the folded-update count is labelled as updates, not steps."
+    },
+    "archx/cli/events.py": {
+      "purpose": "archx events: per-step observations, user annotations and data segments.",
+      "inputs": [
+        "recording path",
+        "--json"
+      ],
+      "outputs": [
+        "human table or JSON with steps / observations / annotations / segments"
+      ],
+      "handles": "Keeps the three streams apart, because they answer three different questions."
+    },
+    "archx/cli/info.py": {
+      "purpose": "`archx info`: summarize a recording (format, size, closure, blocks, key META fields).",
+      "inputs": [
+        "path",
+        "--json"
+      ],
+      "outputs": [
+        "human or JSON text, exit code"
+      ],
+      "handles": "Reads metadata only; never loads tensor payloads."
+    },
+    "archx/cli/main.py": {
+      "purpose": "Argument parsing and dispatch only.",
+      "inputs": [
+        "argv"
+      ],
+      "outputs": [
+        "exit code"
+      ],
+      "handles": "--version, info, recover; new commands are added as their modules land."
+    },
+    "archx/cli/reconstruct.py": {
+      "purpose": "archx reconstruct: rebuild the weights at a step and write them to .npz.",
+      "inputs": [
+        "recording path",
+        "--step",
+        "--out"
+      ],
+      "outputs": [
+        ".npz file (no pickle)",
+        "stdout summary",
+        "exit code"
+      ],
+      "handles": "Defaults to the last stored step. Answers any step inside the recorded range, including steps between store points, and says which anchor the answer was rebuilt from. Refuses only a step outside the file, and names the range it does have."
+    },
+    "archx/cli/recover.py": {
+      "purpose": "`archx recover`: close a crashed recording, in place or into a copy.",
+      "inputs": [
+        "path",
+        "--out"
+      ],
+      "outputs": [
+        "report text, exit code"
+      ],
+      "handles": "Delegates to container/recovery.py."
+    },
+    "archx/container/__init__.py": {
+      "purpose": "Container package surface: Reader, Writer, BlockType, read_header.",
+      "inputs": [],
+      "outputs": [
+        "Reader",
+        "Writer",
+        "BlockType",
+        "read_header"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/container/compress.py": {
+      "purpose": "Per-block compression: zstandard if installed, else stdlib compression.zstd (3.14+), else zlib/none.",
+      "inputs": [
+        "bytes",
+        "Codec"
+      ],
+      "outputs": [
+        "compressed or decompressed bytes"
+      ],
+      "handles": "effective_codec() downgrades ZSTD to ZLIB when no zstd exists; NONE always works."
+    },
+    "archx/container/reader.py": {
+      "purpose": "Validating reader: header checks, prefix CRCs, length caps, payload CRCs, footer detection, index decode.",
+      "inputs": [
+        "path",
+        "max_block_bytes",
+        "allow_torn"
+      ],
+      "outputs": [
+        "Header",
+        "Container(blocks, footer)",
+        "meta()",
+        "info()"
+      ],
+      "handles": "Refuses foreign files, newer majors, absurd lengths, bad CRCs; skips unknown block types; reports torn tails instead of trusting them."
+    },
+    "archx/container/recovery.py": {
+      "purpose": "Rebuild a crashed file: keep whole blocks, truncate the tail, rebuild the index, append a footer.",
+      "inputs": [
+        "path (in place or copy)"
+      ],
+      "outputs": [
+        "RecoveryReport",
+        "a closed, indexed file"
+      ],
+      "handles": "Steps are read from block prefixes, so no decompression is needed; the capability block is the exception, and is recomputed from the surviving blocks because a crash happens before close. Only truncates and re-appends; never rewrites block bytes."
+    },
+    "archx/container/schema.py": {
+      "purpose": "Byte-level layout: header/block/footer structs, block-type ids, codec ids, flag bits, CRC helpers.",
+      "inputs": [],
+      "outputs": [
+        "HEADER/BLOCK/FOOTER structs and sizes",
+        "header_bytes()",
+        "footer_bytes()",
+        "zlib_crc32()"
+      ],
+      "handles": "The only file where byte offsets live. Block prefix is 28 bytes: type, codec, flags, step, raw_len, payload_len, payload_crc, block_crc(over 0..23)."
+    },
+    "archx/container/values.py": {
+      "purpose": "Blocks turned back into meaning: registry, anchor, delta and the Timeline over them.",
+      "inputs": [
+        "Reader"
+      ],
+      "outputs": [
+        "TensorInfo list",
+        "reconstruct(step) -> arrays",
+        "events()",
+        "annotations()",
+        "segments()"
+      ],
+      "handles": "Decoding with the encoder the writer recorded, tie re-aliasing, and last-statement-wins for a segment that grew while the run continued."
+    },
+    "archx/container/writer.py": {
+      "purpose": "Append-only block writer with batched fsync, index block and footer.",
+      "inputs": [
+        "output path",
+        "block type + payload + optional step"
+      ],
+      "outputs": [
+        ".archx.mdl bytes on disk"
+      ],
+      "handles": "Torn-write safety (header first, footer last), CLOSED/RECOVERED flags, index of (step, offset, length)."
+    },
+    "archx/data/__init__.py": {
+      "purpose": "Marks the data package: codecs and capture.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "__all__ of the data helpers"
+      ],
+      "handles": "Nothing at import time."
+    },
+    "archx/data/activations.py": {
+      "purpose": "Tier 3: reduce each layer's forward-pass output to a fixed-size summary (mean, std, min/max, dead-unit and saturation fractions).",
+      "inputs": [
+        "a tensor or tuple handed to a forward hook"
+      ],
+      "outputs": [
+        "one JSON-serialisable dict per layer per store point"
+      ],
+      "handles": "Never keeps a tensor: stride-samples above MAX_ELEMENTS so the cost is bounded by layer count, counts non-finite values instead of letting them poison the moments, and records how many forward passes were folded in."
+    },
+    "archx/data/capture.py": {
+      "purpose": "Data capture in two phases: cheap observe on the training thread, seal off it.",
+      "inputs": [
+        "batch bytes",
+        "step",
+        "segment id",
+        "sensitivity flag",
+        "optional byte cap"
+      ],
+      "outputs": [
+        "Segment records with characteristics and per-region effects",
+        "deduplicated shards"
+      ],
+      "handles": "Four data levels, content dedup, sensitive shards, a cap that degrades to pointers, and a lock so the writer thread and the training thread cannot corrupt each other's view."
+    },
+    "archx/data/codecs.py": {
+      "purpose": "Content id and per-shard codec: text-zstd, tokens-varint or zstd, all lossless.",
+      "inputs": [
+        "bytes of one batch or shard"
+      ],
+      "outputs": [
+        "EncodedShard (id, codec, payload, crc)",
+        "exact original bytes on decode"
+      ],
+      "handles": "Content addressing and the measured varint threshold (ids < 128)."
+    },
+    "archx/encoders/__init__.py": {
+      "purpose": "Encoder package surface.",
+      "inputs": [],
+      "outputs": [
+        "encoder classes",
+        "choose_encoder"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/encoders/base.py": {
+      "purpose": "Encoder contract, the Encoded result, and smallest-under-budget choice.",
+      "inputs": [
+        "np.ndarray delta"
+      ],
+      "outputs": [
+        "Encoded(encoding, body, nnz_or_rank, value_dtype, max_abs_error, rel_error)"
+      ],
+      "handles": "relative_error() is the single definition of error used everywhere."
+    },
+    "archx/encoders/dense.py": {
+      "purpose": "Encoding 2: symmetric int8/int16 quantization of a dense delta.",
+      "inputs": [
+        "delta",
+        "bits"
+      ],
+      "outputs": [
+        "Encoded (lossy, error measured by re-decoding)"
+      ],
+      "handles": "Error is computed from the decoded array, not from pre-decode values."
+    },
+    "archx/encoders/dense_raw.py": {
+      "purpose": "Encoding 4: the lossless fallback, raw (optionally shuffled) bytes through zstd.",
+      "inputs": [
+        "delta",
+        "codec",
+        "shuffle_planes"
+      ],
+      "outputs": [
+        "Encoded (exact)"
+      ],
+      "handles": "Guarantees every tensor has an exact option; shuffle is opt-in because it measured badly."
+    },
+    "archx/encoders/lowrank.py": {
+      "purpose": "Encoding 3: truncated SVD of a 2-D delta at the smallest rank meeting the error budget.",
+      "inputs": [
+        "delta (2-D)",
+        "max_rank",
+        "max_rel_error"
+      ],
+      "outputs": [
+        "Encoded or None"
+      ],
+      "handles": "Refuses non-2-D tensors and refuses noise, which is the honest behaviour."
+    },
+    "archx/encoders/plane.py": {
+      "purpose": "Reversible byte-plane shuffle and XOR-against-previous helper.",
+      "inputs": [
+        "raw bytes",
+        "itemsize"
+      ],
+      "outputs": [
+        "reordered bytes"
+      ],
+      "handles": "Measured to hurt zero-heavy data; used only where it helps."
+    },
+    "archx/encoders/sparse.py": {
+      "purpose": "Encoding 1: index-gap + value compression for deltas with few moved entries.",
+      "inputs": [
+        "delta",
+        "threshold",
+        "codec"
+      ],
+      "outputs": [
+        "Encoded (exact)"
+      ],
+      "handles": "Refuses when more than half the entries moved, because index cost then beats density."
+    },
+    "archx/encoders/unchanged.py": {
+      "purpose": "Encoding 0: zero delta, zero bytes.",
+      "inputs": [
+        "delta",
+        "atol"
+      ],
+      "outputs": [
+        "Encoded or None"
+      ],
+      "handles": "Tied and frozen parameters hit this every step."
+    },
+    "archx/errors.py": {
+      "purpose": "Typed exceptions so callers can degrade selectively.",
+      "inputs": [],
+      "outputs": [
+        "ArchxError and subclasses"
+      ],
+      "handles": "FormatError, CorruptBlockError, TruncatedFileError, UnsupportedVersionError, DependencyMissingError."
+    },
+    "archx/formats/__init__.py": {
+      "purpose": "Format-level value types shared by file, encoders and reader.",
+      "inputs": [],
+      "outputs": [
+        "DType",
+        "to_numpy",
+        "from_numpy",
+        "name_of"
+      ],
+      "handles": "Re-exports only."
+    },
+    "archx/formats/dtype.py": {
+      "purpose": "The one-byte dtype ids from the spec mapped to numpy.",
+      "inputs": [
+        "wire name or numpy dtype"
+      ],
+      "outputs": [
+        "numpy dtype or wire id"
+      ],
+      "handles": "bf16 is refused at decode (no numpy equivalent); everything else round-trips."
+    },
+    "archx/formats/registry.py": {
+      "purpose": "The tensor registry: names, dtypes, shapes, tie groups, regions, components.",
+      "inputs": [
+        "named arrays plus storage pointers"
+      ],
+      "outputs": [
+        "TensorEntry list addressed by stable index",
+        "primary_entries",
+        "components",
+        "regions"
+      ],
+      "handles": "Tied weights detected by data_ptr so bytes are stored once and the alias survives."
+    },
+    "archx/launcher.py": {
+      "purpose": "`archx run -- <command>`: record a training script without editing it.",
+      "inputs": [
+        "command",
+        "recording path",
+        "environment"
+      ],
+      "outputs": [
+        "a .archx.mdl recording",
+        "non-zero exit when nothing was captured"
+      ],
+      "handles": "Copies _launcher_hook.py into a temp dir as sitecustomize.py, prepends it to PYTHONPATH, runs the command, then verifies the file really contains steps. Never leaves an empty recording behind."
+    },
+    "archx/parallel.py": {
+      "purpose": "Recognise FSDP/ZeRO/TP wrappers and refuse to record a sharded model.",
+      "inputs": [
+        "model"
+      ],
+      "outputs": [
+        "Detection(kind, evidence)"
+      ],
+      "handles": "Class-name and parameter-shape detection that needs no deepspeed import and never raises; attach() refuses before opening a file unless allow_partial=True."
     },
     "archx/policy.py": {
       "purpose": "Phase policy: warmup / middle / cool-down plus event triggers -> store, skip or anchor.",
@@ -761,443 +1459,73 @@
       ],
       "handles": "Two promises: training never waits (bounded queue, drops detail), and recording never changes training (reads only). Writes movement, then observation, then data."
     },
-    "archx/capabilities.py": {
-      "purpose": "What a run could actually see: the tier reached and every field it could not see.",
-      "inputs": [
-        "fields offered as facts arrive"
-      ],
+    "archx/version.py": {
+      "purpose": "Single source of version and format constants (MAGIC, END_MAGIC, FORMAT_MAJOR/MINOR).",
+      "inputs": [],
       "outputs": [
-        "capability_tier",
-        "capabilities_missing with a reason per field"
+        "__version__",
+        "FORMAT_MAJOR",
+        "FORMAT_MINOR",
+        "MAGIC",
+        "END_MAGIC"
       ],
-      "handles": "A tier is measured, never requested; a tier cannot be reached above a missing lower tier."
+      "handles": "Imported by schema, reader, writer and the CLI."
     },
-    "archx/formats/registry.py": {
-      "purpose": "The tensor registry: names, dtypes, shapes, tie groups, regions, components.",
-      "inputs": [
-        "named arrays plus storage pointers"
-      ],
-      "outputs": [
-        "TensorEntry list addressed by stable index",
-        "primary_entries",
-        "components",
-        "regions"
-      ],
-      "handles": "Tied weights detected by data_ptr so bytes are stored once and the alias survives."
-    },
-    "archx/data/codecs.py": {
-      "purpose": "Content id and per-shard codec: text-zstd, tokens-varint or zstd, all lossless.",
-      "inputs": [
-        "bytes of one batch or shard"
-      ],
-      "outputs": [
-        "EncodedShard (id, codec, payload, crc)",
-        "exact original bytes on decode"
-      ],
-      "handles": "Content addressing and the measured varint threshold (ids < 128)."
-    },
-    "archx/data/capture.py": {
-      "purpose": "Data capture in two phases: cheap observe on the training thread, seal off it.",
-      "inputs": [
-        "batch bytes",
-        "step",
-        "segment id",
-        "sensitivity flag",
-        "optional byte cap"
-      ],
-      "outputs": [
-        "Segment records with characteristics and per-region effects",
-        "deduplicated shards"
-      ],
-      "handles": "Four data levels, content dedup, sensitive shards, a cap that degrades to pointers, and a lock so the writer thread and the training thread cannot corrupt each other's view."
-    },
-    "archx/container/values.py": {
-      "purpose": "Blocks turned back into meaning: registry, anchor, delta and the Timeline over them.",
-      "inputs": [
-        "Reader"
-      ],
-      "outputs": [
-        "TensorInfo list",
-        "reconstruct(step) -> arrays",
-        "events()",
-        "annotations()",
-        "segments()"
-      ],
-      "handles": "Decoding with the encoder the writer recorded, tie re-aliasing, and last-statement-wins for a segment that grew while the run continued."
-    },
-    "archx/adapters/torch.py": {
-      "purpose": "Raw PyTorch: attach in one line via optimizer.register_step_post_hook.",
-      "inputs": [
-        "model",
-        "optimizer",
-        "path",
-        "policy",
-        "regions",
-        "components",
-        "data_level"
-      ],
-      "outputs": [
-        "TorchRecorder",
-        "as_bytes() for any batch type"
-      ],
-      "handles": "Global gradient norm read before zero_grad(), tied parameters kept via remove_duplicate=False, and the batch converted in exactly one place."
-    },
-    "archx/cli/reconstruct.py": {
-      "purpose": "archx reconstruct: rebuild the weights at a step and write them to .npz.",
-      "inputs": [
-        "recording path",
-        "--step",
-        "--out"
-      ],
-      "outputs": [
-        ".npz file (no pickle)",
-        "stdout summary",
-        "exit code"
-      ],
-      "handles": "Defaults to the last recorded step; refuses a step the file does not have."
-    },
-    "archx/cli/events.py": {
-      "purpose": "archx events: per-step observations, user annotations and data segments.",
-      "inputs": [
-        "recording path",
-        "--json"
-      ],
-      "outputs": [
-        "human table or JSON with steps / observations / annotations / segments"
-      ],
-      "handles": "Keeps the three streams apart, because they answer three different questions."
-    },
-    "Bench/claim05_overhead.py": {
-      "purpose": "Claim 5: what recording costs per step, against the same loop with no recorder.",
-      "inputs": [
-        "synthetic training loops",
-        "policy settings"
-      ],
-      "outputs": [
-        "median step time, bytes written, stored/skipped counts"
-      ],
-      "handles": "Measurement only. The adapter-level version lives in the torch integration test."
-    },
-    "Tests/unit/test_policy.py": {
-      "purpose": "Unit tests for the phase policy: phases, triggers, heartbeat, anchors.",
-      "inputs": [
-        "PhasePolicy"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That density follows the stage of the run and that explicit events win over the phase."
-    },
-    "Tests/unit/test_recorder.py": {
-      "purpose": "Unit tests for the recorder: observation, no mutation, degradation, observations written.",
-      "inputs": [
-        "Recorder",
-        "TemporaryDirectory"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That the recorder never alters a weight, never raises into training, drops detail under backpressure, and writes what it promised into the file."
-    },
-    "Tests/unit/formats/test_registry.py": {
-      "purpose": "Unit tests for the tensor registry: stable indices, tie groups, prefixes.",
-      "inputs": [
-        "TensorRegistry"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That tied weights are one storage unit and that region/component labels use the longest matching prefix."
-    },
-    "Tests/unit/data/test_capture.py": {
-      "purpose": "Unit tests for data capture: dedup, levels, sensitivity, caps, codecs, exact round-trip.",
-      "inputs": [
-        "DataCapture",
-        "codec helpers"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That an epoch over the same data costs no new bytes, that observe does no expensive work, and that every shipped codec is lossless."
-    },
-    "Tests/unit/container/test_values.py": {
-      "purpose": "Unit tests for reading a recording back as values, events and ties.",
-      "inputs": [
-        "Timeline",
-        "Reader"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That reconstruction matches live weights within the encoder budget and that tied names come back identical."
-    },
-    "Tests/integration/test_join.py": {
-      "purpose": "Integration: the join - this data moved these weights at these steps - from the file alone.",
-      "inputs": [
-        "a recorded synthetic run"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "The product's core claim, asserted through the container rather than the recorder."
-    },
-    "Tests/integration/test_torch_adapter.py": {
-      "purpose": "Integration: a real nn.Module and SGD, attached, read back, and timed.",
-      "inputs": [
-        "torch",
-        "archx.attach"
-      ],
-      "outputs": [
-        "pass/fail",
-        "measured overhead printed"
-      ],
-      "handles": "Reconstruction, numerics unchanged with the same seed, the join after a real optimizer step, tier reporting, and the overhead budget. Skips with a reason when torch is absent."
-    },
-    "Tests/integration/test_crash_recovery.py": {
-      "purpose": "Integration: kill a training process mid-run, then recover its history from the file.",
-      "inputs": [
-        "a child process running a real recorder"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "That a crash costs the step in flight and not the history, that data written before the kill survives, and that recovering a copy leaves the evidence untouched."
-    },
-    "archx/adapters/__init__.py": {
-      "purpose": "Marks the adapters package; one file per framework.",
+    "examples/README.md": {
+      "purpose": "Folder README: example contract (one folder, runs on CPU, writes its own recording).",
       "inputs": [
         "none"
       ],
       "outputs": [
-        "__all__ of planned adapters"
+        "none"
       ],
-      "handles": "Nothing at import time: torch is optional."
+      "handles": "Empty until the API exists."
     },
-    "archx/data/__init__.py": {
-      "purpose": "Marks the data package: codecs and capture.",
+    "examples/quickstart.py": {
+      "purpose": "The five-minute tour: record a small run, then answer all five product questions from the file alone.",
+      "inputs": [
+        "none - generates its own data"
+      ],
+      "outputs": [
+        "printed answers plus a .archx.mdl the reader can inspect"
+      ],
+      "handles": "Compares the rebuilt weights against the live tensors, which is the only check that proves anything."
+    },
+    "internels/README.md": {
+      "purpose": "Folder README: what non-public helper material is allowed here.",
       "inputs": [
         "none"
       ],
       "outputs": [
-        "__all__ of the data helpers"
+        "none"
       ],
-      "handles": "Nothing at import time."
+      "handles": "Nothing here is imported by the package."
     },
-    "archx/adapters/hf.py": {
-      "purpose": "Hugging Face Trainer: one callback, no fork of the training loop.",
-      "inputs": [
-        "path",
-        "policy",
-        "regions",
-        "components",
-        "data_level",
-        "queue_size",
-        "max_rel_error",
-        "meta"
-      ],
-      "outputs": [
-        "ArchxCallback",
-        "loss_hook(trainer) for a per-step loss",
-        "HfRecorder"
-      ],
-      "handles": "Gradients and learning rate read at on_pre_optimizer_step (the norm is the CLIPPED one when max_grad_norm > 0), the step taken at on_optimizer_step keyed on state.global_step, model unwrapped so no 'module.' prefix reaches the file, and only the main process records. No optimizer hook is registered: it raises AttributeError on accelerate's AcceleratedOptimizer. The loss is observed via loss_hook or callback.log, never taken from on_log."
+    "internels/chat/README.md": {
+      "purpose": "Folder README for local-only chat exports: the rule, why they are kept, what is in here.",
+      "inputs": [],
+      "outputs": [],
+      "handles": "Committed on purpose; the chat bodies next to it are not."
     },
-    "Tests/integration/test_hf_adapter.py": {
-      "purpose": "Proves the HF adapter against a real Trainer: steps, weights, loss parity, accumulation, ranks.",
-      "inputs": [
-        "tmp_path"
-      ],
-      "outputs": [
-        "16 tests"
-      ],
-      "handles": "Skips with a stated reason when transformers/accelerate are absent; the CI workflow installs them so the tests run rather than skip."
-    },
-    "archx/launcher.py": {
-      "purpose": "`archx run -- <command>`: record a training script without editing it.",
-      "inputs": [
-        "command",
-        "recording path",
-        "environment"
-      ],
-      "outputs": [
-        "a .archx.mdl recording",
-        "non-zero exit when nothing was captured"
-      ],
-      "handles": "Copies _launcher_hook.py into a temp dir as sitecustomize.py, prepends it to PYTHONPATH, runs the command, then verifies the file really contains steps. Never leaves an empty recording behind."
-    },
-    "archx/_launcher_hook.py": {
-      "purpose": "The injected sitecustomize: patches torch optimizers once torch.optim loads.",
-      "inputs": [
-        "ARCHX_LAUNCHER_PATH"
-      ],
-      "outputs": [
-        "a tier-0 recording named param[group][position]"
-      ],
-      "handles": "Installed via sys.meta_path because torch is not importable at start-up; wraps every optimizer class that defines its own step because AdamW does not define one; never raises into the user's training job."
-    },
-    "Tests/integration/test_launcher.py": {
-      "purpose": "Proves the launcher records a real script and fails loudly when it cannot.",
-      "inputs": [
-        "tmp_path"
-      ],
-      "outputs": [
-        "10 tests"
-      ],
-      "handles": "Runs real subprocesses; pins the three silent failures (torch not importable, AdamW has no step, a broken sitecustomize is ignored)."
-    },
-    "archx/adapters/lightning.py": {
-      "purpose": "PyTorch Lightning: one callback, tier 1 with no user code.",
-      "inputs": [
-        "path",
-        "policy",
-        "regions",
-        "components",
-        "queue_size",
-        "max_rel_error",
-        "meta"
-      ],
-      "outputs": [
-        "ArchxCallback",
-        "LightningRecorder"
-      ],
-      "handles": "Stores at on_train_batch_end (weights are new there) keyed on trainer.global_step, which advances only on a real update; gradient norm and lr are cached at on_before_optimizer_step, where the weights are still old. Loss comes free from outputs['loss']."
-    },
-    "Tests/integration/test_lightning_adapter.py": {
-      "purpose": "Proves the Lightning adapter against a real pl.Trainer.",
-      "inputs": [
-        "tmp_path"
-      ],
-      "outputs": [
-        "9 tests"
-      ],
-      "handles": "Compares every reconstructed step against the weights observed at the matching batch end, which is what caught the off-by-one-update store point."
-    },
-    "archx/parallel.py": {
-      "purpose": "Recognise FSDP/ZeRO/TP wrappers and refuse to record a sharded model.",
-      "inputs": [
-        "model"
-      ],
-      "outputs": [
-        "Detection(kind, evidence)"
-      ],
-      "handles": "Class-name and parameter-shape detection that needs no deepspeed import and never raises; attach() refuses before opening a file unless allow_partial=True."
-    },
-    "Bench/phase09_end_to_end.py": {
-      "purpose": "The v1.0 end-to-end proof: a transformer, a CNN and an RNN trained, recorded and measured.",
-      "inputs": [
-        "--steps",
-        "--out",
-        "--keep"
-      ],
-      "outputs": [
-        "fidelity table",
-        "storage table",
-        "A/B table",
-        "JSON"
-      ],
-      "handles": "Anchors exact, chained error, weight-bytes-vs-checkpoint at matched resolution, and a same-seed A/B that proves recording changes nothing."
-    },
-    "Tests/integration/test_end_to_end_proof.py": {
-      "purpose": "Pins the v1.0 promises on three real trainings.",
-      "inputs": [
-        "tmp_path"
-      ],
-      "outputs": [
-        "12 tests"
-      ],
-      "handles": "Bit-identical results, exact anchors, tier 2 with gaps named, unstored steps answerable, data joined to the weights it moved."
-    },
-    "Tests/integration/test_format_spec_matches_code.py": {
-      "purpose": "Parses real files against Plan/Format_Spec.md so the spec cannot drift.",
-      "inputs": [
-        "a real recording"
-      ],
-      "outputs": [
-        "12 tests"
-      ],
-      "handles": "Registry byte layout, anchor body, delta prefix, every JSON block's documented keys, and a rebuild using the spec alone."
-    },
-    "Tests/unit/test_parallel_detection.py": {
-      "purpose": "Sharded models are recognised and refused, on stubbed engines.",
-      "inputs": [
-        "fake wrappers"
-      ],
-      "outputs": [
-        "18 tests"
-      ],
-      "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself."
-    },
-    "Bench/claim11_codecs.py": {
-      "purpose": "Claim 11-12 bench: storage ratio, exactness and CRC per data type, plus the dictionary comparison that justified removing `text-dict`.",
-      "inputs": [
-        "synthetic prose, code, token-id arrays, pixel arrays and float weights"
-      ],
-      "outputs": [
-        "Docs/codec_results.json",
-        "a printed ratio/exactness table"
-      ],
-      "handles": "Chooses nothing itself - it measures `choose_data_codec` + `encode_shard`/`decode_shard` and reports what they did. `--dictionary` re-runs the losing comparison."
-    },
-    "Docs/codec_results.json": {
-      "purpose": "The recorded Claim 11-12 table: per-case raw/stored bytes, ratio, chosen codec, exactness and CRC agreement.",
-      "inputs": [
-        "Bench/claim11_codecs.py"
-      ],
-      "outputs": [
-        "claimed numbers cited in Plan/Roadmap.md and Docs/Research.json"
-      ],
-      "handles": "Generated output, committed so a reader can check a claim without rerunning the bench."
-    },
-    "Tests/unit/data/test_codecs.py": {
-      "purpose": "Unit tests for shard codecs: lossless round-trip, CRC identity, varint boundaries, realistic-token detection, incompressible honesty, and the absence of the removed dictionary codec.",
-      "inputs": [
-        "synthetic shard payloads of each supported shape"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Asserts that a codec which cannot compress (pixels, weights) says so with a ratio near or above 1 instead of pretending."
-    },
-    "Bench/claim13_capture_levels.py": {
-      "purpose": "Claim 13-14 bench: recorder overhead per data level, charged to log()+step(), and a join round-trip checked against the bytes.",
-      "inputs": [
-        "a tiny torch model, synthetic batches, four data levels"
-      ],
-      "outputs": [
-        "Docs/capture_levels.json",
-        "a printed per-level table and join report"
-      ],
-      "handles": "Keeps the optimizer out of the timed region (timing it measured AdamW instead of the recorder). Reports the catch-up tail separately, and verifies every shard by re-decoding it rather than trusting the header."
-    },
-    "Docs/capture_levels.json": {
-      "purpose": "The recorded Claim 13-14 numbers: per-level bytes, median/p95/max step cost, catch-up share, seal time, and the join report with verified-shard counts.",
-      "inputs": [
-        "Bench/claim13_capture_levels.py"
-      ],
-      "outputs": [
-        "the table in Plan/Roadmap.md"
-      ],
-      "handles": "Generated output, committed so the overhead claim is checkable."
-    },
-    "Tests/integration/test_join_round_trip.py": {
-      "purpose": "Claim 14 as a test: the file alone answers which data, at which step, and what movement - with every shard re-decoded and hash-verified.",
-      "inputs": [
-        "a recorded .archx.mdl from a toy model at each data level"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Also covers JOIN_INCOMPLETE, unsynced_log, and the effect_step invariant (movement must land on a step the file actually holds)."
-    },
-    "npm/archx/package.json": {
-      "purpose": "The npm signpost package manifest: name `archx`, one bin, no dependencies, three published files.",
+    "internels/skills/README.md": {
+      "purpose": "Skill file format: when to use, steps, pitfalls.",
       "inputs": [
         "none"
       ],
       "outputs": [
-        "the published tarball (2.2 KB)"
+        "none"
       ],
-      "handles": "Declares no `os` restriction on purpose: a signpost must install on Windows too and explain itself there, rather than sending the user nowhere."
+      "handles": "Skills are added only when reused."
+    },
+    "npm/archx/README.md": {
+      "purpose": "What the npm package is, how to install the real tool, and why the exit code is 1.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "shown on the npm registry page"
+      ],
+      "handles": "Orientation for someone who arrived by the wrong package manager."
     },
     "npm/archx/bin/archx.js": {
       "purpose": "The whole signpost: prints the PyPI install command and docs link, exits 1 for any real use.",
@@ -1210,6 +1538,16 @@
       ],
       "handles": "No child_process, no Python, no pip shell-out. `npm i archx && archx train.py` must fail loudly rather than look like a working install."
     },
+    "npm/archx/package.json": {
+      "purpose": "The npm signpost package manifest: name `archx`, one bin, no dependencies, three published files.",
+      "inputs": [
+        "none"
+      ],
+      "outputs": [
+        "the published tarball (2.2 KB)"
+      ],
+      "handles": "Declares no `os` restriction on purpose: a signpost must install on Windows too and explain itself there, rather than sending the user nowhere."
+    },
     "npm/archx/test/cli.test.js": {
       "purpose": "8 node tests for the signpost, including one that asserts the package cannot grow an implementation.",
       "inputs": [
@@ -1220,141 +1558,19 @@
       ],
       "handles": "Run with `npm test` (node --test, no dependencies); the Python suite also invokes it."
     },
-    "npm/archx/README.md": {
-      "purpose": "What the npm package is, how to install the real tool, and why the exit code is 1.",
+    "pyproject.toml": {
+      "purpose": "Packaging: distribution `archx.mdl`, import `archx`, CLI `archx`, MIT, py>=3.10, deps numpy+zstandard.",
       "inputs": [
-        "none"
+        "build backend"
       ],
       "outputs": [
-        "shown on the npm registry page"
+        "sdist/wheel",
+        "console script"
       ],
-      "handles": "Orientation for someone who arrived by the wrong package manager."
-    },
-    "Tests/integration/test_npm_signpost.py": {
-      "purpose": "Runs the signpost from pytest: install shape, loud failure, --version parity, and the node suite.",
-      "inputs": [
-        "npm/archx"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Skips with a stated reason when node is absent - never fakes a pass, since the whole point is that a wrong install cannot look like a working one."
-    },
-    ".github/workflows/npm.yml": {
-      "purpose": "Packs the signpost, installs the tarball into a scratch project, and proves the failure behaviour on Linux/Windows/macOS x node 18/20.",
-      "inputs": [
-        "Actions/triggers/npm.txt",
-        "npm/**"
-      ],
-      "outputs": [
-        "Actions/out/npm/*.json",
-        "CI records committed back to the branch"
-      ],
-      "handles": "Tests the packed tarball rather than the working tree: a wrong `files` list would ship no bin, which is the failure this job exists to catch."
-    },
-    "Actions/triggers/npm.txt": {
-      "purpose": "Trigger file for the npm-signpost workflow.",
-      "inputs": [
-        "a new line"
-      ],
-      "outputs": [
-        "an npm CI run on three runners"
-      ],
-      "handles": "Same convention as Actions/triggers/tests.txt."
-    },
-    "archx/data/activations.py": {
-      "purpose": "Tier 3: reduce each layer's forward-pass output to a fixed-size summary (mean, std, min/max, dead-unit and saturation fractions).",
-      "inputs": [
-        "a tensor or tuple handed to a forward hook"
-      ],
-      "outputs": [
-        "one JSON-serialisable dict per layer per store point"
-      ],
-      "handles": "Never keeps a tensor: stride-samples above MAX_ELEMENTS so the cost is bounded by layer count, counts non-finite values instead of letting them poison the moments, and records how many forward passes were folded in."
-    },
-    "archx/cli/activations.py": {
-      "purpose": "`archx activations`: print the layer summaries, and flag dead or saturated layers.",
-      "inputs": [
-        ".archx.mdl path",
-        "--layer / --step / --json"
-      ],
-      "outputs": [
-        "a table, JSON, or an explanation of why the file has no tier-3 data"
-      ],
-      "handles": "A file below tier 3 exits 0 with the reason from its own capability block - absence is not an error, silence would be."
-    },
-    "archx/cli/demo.py": {
-      "purpose": "`archx demo`: record a small run so a new install has a real file to inspect.",
-      "inputs": [
-        "--out, --steps"
-      ],
-      "outputs": [
-        "a recorded .archx.mdl and the commands to read it"
-      ],
-      "handles": "Refuses to overwrite an existing file, and needs torch (says so and exits 1 without it)."
-    },
-    "archx/__main__.py": {
-      "purpose": "`python -m archx`, the same CLI as the `archx` script.",
-      "inputs": [
-        "argv"
-      ],
-      "outputs": [
-        "process exit code"
-      ],
-      "handles": "Exists so the tool works from a clone without an editable install on PATH; no logic of its own."
-    },
-    "Bench/claim15_activations.py": {
-      "purpose": "Claim 15: the cost of tier 3 (forward pass and whole step) plus a detection probe on a deliberately sick model.",
-      "inputs": [
-        "a synthetic 4-block stack, with and without activations"
-      ],
-      "outputs": [
-        "Docs/activation_results.json"
-      ],
-      "handles": "Times the forward with no writer thread running; the first version timed step() too and reported +208% then +503% for the same code."
-    },
-    "Docs/activation_results.json": {
-      "purpose": "The recorded tier-3 numbers: added cost per forward, batch-scaling plateau, and the detection probe.",
-      "inputs": [
-        "Bench/claim15_activations.py"
-      ],
-      "outputs": [
-        "the cost figures cited in Plan/Roadmap.md and Docs/Research.json"
-      ],
-      "handles": "Generated output, committed so the overhead claim is checkable."
-    },
-    "Tests/unit/data/test_activations.py": {
-      "purpose": "12 tests: exact statistics, forward accumulation, stride sampling, non-finite handling, the layer cap, tier 3 end to end, and that recording changes no number.",
-      "inputs": [
-        "synthetic tensors and a real recorded run"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Asserts the sampled mean stays close to the exact mean on a tensor whose halves differ wildly - the case a truncating sample gets wrong."
-    },
-    "Tests/integration/test_cli_activations.py": {
-      "purpose": "The two tier-3 CLI commands through `python -m archx`: demo output, refusal to overwrite, JSON shape, filters, and the no-activations explanation.",
-      "inputs": [
-        "a real recording made by `archx demo`"
-      ],
-      "outputs": [
-        "pass/fail"
-      ],
-      "handles": "Uses the real entry point, because the contract a user has is the command and its exit code."
-    },
-    "examples/quickstart.py": {
-      "purpose": "The five-minute tour: record a small run, then answer all five product questions from the file alone.",
-      "inputs": [
-        "none - generates its own data"
-      ],
-      "outputs": [
-        "printed answers plus a .archx.mdl the reader can inspect"
-      ],
-      "handles": "Compares the rebuilt weights against the live tensors, which is the only check that proves anything."
+      "handles": "Version is duplicated in archx/version.py by design (build backend needs it statically); both move together at release."
     }
   },
-  "_generated": "2026-11-12 - Phases 6-9: HF, launcher, Lightning, end-to-end proof, spec conformance, 209 tests",
+  "_generated": "2026-11-13 - v1.0.2: 1M-parameter scale test on CI (three runners green, hand test 11/11), six CLI/recovery defects fixed, 276 tests per runner",
   "_local_only": {
     "internels/chat/2026-11-10-to-11-11_origin-chat.md": "User's verbatim origin chat export. Local only, gitignored, never pushed (rule 25). Header comment added; body unmodified."
   },
