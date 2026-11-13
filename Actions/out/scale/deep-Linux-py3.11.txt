@@ -1,0 +1,33 @@
+{
+  "parameters": 1004176,
+  "steps": 6,
+  "batch": 2,
+  "initial_anchors": 1,
+  "deltas": 6,
+  "example_records": 6,
+  "examples_checked": 12,
+  "loss_first": 1.6609461307525635,
+  "loss_last": 1.518775224685669,
+  "max_weight_error": 4.190951585769653e-09,
+  "max_gradient_sum_error": 1.1920928955078125e-07,
+  "max_sgd_update_error": 1.1974771041423082e-07,
+  "raw_gradient_bytes": 48200448,
+  "compressed_trace_block_bytes": 29480143,
+  "recording_bytes": 45334246,
+  "checkpoint_weights_bytes": 4016704,
+  "trace_seconds_total": 0.5173646599999984,
+  "wall_seconds": 2.443968665,
+  "meaning": "local loss gradients; not causal effects or general optimizer attribution",
+  "run_config": {
+    "model": "Bench.scale_1m_parameters.build_model",
+    "model_seed": 2026,
+    "data_seed": 71,
+    "steps": 6,
+    "batch": 2,
+    "sequence_length": 12,
+    "loss": "cross_entropy mean",
+    "optimizer": "SGD no momentum/weight decay",
+    "learning_rate": 0.02,
+    "dataset": "synthetic first-token class"
+  }
+}
