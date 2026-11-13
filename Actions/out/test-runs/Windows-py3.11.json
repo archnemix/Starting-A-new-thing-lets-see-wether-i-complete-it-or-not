@@ -300,15 +300,15 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-13T17:04:47.270763+00:00",
-  "duration_s": 67.707,
+  "started_utc": "2026-11-13T17:11:21.090996+00:00",
+  "duration_s": 70.396,
   "runner": {
     "os": "Windows-10-10.0.26100-SP0",
     "github_os": "Windows",
     "github_arch": "X64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "661ccc75e044a60b5f833e737720f2ac8a6dec3d"
+    "github_sha": "2072ccdb743b514a775b8b5df8b9b9a403695030"
   },
   "stdout_tail": [
     "........................................................................ [ 25%]",
