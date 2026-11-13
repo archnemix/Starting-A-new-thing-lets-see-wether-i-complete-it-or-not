@@ -1,0 +1,158 @@
+# 1M-parameter scale test
+#
+# Purpose: train and record a real ~1M parameter transformer on a GitHub runner, where the
+# CPU, memory and disk are not this sandbox's, and commit the measured facts back. Every
+# claim archx makes was previously measured on 6,000-18,000 parameter models because those fit
+# in a unit test; this is the first time it is measured at a size where the weights are
+# megabytes.
+#
+# Triggered by editing Actions/triggers/scale.txt, or by a push to Bench/scale_1m_parameters.py.
+
+name: scale-1m
+
+on:
+  push:
+    paths:
+      - "Actions/triggers/scale.txt"
+      - "Bench/scale_1m_parameters.py"
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "training steps"
+        required: false
+        default: "150"
+      batch:
+        description: "batch size"
+        required: false
+        default: "32"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scale-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scale:
+    name: 1M params (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux is the reference. Windows and macOS run a shorter version: a scale test is
+        # about the size of the model, not the length of the run, and three full runs would
+        # spend most of their time on timings that are not comparable across runners anyway.
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+            steps: 150
+            full: true
+          - os: windows-latest
+            python: "3.11"
+            steps: 40
+            full: false
+          - os: macos-latest
+            python: "3.11"
+            steps: 40
+            full: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          else
+            python -m pip install torch
+          fi
+          python -c "import torch, archx; print('torch', torch.__version__, 'archx', archx.__version__)"
+
+      - name: Train and record 1M parameters
+        shell: bash
+        env:
+          STEPS: ${{ github.event.inputs.steps || matrix.steps }}
+          BATCH: ${{ github.event.inputs.batch || 32 }}
+        run: |
+          set -euo pipefail
+          mkdir -p Actions/out/scale
+          label="${RUNNER_OS}-py${{ matrix.python }}"
+          python Bench/scale_1m_parameters.py \
+            --steps "$STEPS" --batch "$BATCH" \
+            --json-out "Actions/out/scale/${label}.json" \
+            | tee "Actions/out/scale/${label}.txt"
+
+      - name: Assert the numbers, not just that it ran
+        shell: bash
+        run: |
+          set -euo pipefail
+          label="${RUNNER_OS}-py${{ matrix.python }}"
+          python - "$label" <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          label = sys.argv[1]
+          data = json.loads(Path(f"Actions/out/scale/{label}.json").read_text())
+
+          params = data["model"]["parameters"]
+          fidelity = data["fidelity"]
+          recording = data["recording"]
+          comparison = data["comparison"]
+
+          # A scale test that only checks it did not crash is a smoke test wearing a lab coat.
+          assert 990_000 <= params <= 1_010_000, f"not a 1M model: {params:,}"
+          assert data["training"]["loss_drop"] > 0.2, (
+              f"the model barely learned ({data['training']['loss_drop']:.3f}); the run says "
+              "nothing about recording a real training process")
+          assert fidelity["values"] == params, (
+              f"the file rebuilds {fidelity['values']:,} values for a {params:,} parameter "
+              "model - every parameter must round-trip")
+          assert fidelity["max_abs_error_vs_live"] < 1e-7, (
+              f"reconstruction error {fidelity['max_abs_error_vs_live']:.3g} is above float32 "
+              "rounding")
+          assert recording["capability_tier"] == 3, recording["capabilities_present"]
+          assert recording["shards_decoded_ok"] == recording["shards"], (
+              "a shard did not decode back to its own length")
+          assert comparison["ratio_per_step"] < 2.0, (
+              f"the recording costs {comparison['ratio_per_step']:.2f}x a checkpoint per "
+              "stored step; the claim is smaller-than-a-checkpoint at matched resolution")
+
+          print(f"OK  {params:,} params, loss -{data['training']['loss_drop']:.3f}, "
+                f"tier {recording['capability_tier']}, "
+                f"error {fidelity['max_abs_error_vs_live']:.2e}, "
+                f"{comparison['ratio_per_step']:.2f}x a checkpoint per step, "
+                f"{recording['bytes']:,} bytes")
+          PY
+
+      - name: Keep the recording as an artifact
+        if: matrix.full
+        uses: actions/upload-artifact@v4
+        with:
+          # The recording itself is ~200 MB at 150 steps; keeping it would make every run
+          # expensive for anyone who clones. The facts are what is committed; the file is
+          # available for a week if somebody wants to open it.
+          name: recording-1m-${{ matrix.os }}
+          path: |
+            /tmp/**/*.archx.mdl
+            ${{ runner.temp }}/**/*.archx.mdl
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Record the result
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          bash Actions/scripts/commit_results.sh "ci: 1M parameter scale test ${RUNNER_OS}"
