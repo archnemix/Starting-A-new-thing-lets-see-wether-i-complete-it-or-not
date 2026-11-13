@@ -14,13 +14,13 @@
     "loss_first": 1.39383864402771,
     "loss_last": 0.0013796602142974734,
     "loss_drop": 1.3924589838134125,
-    "wall_seconds": 53.349530795999996,
-    "step_ms_median": 7.300842500001181
+    "wall_seconds": 33.902185832,
+    "step_ms_median": 6.210940500000817
   },
   "recording": {
     "path": "Bench/out/transformer-1m.archx.mdl",
-    "bytes": 113981897,
-    "bytes_per_parameter": 113.50788805946368,
+    "bytes": 113981823,
+    "bytes_per_parameter": 113.50781436720256,
     "steps_stored": 52,
     "steps_seen": 150,
     "store_ratio": 0.3466666666666667,
@@ -51,17 +51,17 @@
   },
   "comparison": {
     "checkpoint_bytes_one_save": 4028709,
-    "recording_bytes": 113981897,
-    "ratio_recording_over_checkpoint": 28.2924125321536,
-    "bytes_per_stored_step": 2191959.5576923075,
-    "ratio_per_step": 0.5440848563875692,
+    "recording_bytes": 113981823,
+    "ratio_recording_over_checkpoint": 28.29239416398653,
+    "bytes_per_stored_step": 2191958.1346153845,
+    "ratio_per_step": 0.544084503153587,
     "note": "the checkpoint figure is ONE step; the recording holds every stored step, so the per-step ratio is the like-for-like number and the total is not"
   },
   "overhead": {
-    "recorder_encode_seconds": 54.24883373600002,
-    "recorder_copy_seconds": 0.029821065000021463,
+    "recorder_encode_seconds": 29.999641106000013,
+    "recorder_copy_seconds": 0.028428777000016225,
     "blocks_written": 52,
-    "waited": 11
+    "waited": 5
   },
   "activations": {
     "summaries": 1456,
