@@ -1,8 +1,8 @@
 model            1,004,176 parameters (d=164, 3 blocks, vocab 2100)
 training         150 steps, batch 32, loss 1.3938 -> 0.0014 (drop 1.3925)
-wall             53.4s, median step 11.4ms
+wall             53.3s, median step 7.3ms
 
-recording        134,270,634 bytes (133.7 bytes per parameter)
+recording        113,981,897 bytes (113.5 bytes per parameter)
 stored            52/150 steps (35%)
 data              150 segments, 150 shards, 150/150 decoded ok
 tier              3 (activations, data_segments, deltas, grad_norms, loss, steps)
@@ -13,9 +13,9 @@ vs live weights   max abs error 9.31e-10 (float32 rounding)
 anchors           1 in file, last rebuilds exactly
 
 checkpoint        4,028,709 bytes for ONE save
-recording         134,270,634 bytes for 52 stored steps (2,582,128 per step)
-per stored step   0.64x a checkpoint (like-for-like)
-whole recording   33.33x ONE checkpoint, for 52 steps of history
+recording         113,981,897 bytes for 52 stored steps (2,191,960 per step)
+per stored step   0.54x a checkpoint (like-for-like)
+whole recording   28.29x ONE checkpoint, for 52 steps of history
 
 dead units        0 summaries at >=30% zero, worst 0.0%
 saturated         0 summaries at >=50% |x|>=4

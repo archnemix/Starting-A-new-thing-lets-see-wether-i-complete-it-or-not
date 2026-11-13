@@ -11,16 +11,16 @@
   "training": {
     "steps": 150,
     "batch": 32,
-    "loss_first": 1.3938387632369995,
+    "loss_first": 1.39383864402771,
     "loss_last": 0.0013796602142974734,
-    "loss_drop": 1.392459103022702,
-    "wall_seconds": 53.399298339,
-    "step_ms_median": 11.369997999992165
+    "loss_drop": 1.3924589838134125,
+    "wall_seconds": 53.349530795999996,
+    "step_ms_median": 7.300842500001181
   },
   "recording": {
     "path": "Bench/out/transformer-1m.archx.mdl",
-    "bytes": 134270634,
-    "bytes_per_parameter": 133.7122516371632,
+    "bytes": 113981897,
+    "bytes_per_parameter": 113.50788805946368,
     "steps_stored": 52,
     "steps_seen": 150,
     "store_ratio": 0.3466666666666667,
@@ -51,23 +51,23 @@
   },
   "comparison": {
     "checkpoint_bytes_one_save": 4028709,
-    "recording_bytes": 134270634,
-    "ratio_recording_over_checkpoint": 33.32845186882448,
-    "bytes_per_stored_step": 2582127.576923077,
-    "ratio_per_step": 0.6409317667081631,
+    "recording_bytes": 113981897,
+    "ratio_recording_over_checkpoint": 28.2924125321536,
+    "bytes_per_stored_step": 2191959.5576923075,
+    "ratio_per_step": 0.5440848563875692,
     "note": "the checkpoint figure is ONE step; the recording holds every stored step, so the per-step ratio is the like-for-like number and the total is not"
   },
   "overhead": {
-    "recorder_encode_seconds": 52.285088378999944,
-    "recorder_copy_seconds": 0.035975399999884417,
+    "recorder_encode_seconds": 54.24883373600002,
+    "recorder_copy_seconds": 0.029821065000021463,
     "blocks_written": 52,
-    "waited": 9
+    "waited": 11
   },
   "activations": {
     "summaries": 1456,
     "layers": 28,
     "dead_summaries": 0,
-    "worst_zero_fraction": 7.057362240289069e-06,
+    "worst_zero_fraction": 0.0,
     "saturated_summaries": 0
   }
 }
