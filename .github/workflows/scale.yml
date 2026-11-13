@@ -30,7 +30,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: scale-${{ github.ref }}
+  # Keep scale runs on this branch serialized, including the deep compression test.
+  group: scale-compression-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
