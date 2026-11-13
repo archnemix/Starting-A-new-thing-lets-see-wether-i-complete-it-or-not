@@ -98,7 +98,7 @@ def test_shuffle_lossless_and_legacy_and_new_blocks(tmp_path):
               'zeros': np.zeros((2, 512), dtype=np.float32)}
     arrays['zeros'].view(np.uint32).flat[3] = 0x80000000  # negative zero is not discarded
     arrays['zeros'].view(np.uint32).flat[-1] = 1  # smallest subnormal
-    examples = [b'\x00\xff\x01', 'the input text'.encode()]
+    examples = [b'\x00\xff\x01', ('Data changes weights. مثال متن 🧠\n' * 800).encode('utf-8')]
     meta = {'version': 1, 'meaning': 'local gradients', 'names': list(arrays),
             'examples_base64': [base64.b64encode(x).decode() for x in examples],
             'loss_parts': [0., 1.], 'max_aggregate_abs_error': 0.,
