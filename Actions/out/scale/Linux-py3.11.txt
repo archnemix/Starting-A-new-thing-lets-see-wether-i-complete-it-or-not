@@ -1,0 +1,23 @@
+model            1,004,176 parameters (d=164, 3 blocks, vocab 2100)
+training         150 steps, batch 32, loss 1.3938 -> 0.0014 (drop 1.3925)
+wall             55.4s, median step 8.0ms
+
+recording        134,264,929 bytes (133.7 bytes per parameter)
+stored            52/150 steps (35%)
+data              150 segments, 150 shards, 150/150 decoded ok
+tier              3 (activations, data_segments, deltas, grad_norms, loss, steps)
+activations       1456 summaries
+
+rebuild           step 149: 42 tensors, 1,004,176 values
+vs live weights   max abs error 9.31e-10 (float32 rounding)
+anchors           1 in file, last rebuilds exactly
+
+checkpoint        4,028,709 bytes for ONE save
+recording         134,264,929 bytes for 52 stored steps (2,582,018 per step)
+per stored step   0.64x a checkpoint (like-for-like)
+whole recording   33.33x ONE checkpoint, for 52 steps of history
+
+dead units        0 summaries at >=30% zero, worst 0.0%
+saturated         0 summaries at >=50% |x|>=4
+
+written to Actions/out/scale/Linux-py3.11.json
