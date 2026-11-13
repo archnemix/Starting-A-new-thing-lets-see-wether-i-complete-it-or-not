@@ -6,21 +6,21 @@
     "layers": 3,
     "heads": 4,
     "out": 4,
-    "architecture": "causal transformer, 5 pre-norm blocks"
+    "architecture": "causal transformer, 3 pre-norm blocks"
   },
   "training": {
     "steps": 150,
     "batch": 32,
-    "loss_first": 1.39383864402771,
+    "loss_first": 1.3938387632369995,
     "loss_last": 0.0013796602142974734,
-    "loss_drop": 1.3924589838134125,
-    "wall_seconds": 55.44640594799999,
-    "step_ms_median": 8.039080000003196
+    "loss_drop": 1.392459103022702,
+    "wall_seconds": 60.638563871,
+    "step_ms_median": 11.722216999991986
   },
   "recording": {
-    "path": "/tmp/archx-1m-ifbtd56s/transformer-1m.archx.mdl",
-    "bytes": 134264929,
-    "bytes_per_parameter": 133.70657036216758,
+    "path": "Bench/out/transformer-1m.archx.mdl",
+    "bytes": 134267105,
+    "bytes_per_parameter": 133.708737312981,
     "steps_stored": 52,
     "steps_seen": 150,
     "store_ratio": 0.3466666666666667,
@@ -51,23 +51,23 @@
   },
   "comparison": {
     "checkpoint_bytes_one_save": 4028709,
-    "recording_bytes": 134264929,
-    "ratio_recording_over_checkpoint": 33.32703578243055,
-    "bytes_per_stored_step": 2582017.8653846155,
-    "ratio_per_step": 0.6409045342775106,
+    "recording_bytes": 134267105,
+    "ratio_recording_over_checkpoint": 33.32757590582988,
+    "bytes_per_stored_step": 2582059.7115384615,
+    "ratio_per_step": 0.6409149212659593,
     "note": "the checkpoint figure is ONE step; the recording holds every stored step, so the per-step ratio is the like-for-like number and the total is not"
   },
   "overhead": {
-    "recorder_encode_seconds": 54.292305650999964,
-    "recorder_copy_seconds": 0.027715791000012757,
+    "recorder_encode_seconds": 60.05885841,
+    "recorder_copy_seconds": 0.06317510500004175,
     "blocks_written": 52,
-    "waited": 9
+    "waited": 8
   },
   "activations": {
     "summaries": 1456,
     "layers": 28,
     "dead_summaries": 0,
-    "worst_zero_fraction": 0.0,
+    "worst_zero_fraction": 7.057362240289069e-06,
     "saturated_summaries": 0
   }
 }
