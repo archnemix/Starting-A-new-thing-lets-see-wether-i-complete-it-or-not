@@ -69,7 +69,7 @@ def run_reconstruct(path: str, *, step: int | None = None, out: str | None = Non
         # Say where the answer came from, so a reconstruction of a skipped step is never
         # mistaken for one taken at a store point.
         base = max(s for s in steps if s <= target)
-        print(f"stored         no  (rebuilt from the anchor at step {base})")
+        print(f"stored         no  (latest prior stored state is step {base}; not exact for step {target})")
     print(f"tensors        {len(state)}")
     print(f"values         {total}")
     if torn:

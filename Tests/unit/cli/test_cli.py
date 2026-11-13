@@ -155,13 +155,7 @@ def test_reconstruct_defaults_to_the_last_step_and_refuses_steps_outside_the_fil
 
 
 def test_reconstruct_answers_a_step_between_two_store_points(tmp_path, capsys):
-    """The format's headline promise, reached through the CLI rather than the library.
-
-    `archx reconstruct --step 2` on a 20-step 1M recording exited 1 with "step 2 is not
-    recorded" while `Timeline.reconstruct(2)` returned all 1,004,176 values: a command that
-    refused the one thing the product exists to do. A store point is the exception, not the
-    rule - the policy skips most steps in the middle of a run.
-    """
+    """A skipped step reports the prior stored state, not invented intermediate weights."""
     from archx.container.reader import Reader
     from archx.container.values import Timeline
 
@@ -172,7 +166,8 @@ def test_reconstruct_answers_a_step_between_two_store_points(tmp_path, capsys):
                  "--out", str(tmp_path / "gap.npz")]) == 0
     printed = capsys.readouterr().out
     assert "stored         no" in printed
-    assert f"anchor at step {max(s for s in stored if s <= target)}" in printed
+    assert f"latest prior stored state is step {max(s for s in stored if s <= target)}" in printed
+    assert "not exact for step" in printed
 
 
 def test_events_lists_the_annotation_and_the_segment(tmp_path, capsys):

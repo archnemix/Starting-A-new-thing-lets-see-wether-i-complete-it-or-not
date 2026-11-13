@@ -1,2 +1,4 @@
 2026-11-13T13:53:15Z 1M parameter scale test on CI
 2026-11-13T14:40:00Z hand test the 1M recording with the shipped CLI; artifact path fixed
+
+Deep recording and per-example gradient trace verification

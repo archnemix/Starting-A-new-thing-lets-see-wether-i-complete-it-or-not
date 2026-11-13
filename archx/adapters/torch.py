@@ -96,6 +96,29 @@ class TorchRecorder(Recorder):
     converts, so the conversion rules live next to the framework they belong to.
     """
 
+    def trace_examples(self, loss_parts, examples, *, max_bytes: int = 256 * 1024 * 1024) -> dict:
+        """Record gradients of additive, already-scaled per-example losses before step().
+
+        Call after total_loss.backward(retain_graph=True), before optimizer.step(). Each
+        loss_parts[i] must include its contribution to the batch reduction (for mean loss,
+        divide each individual loss by batch size). The parts must sum to the gradients
+        currently in .grad; accumulation, clipping, regularization or omitted parameters
+        cause a clear error unless they are represented in those parts. `examples` are
+        caller-supplied bytes for each input AND any target needed to identify it.
+
+        This stores local gradients, not individual causal effects or Adam updates. It can be
+        expensive: O(batch * parameters) values per step, before compression.
+        """
+        from .example_gradients import encode_example_gradients
+        if not self.full_history:
+            raise ValueError("example tracing requires full_history=True")
+        if getattr(self, "_example_trace", None) is not None:
+            raise RuntimeError("an example trace is already pending an optimizer step")
+        payload, report = encode_example_gradients(loss_parts, examples,
+                                                   self._archx_parameters, max_bytes=max_bytes)
+        self._example_trace = payload
+        return report
+
     def log(self, *, loss: float | None = None, data: Any = None, lr: float | None = None,
             segment_id: str = "", source: str = "") -> None:
         super().log(loss=loss, data=as_bytes(data), lr=lr,
@@ -118,6 +141,7 @@ def attach(
     activations: bool = False,
     activation_layers: list[str] | None = None,
     max_activation_layers: int = 256,
+    full_history: bool = False,
 ) -> Recorder:
     """Attach a recorder and return it. The training loop stays exactly as it was.
 
@@ -132,6 +156,9 @@ def attach(
     would rebuild weights that never existed. attach() therefore refuses, rather than writing
     a plausible-looking file; pass `allow_partial=True` to record anyway, and the file will
     say `parameters_complete: false` and name the wrapper.
+
+    `full_history=True` records the initial weights at step 0 and a delta after every
+    optimizer step. Delta encoding is lossless in this mode. This costs more.
 
     `activations=True` reaches tier 3: a forward hook summarises each layer's output (shape,
     mean, std, min/max, dead-unit and saturation fractions) at every store point. It is off by
@@ -150,16 +177,36 @@ def attach(
             f"  Either record on an unsharded run, or pass allow_partial=True and the file\n"
             f"  will state that its parameters are incomplete.")
     parameters = dict(_named_parameters(model))
+    if full_history:
+        import torch
+        if any(p.dtype != torch.float32 for p in parameters.values()):
+            raise ValueError("full_history currently requires float32 parameters")
+        # Dense mode is a fidelity contract, not the adaptive lossy budget.
+        max_rel_error = 0.0
     registry = _build_registry(parameters, regions=regions, components=components)
 
     def read_parameter(key: str) -> np.ndarray:
         return parameters[key].detach().cpu().numpy()
 
+    # This is a seed label, not a saved RNG state or a replay guarantee. User-supplied
+    # run configuration (dataset, model, schedule and RNG states) belongs in meta.
+    import torch
+    import base64
+    groups = []
+    for group in optimizer.param_groups:
+        groups.append({k: v if isinstance(v, (str, int, float, bool, type(None))) else repr(v)
+                       for k, v in group.items() if k != "params"})
     recorder = TorchRecorder(registry, read_parameter, path, policy=policy,
                         queue_size=queue_size,
                         max_rel_error=max_rel_error,
                         data_level=data_level,
+                        full_history=full_history,
                         meta={"adapter": "torch", "torch": _torch_version(),
+                              "torch_initial_seed": int(torch.initial_seed()),
+                              "torch_cpu_rng_state_base64": base64.b64encode(
+                                  torch.get_rng_state().cpu().numpy().tobytes()).decode("ascii"),
+                              "optimizer_class": f"{type(optimizer).__module__}.{type(optimizer).__qualname__}",
+                              "optimizer_groups": groups,
                               "parallel": parallel.kind,
                               "parameters_complete": not parallel.is_sharded,
                               **({"parallel_evidence": parallel.describe()}
@@ -265,10 +312,17 @@ def _make_step_hook(recorder: Recorder, parameters: dict):
     Gradient norms are computed here because this is the last moment they exist: the caller's
     loop calls zero_grad() immediately afterwards. Nothing is kept alive afterwards.
     """
-    state = {"step": -1}
+    state = {"step": 0 if recorder.full_history else -1}
 
     def hook(_optimizer, _args, _kwargs) -> None:
         state["step"] += 1
-        recorder.step(state["step"], grad_norm=_grad_norm(parameters))
+        decision = recorder.step(state["step"], grad_norm=_grad_norm(parameters))
+        pending = getattr(recorder, "_example_trace", None)
+        if pending is not None:
+            from ..recorder import _Pending
+            if decision.value == "skip":
+                raise RuntimeError("example trace requires a stored optimizer step")
+            recorder._enqueue(_Pending("example_gradients", state["step"], {}, payload=pending))
+            recorder._example_trace = None
 
     return hook

@@ -157,6 +157,16 @@ jobs:
               f"the hand test passed {passed} of {total} checks")
           PY
 
+      - name: Test per-example gradients and every-step history at 1M
+        if: matrix.full
+        shell: bash
+        run: |
+          set -euo pipefail
+          python Bench/scale_deep_trace.py --steps 6 --batch 2 \
+            --out Bench/out/deep-1m.archx.mdl \
+            --json-out Actions/out/scale/deep-Linux-py3.11.json \
+            | tee Actions/out/scale/deep-Linux-py3.11.txt
+
       - name: Keep the recording as an artifact
         if: matrix.full
         uses: actions/upload-artifact@v4

@@ -98,10 +98,12 @@ class Recorder:
         data_level: DataLevel | str = DataLevel.SEGMENTS,
         data_max_bytes: int | None = None,
         activations: "ActivationCapture | None" = None,
+        full_history: bool = False,
     ) -> None:
         self.registry = registry
         self._read = read
         self.policy = policy or PhasePolicy()
+        self.full_history = full_history
         self.max_rel_error = max_rel_error
         self.stats = RecorderStats()
         self._queue_size = max(1, queue_size)
@@ -162,11 +164,17 @@ class Recorder:
                                     # reported by the INFO capability block written at close
             "attribution": "observational",
             "data_level": self.data.level.value,
+            "weight_history": "every_optimizer_step" if full_history else "adaptive",
             "tensors": len(registry),
             "ties": sum(1 for e in registry if e.tie_group),
             **(meta or {}),
         }
         self._thread.start()
+        if full_history:
+            # In dense mode step 0 is the state BEFORE training; updates are steps 1..N.
+            self._enqueue(_Pending("anchor", 0, self._previous, context={"initial": True}))
+            self.stats.anchors += 1
+            self.stats.steps_stored += 1
 
     # ------------------------------------------------------------ observation
 
@@ -206,7 +214,8 @@ class Recorder:
         source = source or logged.get("source", "")
         try:
             self._last_step = step if self._last_step is None else max(self._last_step, step)
-            decision = self.policy.decide(step, loss=loss, grad_norm=grad_norm, event=event)
+            decision = (Decision.STORE if self.full_history else
+                        self.policy.decide(step, loss=loss, grad_norm=grad_norm, event=event))
             self.stats.steps_seen += 1
             if loss is not None:
                 self.capabilities.offer("loss")
@@ -317,12 +326,16 @@ class Recorder:
                 pass
         self._archx_activation_handles = []
 
+        pending_trace = getattr(self, "_example_trace", None) is not None
+        self._example_trace = None
         self._stop.set()
         with self._cond:
             self._cond.notify_all()
         self._thread.join(timeout=60)
         if self._error is not None:
             raise RuntimeError(f"archx recorder failed: {self._error}") from self._error
+        if pending_trace:
+            raise RuntimeError("example trace had no matching optimizer step; it was not recorded")
 
     def __enter__(self) -> "Recorder":
         return self
@@ -571,6 +584,8 @@ class Recorder:
             writer.write_block(BlockType.ANNOT,
                                json.dumps({"step": item.step, **item.context}).encode(),
                                step=item.step)
+        elif item.kind == "example_gradients":
+            writer.write_block(BlockType.EXAMPLE_GRADIENTS, item.payload, step=item.step)
         elif item.kind in ("anchor", "delta"):
             payload = item.payload or self._payload_for(item)
             writer.write_block(BlockType.ANCHOR if item.kind == "anchor" else BlockType.DELTA,

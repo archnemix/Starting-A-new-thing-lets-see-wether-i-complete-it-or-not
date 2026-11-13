@@ -350,6 +350,17 @@
       ],
       "handles": "Parameter budget swept with real count_parameters, never computed by hand (the first shape was 25% over). Both size ratios are printed with the denominator named, because the like-for-like number is per stored step. --hand-test runs the CLI as a subprocess and asserts on its text."
     },
+    "Bench/scale_deep_trace.py": {
+      "purpose": "Checks dense per-example tracing on a 1M model in GitHub Actions",
+      "inputs": [
+        "synthetic batches"
+      ],
+      "outputs": [
+        "scale report",
+        "recording"
+      ],
+      "handles": "Measures cost and validates steps, examples, gradients and SGD updates."
+    },
     "Docs/Change.md": {
       "purpose": "Inbox for user-requested additions and changes, each with an effect on the roadmap.",
       "inputs": [
@@ -369,6 +380,16 @@
         "release notes per version"
       ],
       "handles": "Features only; no implementation notes."
+    },
+    "Docs/Deep_Recording.md": {
+      "purpose": "Explains dense history, trace setup, limits and costs",
+      "inputs": [
+        "recorder implementation"
+      ],
+      "outputs": [
+        "user instructions"
+      ],
+      "handles": "Distinguishes local gradients from causal influence and explains storage and metadata limitations."
     },
     "Docs/Files_Info.json": {
       "purpose": "This file: the per-file map used instead of re-reading the codebase.",
@@ -656,6 +677,17 @@
         "12 tests"
       ],
       "handles": "Bit-identical results, exact anchors, tier 2 with gaps named, unstored steps answerable, data joined to the weights it moved."
+    },
+    "Tests/integration/test_example_gradients.py": {
+      "purpose": "Exercises dense weight history and per-example gradients",
+      "inputs": [
+        "PyTorch model",
+        "synthetic examples"
+      ],
+      "outputs": [
+        "pytest assertions"
+      ],
+      "handles": "Checks every step, gradient sums, SGD update and failure cases."
     },
     "Tests/integration/test_file_map.py": {
       "purpose": "Integration: Docs/Files_Info.json lists every tracked file, describes nothing that was deleted, and gives each entry the four fields its own rules require.",
@@ -977,6 +1009,19 @@
         "__all__ of planned adapters"
       ],
       "handles": "Nothing at import time: torch is optional."
+    },
+    "archx/adapters/example_gradients.py": {
+      "purpose": "Opt-in lossless per-example local gradient encoder and reader",
+      "inputs": [
+        "loss parts",
+        "example bytes",
+        "model gradients"
+      ],
+      "outputs": [
+        "compressed trace payload",
+        "gradient arrays"
+      ],
+      "handles": "Checks additive gradients against the actual batch gradient; refuses oversized or unsupported traces."
     },
     "archx/adapters/hf.py": {
       "purpose": "Hugging Face Trainer: one callback, no fork of the training loop.",

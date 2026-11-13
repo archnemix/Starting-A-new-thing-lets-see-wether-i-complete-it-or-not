@@ -9,6 +9,21 @@ every file.
 
 ---
 
+## Unreleased: dense weight history and per-example gradients
+
+- Added opt-in float32 `full_history=True`: pre-training anchor followed by one lossless
+  delta per optimizer update; no adaptive skipped points or periodic full snapshots.
+- Added explicit per-example local gradients from additive loss parts, stored with caller's
+  example bytes. Validated against batch `.grad`, size-limited per step and container-compressed.
+  This is not causal attribution and does not split arbitrary optimizer updates.
+- Record optimizer settings, torch seed and CPU RNG state at attach; users must supply the
+  rest of the training configuration. See `Docs/Deep_Recording.md` for the missing replay state,
+  storage cost, privacy, gradient assumptions, and Python reader.
+- Corrected a CLI defect: for an unstored step it used to call a prior stored state an anchor
+  and leave the impression it was the exact requested state. It now explicitly says it is not.
+- The new 1M Actions experiment checks every stored step, every input, per-example gradient
+  sums, SGD updates and the measured storage/time. See `Actions/out/scale/deep-Linux-py3.11.json`.
+
 ## Unreleased (design phase)
 
 No code yet. This stage produced documentation only:

@@ -1,7 +1,7 @@
 # Archnemix Model Life Line (`.archx.mdl`)
 
 A recorder for neural network training. It attaches to a training run that already exists and
-records three things **together**: **how the weights changed**, **which data caused it**, and
+records three things **together**: **how the weights changed**, **which data was observed**, and
 **at which stage**. The whole journey goes into one compact, crash-safe file that humans and
 other AI systems can query afterwards.
 
@@ -9,8 +9,7 @@ Think "git for model training": a few full snapshots plus compressed deltas betw
 instead of only the final weights.
 
 **Status: v0.1.0, working.** The recorder, the container format, the CLI and four adapters
-(plain PyTorch, Hugging Face `Trainer`, PyTorch Lightning, zero-code launcher) all run. 257
-tests pass on Linux, Windows and macOS with the same test names on all three.
+(plain PyTorch, Hugging Face `Trainer`, PyTorch Lightning, zero-code launcher) all run. The recorded CI results are in `Actions/out/test-runs/`.
 
 ---
 
@@ -91,7 +90,7 @@ A tier is a **measured fact about one run**, written into the file — not a cla
 |---|---|
 | 0 | step counter, weight deltas, timing |
 | 1 | + loss, learning rate, gradient norms |
-| 2 | + which data segments caused which movement |
+| 2 | + data segments and observed movement over their shared interval (not causal attribution) |
 | 3 | + what each layer saw (activations) |
 
 A run that reached tier 2 but has no activations says so, and names
@@ -100,8 +99,9 @@ with no data behind it reports a corrupt file rather than trusting it.
 
 ## What it guarantees
 
-- **The file rebuilds the weights.** Anchors are byte-exact; steps between them reconstruct to
-  float32 rounding (~1e-9 measured). A test fails if either number moves.
+- **The file rebuilds stored weight states.** Anchors are byte-exact; recorded deltas can
+  incur float32 rounding. Adaptive recording can skip steps; a skipped step returns the latest
+  prior stored state, not that step’s actual weights. See maximum-detail mode below.
 - **Recording does not change training.** Bit-identical losses with and without a recorder
   attached, on all three model families tested.
 - **It never silently degrades.** Data too large for the cap → the level degrades to
@@ -110,6 +110,16 @@ with no data behind it reports a corrupt file rather than trusting it.
 - **One file, no side table.** No dictionary, no index to keep in sync, nothing to lose.
 - **Crash-safe.** Kill the process mid-run and every complete block before the tear is still
   readable.
+
+## Maximum-detail history and example gradients
+
+For float32 PyTorch models, `full_history=True` records an initial anchor plus a
+lossless delta after every optimizer step. An opt-in `trace_examples` call can also
+save each example's gradient of its additive loss part, tied to caller-supplied
+example bytes. It checks that these sum to the batch gradient; it does **not**
+prove causal influence on later behavior or allocate nonlinear optimizer updates.
+This mode may be very large and slow. Setup, metadata requirements, reader example,
+and limits are in [Docs/Deep_Recording.md](Docs/Deep_Recording.md).
 
 ## Measured at a million parameters, on three operating systems
 
