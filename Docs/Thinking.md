@@ -756,6 +756,24 @@ a *difference* between two runs that share the noise can. The assertion now asks
 copy costs anything at all and prints the number, because "0.03 to 0.10 ms" is a fact and
 "under 20%" was a guess with a stopwatch.
 
+**A benchmark that measures the wrong thread.** The activation-overhead bench called
+`recorder.step()` inside the same timing window as the forward pass, so the writer thread was
+compressing blocks on another core while the forward was being timed. It reported +208%, then
++503%, for identical code. Removing the writer from the window gave 1.38 -> 3.02 ms. The
+feature had not changed; the measurement had been reading contention and calling it cost.
+
+**A cap set by round numbers instead of measurement.** `MAX_ELEMENTS = 1_000_000` looked
+generous and safe. Per element the reduction cost ~2.8 us per 1,000 values, so a million
+elements per layer per forward was several milliseconds - the cap *was* the cost. At 16,384
+the layer costs ~45 us and the stride still spans the tensor. The test that keeps this honest
+compares the sampled mean to the exact mean on a tensor whose two halves differ by 20.
+
+**A probe that reported tier 0 and looked broken.** The sick-model probe fed a loss and never
+stepped the optimizer, so no gradients existed, and the tier ladder - which is strictly
+sequential by design - correctly refused to award tier 3 on top of a missing tier 1. The code
+was right and the probe was wrong. Worth remembering whenever a file "has the data but not the
+tier": that is the ladder working, not a bug.
+
 The common thread with the eight defects above: none of them crashed, none of them turned a
 test red, and every one of them produced output that a careful reader would have accepted. The
 difference this time is that the suspicious numbers were *impossible* rather than merely

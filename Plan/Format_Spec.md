@@ -95,6 +95,7 @@ Reader rules, all mandatory:
 
 Blocks 1-8 are version 1; new types are added as integers, never by changing these.
 | 21 | `DATA_POINTER` | JSON | content hash + source reference instead of content (level `pointers`, or a `sensitive` shard) |
+| 23 | `ACTIVATION` | JSON | per-layer output statistics for a stored step (tier 3) |
 
 Reserved ids are allocated so that a file written by a future version is skipped, not
 misread, by a v1 reader. `DATA_SEGMENT` (17) supersedes the previously reserved
@@ -246,6 +247,34 @@ still reads `first_step`/`last_step` as before.
 
 A segment is **re-stated** rather than rewritten: the file is append-only, so a growing segment
 is written again with its new `last_step`, and the last statement about an id is the true one.
+
+### 5.2.2a `ACTIVATION` *(JSON)*
+
+One block per layer per stored step. Not a tensor: a fixed-size summary, so the size of a
+recording is a function of the layer count and the step count, and never of the batch size.
+
+```json
+{"step": 8, "layer": "2", "shape": [64, 64], "dtype": "float32", "forwards": 1,
+ "count": 4096, "mean": -0.0191, "std": 0.2551, "min": -0.916, "max": 0.884,
+ "zero_fraction": 0.0, "saturated_fraction": 0.0, "saturation_limit": 4.0, "sampled": 4096}
+```
+
+- `layer` is the module's name from `named_modules()`, so `"2"` in a `Sequential` and
+  `"encoder.layer.0.attention"` in a transformer both read correctly.
+- `forwards` says how many forward passes were folded into this summary. A step that runs the
+  model twice is recorded as `2`, not as one of them silently winning.
+- `count` may be smaller than the tensor: above 16,384 elements the reduction is
+  **stride-sampled** across the whole tensor (never truncated from the start), and `sampled`
+  records how many elements the moments are over.
+- `zero_fraction` is the fraction of units exactly 0.0 (a dead ReLU);
+  `saturated_fraction` is the fraction with `|x| >= saturation_limit`.
+- `nonfinite` appears only when NaN/Inf was seen; those values are counted and excluded from
+  the moments rather than poisoning them.
+- Blocks are written after the step's `DELTA` and before its `EVENT`, so a reader that has
+  reached the event has the whole chain: movement, then what the forward pass saw.
+
+Tier 3 requires an `ACTIVATION` block behind the claim; a file that lists `activations` in
+`capabilities_present` but holds none is corrupt.
 
 ### 5.2.3 `EVENT` *(JSON)*
 

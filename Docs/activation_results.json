@@ -1,0 +1,45 @@
+{
+  "end_to_end": {
+    "plain": 2.315766999970492,
+    "activations": 7.1264879999830555,
+    "added_ms": 4.810721000012563,
+    "added_percent": 207.73769554855312
+  },
+  "forward": {
+    "batch": 256,
+    "plain_ms": 1.3752319999866813,
+    "captured_ms": 3.0176509999932932,
+    "added_ms": 1.642419000006612,
+    "added_percent": 119.42850370137681
+  },
+  "batch_scaling": {
+    "64": {
+      "plain_ms": 0.4107999999973799,
+      "captured_ms": 1.2496239999677528,
+      "added_ms": 0.8388239999703728
+    },
+    "256": {
+      "plain_ms": 1.4915849999965758,
+      "captured_ms": 3.006194000022333,
+      "added_ms": 1.5146090000257573
+    },
+    "1024": {
+      "plain_ms": 5.33189800000855,
+      "captured_ms": 7.366102999981194,
+      "added_ms": 2.034204999972644
+    }
+  },
+  "detection": {
+    "summaries": 36,
+    "layers": 9,
+    "tier": 3,
+    "dead_layer_summaries": 4,
+    "worst_zero_fraction": 0.49810791015625,
+    "saturated_summaries": 0,
+    "loss_spread": 0.001402735710144043,
+    "loss_first": 1.3959153890609741,
+    "loss_last": 1.39451265335083,
+    "loss_alone_would_not_show_it": false,
+    "found_without_the_loss": true
+  }
+}

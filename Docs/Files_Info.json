@@ -1261,6 +1261,97 @@
         "an npm CI run on three runners"
       ],
       "handles": "Same convention as Actions/triggers/tests.txt."
+    },
+    "archx/data/activations.py": {
+      "purpose": "Tier 3: reduce each layer's forward-pass output to a fixed-size summary (mean, std, min/max, dead-unit and saturation fractions).",
+      "inputs": [
+        "a tensor or tuple handed to a forward hook"
+      ],
+      "outputs": [
+        "one JSON-serialisable dict per layer per store point"
+      ],
+      "handles": "Never keeps a tensor: stride-samples above MAX_ELEMENTS so the cost is bounded by layer count, counts non-finite values instead of letting them poison the moments, and records how many forward passes were folded in."
+    },
+    "archx/cli/activations.py": {
+      "purpose": "`archx activations`: print the layer summaries, and flag dead or saturated layers.",
+      "inputs": [
+        ".archx.mdl path",
+        "--layer / --step / --json"
+      ],
+      "outputs": [
+        "a table, JSON, or an explanation of why the file has no tier-3 data"
+      ],
+      "handles": "A file below tier 3 exits 0 with the reason from its own capability block - absence is not an error, silence would be."
+    },
+    "archx/cli/demo.py": {
+      "purpose": "`archx demo`: record a small run so a new install has a real file to inspect.",
+      "inputs": [
+        "--out, --steps"
+      ],
+      "outputs": [
+        "a recorded .archx.mdl and the commands to read it"
+      ],
+      "handles": "Refuses to overwrite an existing file, and needs torch (says so and exits 1 without it)."
+    },
+    "archx/__main__.py": {
+      "purpose": "`python -m archx`, the same CLI as the `archx` script.",
+      "inputs": [
+        "argv"
+      ],
+      "outputs": [
+        "process exit code"
+      ],
+      "handles": "Exists so the tool works from a clone without an editable install on PATH; no logic of its own."
+    },
+    "Bench/claim15_activations.py": {
+      "purpose": "Claim 15: the cost of tier 3 (forward pass and whole step) plus a detection probe on a deliberately sick model.",
+      "inputs": [
+        "a synthetic 4-block stack, with and without activations"
+      ],
+      "outputs": [
+        "Docs/activation_results.json"
+      ],
+      "handles": "Times the forward with no writer thread running; the first version timed step() too and reported +208% then +503% for the same code."
+    },
+    "Docs/activation_results.json": {
+      "purpose": "The recorded tier-3 numbers: added cost per forward, batch-scaling plateau, and the detection probe.",
+      "inputs": [
+        "Bench/claim15_activations.py"
+      ],
+      "outputs": [
+        "the cost figures cited in Plan/Roadmap.md and Docs/Research.json"
+      ],
+      "handles": "Generated output, committed so the overhead claim is checkable."
+    },
+    "Tests/unit/data/test_activations.py": {
+      "purpose": "12 tests: exact statistics, forward accumulation, stride sampling, non-finite handling, the layer cap, tier 3 end to end, and that recording changes no number.",
+      "inputs": [
+        "synthetic tensors and a real recorded run"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Asserts the sampled mean stays close to the exact mean on a tensor whose halves differ wildly - the case a truncating sample gets wrong."
+    },
+    "Tests/integration/test_cli_activations.py": {
+      "purpose": "The two tier-3 CLI commands through `python -m archx`: demo output, refusal to overwrite, JSON shape, filters, and the no-activations explanation.",
+      "inputs": [
+        "a real recording made by `archx demo`"
+      ],
+      "outputs": [
+        "pass/fail"
+      ],
+      "handles": "Uses the real entry point, because the contract a user has is the command and its exit code."
+    },
+    "examples/quickstart.py": {
+      "purpose": "The five-minute tour: record a small run, then answer all five product questions from the file alone.",
+      "inputs": [
+        "none - generates its own data"
+      ],
+      "outputs": [
+        "printed answers plus a .archx.mdl the reader can inspect"
+      ],
+      "handles": "Compares the rebuilt weights against the live tensors, which is the only check that proves anything."
     }
   },
   "_generated": "2026-11-12 - Phases 6-9: HF, launcher, Lightning, end-to-end proof, spec conformance, 209 tests",

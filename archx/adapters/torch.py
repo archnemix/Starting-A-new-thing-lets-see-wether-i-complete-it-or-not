@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 
+from ..data.activations import ActivationCapture
 from ..formats.registry import TensorRegistry
 from ..parallel import detect
 from ..policy import PhasePolicy
@@ -114,6 +115,9 @@ def attach(
     max_rel_error: float = 1e-3,
     allow_partial: bool = False,
     meta: dict[str, Any] | None = None,
+    activations: bool = False,
+    activation_layers: list[str] | None = None,
+    max_activation_layers: int = 256,
 ) -> Recorder:
     """Attach a recorder and return it. The training loop stays exactly as it was.
 
@@ -128,6 +132,14 @@ def attach(
     would rebuild weights that never existed. attach() therefore refuses, rather than writing
     a plausible-looking file; pass `allow_partial=True` to record anyway, and the file will
     say `parameters_complete: false` and name the wrapper.
+
+    `activations=True` reaches tier 3: a forward hook summarises each layer's output (shape,
+    mean, std, min/max, dead-unit and saturation fractions) at every store point. It is off by
+    default because it costs real time inside the forward pass - measured in
+    `Bench/claim15_activations.py`, reported rather than hidden - and because a recorder that
+    changed a loop's speed by default would be a recorder nobody leaves switched on. Pass
+    `activation_layers=[...]` to name specific modules; the default is every leaf layer that
+    returns a float tensor.
     """
     parallel = detect(model)
     if parallel.is_sharded and not allow_partial:
@@ -156,7 +168,55 @@ def attach(
     recorder._archx_parameters = parameters        # type: ignore[attr-defined]
     handle = optimizer.register_step_post_hook(_make_step_hook(recorder, parameters))
     recorder._archx_handle = handle                # type: ignore[attr-defined]
+    if activations:
+        _attach_activation_hooks(model, recorder, layers=activation_layers,
+                                 max_layers=max_activation_layers)
     return recorder
+
+
+def _attach_activation_hooks(model, recorder: Recorder, *, layers: list[str] | None,
+                             max_layers: int) -> None:
+    """Summarise every forward pass, for tier 3.
+
+    Hooks are registered here, in `attach`, and removed by `detach`; a hook left behind on a
+    model that outlives its recorder would keep writing into a closed file. The handle list is
+    kept on the recorder so closing it is enough.
+    """
+    capture = ActivationCapture(max_layers=max_layers)
+    wanted = set(layers) if layers else None
+    handles = []
+
+    for name, module in model.named_modules():
+        if not name:
+            continue                                  # the root is not a layer
+        if wanted is not None and name not in wanted:
+            continue
+        handles.append(module.register_forward_hook(_make_activation_hook(name, capture)))
+
+    recorder.activations = capture
+    recorder._archx_activation_handles = handles      # type: ignore[attr-defined]
+    if not handles:
+        recorder.capabilities.deny(
+            "activations",
+            "activations=True but the model exposes no named modules to hook")
+        return
+    recorder._meta_activation_layers = sorted(       # type: ignore[attr-defined]
+        {name for name, module in model.named_modules() if name})
+
+
+def _make_activation_hook(name: str, capture: ActivationCapture):
+    """A forward hook that records a summary and returns nothing.
+
+    Returning a value from a forward hook *replaces* the layer's output, which would silently
+    change the model's behaviour - the one thing a recorder must never do. This returns None,
+    explicitly.
+    """
+
+    def hook(_module, _inputs, output) -> None:
+        capture.observe(name, output)
+        return None
+
+    return hook
 
 
 def _named_parameters(model):

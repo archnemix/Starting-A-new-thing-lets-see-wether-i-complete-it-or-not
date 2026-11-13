@@ -46,6 +46,62 @@ Shipped on the branch:
 - 31 tests (unit + integration + property), green on Linux, Windows and macOS.
 - CI writes machine-readable run records into `Actions/out/test-runs/`.
 
+## v0.2.0 - not released yet (tier 3, and a usable first run)
+
+The last two roadmap rows, and the first version a stranger can pick up without the plan.
+
+### Tier 3: what the network saw (roadmap 8.3)
+
+`archx.attach(..., activations=True)` now reaches **tier 3**. A forward hook reduces each leaf
+layer's output to a fixed-size summary, written as `ACTIVATION` blocks (type 23) at every
+stored step:
+
+```console
+$ archx activations demo.archx.mdl
+layers         5  0, 1, 2, 3, 4
+summaries      55
+  step  layer   shape   mean     std     min     max  zero%   sat%
+     0      0  64x32  -0.018   0.614  -2.13    2.10   0.00   0.00
+     0      1  64x64   0.234   0.349   0.00    1.63  49.80   0.00
+```
+
+- **It is not a tensor cache.** Shape, mean, std, min/max, dead-unit fraction, saturation
+  fraction, forward count. Bounded by layer count, never by batch size.
+- **Measured cost: +1.6 ms on a 1.4 ms forward pass** for a 9-layer 256-wide stack, off by
+  default. The cost **plateaus** above the sampling cap: batch 64/256/1024 costs
+  +0.84/+1.51/+2.03 ms, so 4x the data is 1.3x the price.
+- **It finds what the loss cannot.** A model with half its ReLU units killed is flagged in 4
+  summaries at a 49.8% dead-unit fraction while the loss moves by 0.0014.
+- Above 16,384 elements per layer the reduction is **stride-sampled across the whole tensor**,
+  never truncated from the start, and the block records how many elements the moments cover.
+
+Getting the number right took three attempts, all recorded: the bench first timed
+`recorder.step()` alongside the forward (writer thread on another core) and reported +208% then
++503% for identical code; the first per-element reduction allocated a float64 copy per layer;
+and the "sick model" probe reported tier 0 until it called `optimizer.step()`, because tiers are
+strictly sequential and only a real optimizer step produces gradients.
+
+### A first run that does not need a training loop (roadmap 0.5 follow-up)
+
+- **`archx demo`** records a small run in one command and prints the five commands to read it.
+- **`archx activations`** is the new read command; a file below tier 3 explains why instead of
+  printing nothing.
+- **`python -m archx`** works. It did not: there was no `__main__`, so the first thing many
+  people try did nothing at all, silently.
+- **`README.md` rewritten.** It still said "design only, no code yet", which had been false for
+  nine phases.
+- **`examples/quickstart.py`**: the tour, ending with the rebuilt weights compared against the
+  live tensors (max abs error 1.9e-09 on the last step).
+
+### Roadmap 7.4 decided
+
+Ship the launcher as a **fallback**, not a headline. The decision is recorded as made on the
+evidence, with the user delegating the call, rather than as an approval that never happened.
+`archx run` stays: it works on an untouched script and never lies about what it could not see,
+which is exactly what a fallback should be.
+
+Roadmap: **53 / 53 rows done.** Tests: **263 passed** locally.
+
 ## The CI record for the Phase 2 work: run 43259502790
 
 Three runners, python 3.11, torch + transformers + lightning installed on all three:

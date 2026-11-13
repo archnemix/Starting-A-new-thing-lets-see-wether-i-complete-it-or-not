@@ -38,6 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
     events.add_argument("file", help="path to the recording")
     events.add_argument("--json", action="store_true", help="machine-readable output")
 
+    demo = sub.add_parser("demo", help="record a small run you can inspect immediately")
+    demo.add_argument("--out", default="demo.archx.mdl", help="where to write (default: %(default)s)")
+    demo.add_argument("--steps", type=int, default=20, help="how many steps (default: %(default)s)")
+
+    acts = sub.add_parser("activations", help="layer-by-layer activation summaries")
+    acts.add_argument("file", help="path to the recording")
+    acts.add_argument("--layer", help="only this module name")
+    acts.add_argument("--step", type=int, help="only this step")
+    acts.add_argument("--json", action="store_true", help="machine-readable output")
+
     diff = sub.add_parser("diff", help="compare two steps, or two recordings")
     diff.add_argument("file", help="path to the recording")
     diff.add_argument("--other", help="a second recording to compare against")
@@ -93,6 +103,17 @@ def main(argv: list[str] | None = None) -> int:
 
         return run_reconstruct(args.file, step=args.step, out=args.out)
 
+    if args.command == "demo":
+        from .demo import run_demo
+
+        return run_demo(args.out, steps=args.steps)
+
+    if args.command == "activations":
+        from .activations import run_activations
+
+        return run_activations(args.file, as_json=args.json, layer=args.layer,
+                               step=args.step)
+
     if args.command == "events":
         from .events import run_events
 
@@ -140,3 +161,7 @@ def _run_launcher(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
     return run_launcher(rest, recording=recording)
+
+
+if __name__ == "__main__":      # `python -m archx.cli.main`, used by the CLI tests
+    raise SystemExit(main())

@@ -43,6 +43,9 @@ class BlockType(IntEnum):
     DELTA = 4
     EVENT = 5
     ANNOT = 7
+    #: Per-layer activation statistics: what the network *saw*, not what it changed.
+    #: The last piece of the recording triple, and the only one a forward pass can supply.
+    ACTIVATION = 23
     DATA_SEGMENT = 17
     DATA_SHARD = 20
     DATA_POINTER = 21

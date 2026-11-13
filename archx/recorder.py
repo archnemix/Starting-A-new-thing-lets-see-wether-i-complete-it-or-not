@@ -23,6 +23,7 @@ import numpy as np
 from .capabilities import Capabilities
 from .container.schema import BlockType
 from .container.writer import Writer
+from .data.activations import ActivationCapture
 from .data.capture import DataCapture, DataLevel
 from .encoders import DenseQuant, DenseRaw, LowRank, Sparse, Unchanged, choose_encoder
 from .formats.registry import TensorRegistry
@@ -61,6 +62,9 @@ class _Pending:
     #: Set when the training thread had to encode the block itself because the writer was
     #: behind. Empty means the writer will encode it, which is the normal path.
     payload: bytes = b""
+    #: Per-layer activation summaries for this step, already reduced. Small by construction:
+    #: one fixed-size dict per layer, never a tensor.
+    activations: list = field(default_factory=list)
 
 
 #: The error budget above which int16 quantization is offered.
@@ -93,6 +97,7 @@ class Recorder:
         codec: int | None = None,
         data_level: DataLevel | str = DataLevel.SEGMENTS,
         data_max_bytes: int | None = None,
+        activations: "ActivationCapture | None" = None,
     ) -> None:
         self.registry = registry
         self._read = read
@@ -137,6 +142,9 @@ class Recorder:
         if max_rel_error > _INT16_MIN_BUDGET:
             self._encoders.insert(3, DenseQuant(bits=16))
         self.data = DataCapture(data_level, max_bytes=data_max_bytes)
+        # Tier 3. The capture is owned by the adapter, which is the only layer that knows what
+        # a forward pass is; the recorder only decides *when* to ask and writes the answer.
+        self.activations = activations
         # What this run can promise. Filled in as facts arrive, never assumed up front.
         self.capabilities = Capabilities()
         self.capabilities.offer("steps")
@@ -155,6 +163,7 @@ class Recorder:
             "attribution": "observational",
             "data_level": self.data.level.value,
             "tensors": len(registry),
+            "activation_capture": bool(activations),
             "ties": sum(1 for e in registry if e.tie_group),
             **(meta or {}),
         }
@@ -225,6 +234,11 @@ class Recorder:
 
             started = time.perf_counter()
             snapshot = self._snapshot()
+            # Taken at the store point, not at the forward: a summary is only worth keeping
+            # if the file records the step it belongs to, and this is the step.
+            activation_payload = self.activations.take() if self.activations else []
+            if activation_payload:
+                self.capabilities.offer("activations")
             self.stats.copy_seconds += time.perf_counter() - started
 
             previous = self._previous or snapshot
@@ -237,11 +251,12 @@ class Recorder:
                 # An anchor already holds the current weights, so it is its own previous
                 # snapshot: no second copy, and no stale reference either.
                 self._enqueue(_Pending("anchor", step, snapshot, context=context,
-                                       movement=movement))
+                                       movement=movement, activations=activation_payload))
                 self.stats.anchors += 1
             else:
                 self._enqueue(_Pending("delta", step, previous, current=snapshot,
-                                       context=context, movement=movement))
+                                       context=context, movement=movement,
+                                       activations=activation_payload))
             self.stats.steps_stored += 1
             self._last_loss = loss
             if self._span_segments:
@@ -293,6 +308,16 @@ class Recorder:
         The capability block is written here, not at open, because a tier is what the run
         turned out to be able to see - not what was asked for at the start.
         """
+        # Detach any hook the adapter registered *before* closing: a hook left on a model that
+        # outlives its recorder would keep appending summaries to a file that is already shut,
+        # and the failure would surface as a confusing error inside an unrelated forward pass.
+        for handle in getattr(self, "_archx_activation_handles", []):
+            try:
+                handle.remove()
+            except Exception:  # noqa: BLE001 - a removed hook is not an error
+                pass
+        self._archx_activation_handles = []
+
         self._stop.set()
         with self._cond:
             self._cond.notify_all()
@@ -517,6 +542,10 @@ class Recorder:
 
     def _write_capabilities(self, writer: Writer) -> None:
         """State the tier this run reached, and name every field it could not see."""
+        if self.activations is not None and not self.capabilities.have("activations"):
+            self.capabilities.deny(
+                "activations",
+                "a capture was attached but no forward pass happened before a store point")
         payload = {"event": "capabilities", **self.capabilities.resolve().to_dict()}
         writer.write_block(BlockType.INFO, json.dumps(payload).encode())
 
@@ -559,6 +588,13 @@ class Recorder:
             # One observation per stored step: the weight change, and the stage it happened
             # at. Loss and gradient norm are optional facts, empty when unavailable, never
             # invented - the tier in META says which of them this run could see.
+            # Activations sit between the movement and the event: they describe the forward
+            # pass that produced the gradient which produced the delta, so a reader that has
+            # read up to here has the whole causal chain for this step.
+            for summary in item.activations:
+                writer.write_block(BlockType.ACTIVATION,
+                                   json.dumps({"step": item.step, **summary}).encode(),
+                                   step=item.step)
             writer.write_block(BlockType.EVENT,
                                json.dumps({"step": item.step, **item.context}).encode(),
                                step=item.step)

@@ -859,6 +859,33 @@
         "Tests/integration/test_torch_adapter.py",
         "archx/recorder.py"
       ]
+    },
+    {
+      "id": "tier-3-cost-and-value",
+      "question": "Claim 15: what does activation capture cost, and does the stream show anything the loss curve cannot?",
+      "sources": [
+        "Bench/claim15_activations.py",
+        "Docs/activation_results.json",
+        "Tests/unit/data/test_activations.py"
+      ],
+      "findings": [
+        "A forward hook cannot defer its work: the tensor is alive only during the forward pass, so the summary is computed inline on the training thread. That makes the cost real and worth measuring rather than assuming.",
+        "First measurement was +208% on a forward pass, then +503% on the next run of the same code. The bench was calling `recorder.step()` inside the timing window, so the writer thread was compressing blocks on the other core while the forward was timed. Measured with no writer running: 1.38 -> 3.02 ms.",
+        "The per-layer reduction cost ~2.8 us per 1,000 values once the float64 conversion was included, so the original 1,000,000-element budget was the whole cost. Reducing MAX_ELEMENTS to 16,384 (stride-sampled, which spans the tensor instead of truncating it) brought a 256x256 layer to ~45 us.",
+        "The cost now plateaus: batch 64 -> 256 -> 1024 gives +0.84 -> +1.51 -> +2.03 ms added. Four times the elements for 1.3x the cost is the cap binding, which is what 'bounded by layers, not by batch' means when measured.",
+        "Value: a model with half its ReLU units killed by a -3 bias is caught by the activation stream - 4 summaries at a 49.8% dead-unit fraction - while the loss moves by 0.0014. That is the case the third stream exists for, and it is invisible in the weights and in the loss.",
+        "A 'sick' probe must still step the optimizer. The first version never called `optimizer.step()`, so the hook never fired, no gradients were recorded, and the tier ladder (which is strictly sequential) reported tier 0 even with activations present. A tier is the highest one whose every lower tier is satisfied, and that is worth remembering when a file 'has the data but not the tier'."
+      ],
+      "verdict": "Tier 3 costs about +1.6 ms per forward pass on a 9-layer 256-wide model, independent of batch size past the sample cap, and is off by default. It earns that cost on the case it exists for - damage that leaves the loss unchanged.",
+      "affects": [
+        "archx/data/activations.py",
+        "archx/adapters/torch.py",
+        "archx/recorder.py",
+        "archx/cli/activations.py",
+        "archx/container/schema.py",
+        "Bench/claim15_activations.py",
+        "Tests/unit/data/test_activations.py"
+      ]
     }
   ]
 }
