@@ -388,6 +388,30 @@ libraries are not installed here), where `HEAD` before the change collected 240.
 assert statements in the product's *output* rather than return values, because output is what a
 user has.
 
+### The CI record: run 43441026689
+
+Three runners, all green, on commit `dd43568`. Every step passed including the artifact upload
+that failed on the previous run.
+
+| | Linux (150 steps) | Windows (40) | macOS (40) |
+|---|---|---|---|
+| parameters | 1,004,176 | 1,004,176 | 1,004,176 |
+| loss, first -> last | 1.3938 -> 0.0014 | -> 0.0052 | -> 0.0052 |
+| stored steps | 52/150 | 28/40 | 28/40 |
+| recording | 134,267,105 B | 77,021,165 B | 77,022,650 B |
+| values rebuilt, max abs error | 1,004,176, 9.31e-10 | same | same |
+| per stored step | 2,582,060 B = **0.64x** | 0.68x | 0.68x |
+| tier / shards / dead / saturated | 3 / 150 of 150 / 0 / 0 | 3 / 40 of 40 / 0 / 0 | 3 / 40 of 40 / 0 / 0 |
+| hand test | **11/11** | 11/11 | 11/11 |
+
+The `tests` workflow on the same commit: **276 passed, 0 failed, 0 errors, 0 skipped on each of
+Linux, Windows and macOS** (torch, transformers and lightning are installed on those runners, so
+the two modules skipped locally ran there).
+
+Committed evidence: `Actions/out/scale/{Linux,Windows,macOS}-py3.11.{json,txt}` - the JSON is the
+machine-readable record and the `.txt` is the transcript the assertions read, including the hand
+test line by line.
+
 ## v1.0.0 - not released yet (Phase 9 complete on the branch)
 
 ## The CI record for the v1.0 work: run 43235517057
