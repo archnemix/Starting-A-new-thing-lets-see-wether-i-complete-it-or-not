@@ -48,6 +48,8 @@ class BlockType(IntEnum):
     ACTIVATION = 23
     #: Compressed, opt-in per-example loss gradients; not causal influence.
     EXAMPLE_GRADIENTS = 24
+    #: Byte-plane shuffled gradients and packed examples; older readers skip this block.
+    EXAMPLE_GRADIENTS_SHUFFLED = 25
     DATA_SEGMENT = 17
     DATA_SHARD = 20
     DATA_POINTER = 21

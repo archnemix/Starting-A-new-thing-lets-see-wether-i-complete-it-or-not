@@ -73,6 +73,25 @@ model's later behaviour. Adam, momentum, clipping, regularization and floating
 point arithmetic prevent a general per-example decomposition of the optimizer
 update. The file stores actual total weight deltas separately.
 
+### Compression while training
+
+Each trace is compressed as an independent block by the background writer, with
+Zstandard by default (zlib fallback). For each trace, it compares the previous
+archive layout to a reversible byte-plane shuffle of gradients with packed example
+bytes; it writes the smaller compressed representation, or raw if compression
+expands it. It also compares shuffled and unshuffled lossless dense weight-delta
+encodings. Repeated ordinary data shards are already content-deduplicated and
+compressed; example text in a trace is compressed within its block but is not
+deduplicated across trace blocks. No gradient values or example bytes are discarded.
+
+The comparison costs extra CPU and temporarily holds alternative representations.
+If the writer falls behind, the producer of a large gradient trace waits when the
+queue is full; this prevents an unbounded backlog of trace archives but can slow
+training. It is not a global RAM limit on the whole recorder, and the reader still
+loads the complete file. A complete block can be recovered after a crash; a torn
+tail block can be lost. New block type 25 requires this build or newer: older
+readers skip it and cannot report those trace records.
+
 Per-example full gradients cost **O(steps × examples × parameters)** before
 compression, not exponentially in steps, but potentially huge. Lossless
 compression cannot guarantee a small file for arbitrary dense, high-entropy

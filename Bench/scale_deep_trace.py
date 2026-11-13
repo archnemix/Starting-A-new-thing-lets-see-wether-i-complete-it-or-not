@@ -6,6 +6,7 @@ of a batch loss, NOT evidence of an example's causal influence on future behavio
 from __future__ import annotations
 import argparse
 import base64
+import io
 import json
 import sys
 import time
@@ -18,7 +19,8 @@ import torch
 import archx
 from Bench.scale_1m_parameters import build_model, count_parameters, make_data
 from archx.container.reader import Reader
-from archx.container.schema import BlockType
+from archx.container.schema import BlockType, Codec
+from archx.container.compress import compress, effective_codec
 from archx.container.values import Timeline
 from archx.adapters.example_gradients import read_example_gradients
 
@@ -39,7 +41,7 @@ def run(steps, batch, output):
     recorder = archx.attach(model, optimizer, str(output), full_history=True, max_rel_error=0,
                             meta={'run_config': config})
     weights = [{n: p.detach().cpu().numpy().copy() for n, p in model.named_parameters()}]
-    gradients, examples, losses, trace_times = [], [], [], []
+    gradients, examples, losses, trace_times, original_payloads = [], [], [], [], []
     t0 = time.perf_counter()
     for tokens, labels in batches:
         optimizer.zero_grad()
@@ -51,6 +53,9 @@ def run(steps, batch, output):
                         for x, y in zip(tokens, labels)]
         t = time.perf_counter()
         recorder.trace_examples(parts, sample_bytes)
+        # Keep the exact pre-compression v1 archive for byte-level verification and an
+        # apples-to-apples baseline, not another run with different model weights.
+        original_payloads.append(recorder._example_trace)
         trace_times.append(time.perf_counter() - t)
         gradients.append({n: p.grad.detach().cpu().numpy().copy()
                           for n, p in model.named_parameters()})
@@ -78,6 +83,10 @@ def run(steps, batch, output):
     for step, meta, arrays in traces:
         assert [base64.b64decode(s) for s in meta['examples_base64']] == examples[step - 1]
         raw_trace_bytes += meta['raw_gradient_bytes']
+        with np.load(io.BytesIO(original_payloads[step - 1]), allow_pickle=False) as original:
+            for i, name in enumerate(meta['names']):
+                assert arrays[name].shape == original[f'g{i}'].shape
+                assert arrays[name].tobytes() == original[f'g{i}'].tobytes(), name
         for name, arr in arrays.items():
             assert arr.shape[0] == batch
             g = arr.sum(axis=0)
@@ -87,13 +96,31 @@ def run(steps, batch, output):
     assert worst_weight < 1e-6, worst_weight
     assert worst_grad < 1e-5, worst_grad
     assert worst_update < 1e-6, worst_update
-    trace_blocks = list(reader.blocks(BlockType.EXAMPLE_GRADIENTS))
+    trace_blocks = [b for b in reader.blocks()
+                    if b.block_type in (BlockType.EXAMPLE_GRADIENTS,
+                                        BlockType.EXAMPLE_GRADIENTS_SHUFFLED)]
+    # Counterfactual: encode the SAME example bytes and gradients using the old v1
+    # layout and the same block compressor. This compares identical data, not two runs.
+    t_compare = time.perf_counter()
+    codec = effective_codec(Codec.ZSTD)
+    baseline_bytes = sum(len(compress(payload, codec)) for payload in original_payloads)
+    selected_bytes = sum(b.stored_len for b in trace_blocks)
+    assert selected_bytes <= baseline_bytes, (selected_bytes, baseline_bytes)
+    compare_seconds = time.perf_counter() - t_compare
     report = {'parameters': count, 'steps': steps, 'batch': batch,
               'initial_anchors': 1, 'deltas': steps, 'example_records': len(traces),
-              'examples_checked': steps * batch, 'loss_first': losses[0], 'loss_last': losses[-1],
+              'examples_checked': steps * batch, 'gradients_bitwise_equal': True, 'loss_first': losses[0], 'loss_last': losses[-1],
               'max_weight_error': worst_weight, 'max_gradient_sum_error': worst_grad,
               'max_sgd_update_error': worst_update, 'raw_gradient_bytes': raw_trace_bytes,
-              'compressed_trace_block_bytes': sum(b.stored_len for b in trace_blocks),
+              'compressed_trace_block_bytes': selected_bytes,
+              'baseline_legacy_trace_block_bytes': baseline_bytes,
+              'trace_bytes_saved': baseline_bytes - selected_bytes,
+              'trace_savings_percent': 100 * (baseline_bytes - selected_bytes) / baseline_bytes,
+              'shuffled_trace_blocks': sum(b.block_type == BlockType.EXAMPLE_GRADIENTS_SHUFFLED
+                                           for b in trace_blocks),
+              'raw_or_legacy_trace_blocks': sum(b.block_type == BlockType.EXAMPLE_GRADIENTS
+                                                for b in trace_blocks),
+              'baseline_comparison_seconds': compare_seconds,
               'recording_bytes': output.stat().st_size,
               'checkpoint_weights_bytes': count * 4,
               'trace_seconds_total': sum(trace_times), 'wall_seconds': duration,

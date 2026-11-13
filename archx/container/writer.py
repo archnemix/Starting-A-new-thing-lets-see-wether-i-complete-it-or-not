@@ -77,10 +77,34 @@ class Writer:
 
         raw = bytes(payload)
         stored = _compress.compress(raw, self.codec)
+        return self._write_encoded(block_type, raw, stored, self.codec, step=step)
+
+    def write_best_block(self, candidates, *, step: int | None = None) -> int:
+        """Write the smallest actual compressed candidate (or raw), recording its type/codec.
+
+        Used for deep traces only; every candidate must represent the same information.
+        Compression occurs on the writer thread, with each block independently recoverable.
+        """
+        if self._closed:
+            raise ValueError("writer is closed")
+        best = None
+        for block_type, raw in candidates:
+            raw = bytes(raw)
+            stored = _compress.compress(raw, self.codec)
+            option = (block_type, raw, stored, self.codec)
+            if len(raw) < len(stored):
+                option = (block_type, raw, raw, Codec.NONE)
+            if best is None or len(option[2]) < len(best[2]):
+                best = option
+        if best is None:
+            raise ValueError("no block candidates")
+        return self._write_encoded(*best, step=step)
+
+    def _write_encoded(self, block_type, raw, stored, codec, *, step):
         payload_crc = zlib_crc32(stored)
         head = BLOCK.pack(
             int(block_type),
-            int(self.codec),
+            int(codec),
             0,
             STEP_NONE if step is None else step,
             len(raw),

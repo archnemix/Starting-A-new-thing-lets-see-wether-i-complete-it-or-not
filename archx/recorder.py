@@ -140,7 +140,8 @@ class Recorder:
         # steps, which broke a documented promise. At the default 1e-3 the recorder is still
         # lossless; an opt-in budget such as 1e-2 buys the size.
         self._encoders = [Unchanged(), Sparse(threshold=0.0), DenseQuant(bits=8),
-                          LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw()]
+                          LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw(),
+                          DenseRaw(shuffle_planes=True)]
         if max_rel_error > _INT16_MIN_BUDGET:
             self._encoders.insert(3, DenseQuant(bits=16))
         self.data = DataCapture(data_level, max_bytes=data_max_bytes)
@@ -354,23 +355,28 @@ class Recorder:
         return out
 
     def _enqueue(self, item: _Pending) -> None:
-        """Hand work to the writer without blocking the training thread on compression.
+        """Queue work in order; bound the large opt-in example-trace backlog.
 
-        The first design dropped the item when the queue was full, and that was a real bug:
-        with the default queue size of 8, a thousand-step run lost 13 of its 39 stored steps
-        and never noticed. Losing history is not "dropping detail" - it is losing the
-        recording while still claiming the run happened.
-
-        So neither dropping nor blocking is used. The stream is unbounded in order and
-        bounded in memory: once the writer is `queue_size` blocks behind, the training thread
-        encodes each block itself before appending it. The arrays can then be released and
-        only the compressed bytes are held, which is the same work the writer would have done
-        and the same number of bytes that were going to be written anyway.
-
-        Blocking instead was tried and is wrong for a different reason: the writer can be
-        waiting for a lock the trainer is holding, and a trainer that blocks on a stalled
-        writer stops training.
+        A trace may contain batch * parameter count floats. When the queue is full,
+        its producer waits for the writer rather than retaining an unbounded sequence of
+        uncompressed trace archives in RAM. No data is dropped; writer failures surface.
+        Other work retains the existing caller-side encoding on backlog.
         """
+        if item.kind == "example_gradients":
+            with self._cond:
+                waited = False
+                while len(self._items) >= self._queue_size:
+                    if self._error is not None or not self._thread.is_alive():
+                        raise RuntimeError("cannot enqueue trace: recorder writer failed") from self._error
+                    waited = True
+                    self._cond.wait(timeout=0.1)
+                if self._error is not None:
+                    raise RuntimeError("cannot enqueue trace: recorder writer failed") from self._error
+                if waited:
+                    self.stats.waited += 1
+                self._items.append(item)
+                self._cond.notify_all()
+            return
         with self._cond:
             backlogged = len(self._items) >= self._queue_size
         if backlogged and item.kind in ("anchor", "delta") and not item.payload:
@@ -416,6 +422,7 @@ class Recorder:
                     if not self._items:
                         break           # stop was requested and nothing is left to write
                     item = self._items.popleft()
+                    self._cond.notify_all()
                 try:
                     self._handle(writer, item)
                 except Exception as exc:  # noqa: BLE001 - one bad step, not a lost run
@@ -585,7 +592,11 @@ class Recorder:
                                json.dumps({"step": item.step, **item.context}).encode(),
                                step=item.step)
         elif item.kind == "example_gradients":
-            writer.write_block(BlockType.EXAMPLE_GRADIENTS, item.payload, step=item.step)
+            from .adapters.example_gradients import shuffle_trace_payload
+            alternative = shuffle_trace_payload(item.payload)
+            writer.write_best_block([(BlockType.EXAMPLE_GRADIENTS, item.payload),
+                                     (BlockType.EXAMPLE_GRADIENTS_SHUFFLED, alternative)],
+                                    step=item.step)
         elif item.kind in ("anchor", "delta"):
             payload = item.payload or self._payload_for(item)
             writer.write_block(BlockType.ANCHOR if item.kind == "anchor" else BlockType.DELTA,

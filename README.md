@@ -118,7 +118,8 @@ lossless delta after every optimizer step. An opt-in `trace_examples` call can a
 save each example's gradient of its additive loss part, tied to caller-supplied
 example bytes. It checks that these sum to the batch gradient; it does **not**
 prove causal influence on later behavior or allocate nonlinear optimizer updates.
-This mode may be very large and slow. Setup, metadata requirements, reader example,
+Compression is chosen per trace as it is written; it is lossless but adds CPU cost
+and can still leave a very large file. Setup, metadata requirements, reader example,
 and limits are in [Docs/Deep_Recording.md](Docs/Deep_Recording.md).
 
 ## Measured at a million parameters, on three operating systems

@@ -9,6 +9,21 @@ every file.
 
 ---
 
+## Unreleased: adaptive lossless compression
+
+- The writer tests both legacy and byte-shuffled per-example gradient archives
+  with the same compressor and stores the smaller, or raw when compression expands
+  it. Shuffled block 25 packs the example bytes instead of base64 encoding them.
+  Both layouts decode without loss; older readers cannot read block 25.
+- Dense deltas now compare shuffled and unshuffled lossless encodings, rather than
+  assuming one wins for every tensor. Existing compressed/deduplicated data shards
+  and sparse encodings remain in use.
+- The trace producer waits if its writer queue is full. Previously raw trace
+  archives could accumulate without a bound when training outpaced compression.
+  This trade-off can slow training and does not impose a global recorder memory cap.
+- The 1M benchmark compares both layouts on the *same* original gradients and
+  example bytes and verifies every decoded gradient bit against the input archive.
+
 ## Unreleased: dense weight history and per-example gradients
 
 - Added opt-in float32 `full_history=True`: pre-training anchor followed by one lossless

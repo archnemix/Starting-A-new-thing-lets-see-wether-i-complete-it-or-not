@@ -52,3 +52,20 @@ def test_abort_leaves_a_readable_file_without_footer(tmp_path):
     assert reader.container.footer is None
     assert reader.container.torn is False
     assert reader.meta() == {"partial": True}
+
+
+def test_best_block_uses_smallest_lossless_candidate_and_raw_fallback(tmp_path):
+    from archx.container.reader import Reader
+    from archx.container.schema import BlockType, Codec
+    import os
+    path = tmp_path / 'adaptive.archx.mdl'
+    data = os.urandom(8192)
+    with Writer(path, codec=Codec.ZSTD) as w:
+        w.write_best_block([(BlockType.EXAMPLE_GRADIENTS, data),
+                            (BlockType.EXAMPLE_GRADIENTS_SHUFFLED, b'x' * len(data))], step=1)
+        w.write_best_block([(BlockType.EXAMPLE_GRADIENTS, data)], step=2)
+    blocks = [b for b in Reader(path).blocks() if b.step in (1, 2)]
+    assert blocks[0].block_type == BlockType.EXAMPLE_GRADIENTS_SHUFFLED
+    assert blocks[0].payload == b'x' * len(data)
+    assert blocks[1].payload == data
+    assert blocks[1].codec == Codec.NONE

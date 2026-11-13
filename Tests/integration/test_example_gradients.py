@@ -84,3 +84,104 @@ def test_trace_requires_dense_mode(tmp_path):
     with pytest.raises(ValueError, match='full_history'):
         r.trace_examples(torch.ones(1), [b'a'])
     r.close()
+
+
+def test_shuffle_lossless_and_legacy_and_new_blocks(tmp_path):
+    import json
+    import io
+    from archx.adapters.example_gradients import (shuffle_trace_payload, unshuffle_trace_payload,
+                                                  legacy_trace_payload)
+    from archx.container.writer import Writer
+    # Include negative zero, subnormals, repeated zeros and arbitrary finite bit patterns.
+    bits = np.array([0, 0x80000000, 1, 0x3f800000, 0xbf800000, 0x7f7fffff], dtype=np.uint32)
+    arrays = {'dense': bits.view(np.float32).reshape(2, 3),
+              'zeros': np.zeros((2, 512), dtype=np.float32)}
+    examples = [b'\x00\xff\x01', 'the input text'.encode()]
+    meta = {'version': 1, 'meaning': 'local gradients', 'names': list(arrays),
+            'examples_base64': [base64.b64encode(x).decode() for x in examples],
+            'loss_parts': [0., 1.], 'max_aggregate_abs_error': 0.,
+            'raw_gradient_bytes': sum(v.nbytes for v in arrays.values())}
+    legacy = legacy_trace_payload(meta, arrays)
+    shuffled = shuffle_trace_payload(legacy)
+    rebuilt_meta, rebuilt = unshuffle_trace_payload(shuffled)
+    assert [base64.b64decode(s) for s in rebuilt_meta['examples_base64']] == examples
+    for name in arrays:
+        assert rebuilt[name].dtype == arrays[name].dtype
+        assert rebuilt[name].shape == arrays[name].shape
+        assert rebuilt[name].tobytes() == arrays[name].tobytes()
+    path = tmp_path / 'both.archx.mdl'
+    with Writer(path) as writer:
+        writer.write_block(BlockType.EXAMPLE_GRADIENTS, legacy, step=1)
+        writer.write_block(BlockType.EXAMPLE_GRADIENTS_SHUFFLED, shuffled, step=2)
+    rows = list(read_example_gradients(Reader(path)))
+    assert [r[0] for r in rows] == [1, 2]
+    assert len(list(read_example_gradients(Reader(path), step=2))) == 1
+    for _, got_meta, got in rows:
+        assert got_meta['examples_base64'] == meta['examples_base64']
+        for name in arrays:
+            assert got[name].tobytes() == arrays[name].tobytes()
+
+
+def test_shuffled_trace_corruption_is_rejected():
+    import io
+    import json
+    from archx.adapters.example_gradients import unshuffle_trace_payload
+    meta = {'version': 2, 'encoding': 'byte_shuffle_4', 'names': [], 'tensors': [],
+            'example_lengths': [3]}
+    b = io.BytesIO()
+    np.savez(b, metadata=np.frombuffer(json.dumps(meta).encode(), dtype=np.uint8),
+             examples=np.frombuffer(b'x', dtype=np.uint8))
+    with pytest.raises(ValueError, match='invalid example lengths'):
+        unshuffle_trace_payload(b.getvalue())
+
+
+def test_deep_trace_waits_when_writer_falls_behind_without_losing_steps(tmp_path, monkeypatch):
+    import threading
+    from archx.recorder import Recorder
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    original = Recorder._handle
+
+    def slow_first_trace(self, writer, item):
+        if item.kind == 'example_gradients' and not entered.is_set():
+            entered.set()
+            if not release.wait(10):
+                raise RuntimeError('test timed out waiting for writer')
+        return original(self, writer, item)
+
+    monkeypatch.setattr(Recorder, '_handle', slow_first_trace)
+    model = torch.nn.Linear(1, 1)
+    optimizer = torch.optim.SGD(model.parameters(), lr=.1)
+    r = archx.attach(model, optimizer, str(tmp_path / 'bounded.archx.mdl'),
+                     full_history=True, queue_size=1)
+    errors = []
+
+    def step():
+        optimizer.zero_grad()
+        parts = model(torch.tensor([[1.], [2.]])).reshape(-1) / 2
+        parts.sum().backward(retain_graph=True)
+        r.trace_examples(parts, [b'a', b'b'])
+        r.log(data=b'ab')
+        optimizer.step()
+
+    step()
+    assert entered.wait(10)
+
+    def second():
+        try:
+            step()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    thread = threading.Thread(target=second)
+    thread.start()
+    try:
+        assert not finished.wait(.2), 'trace should wait for the blocked writer'
+    finally:
+        release.set()
+    thread.join(10)
+    assert finished.is_set() and not errors
+    r.close()
+    assert [step for step, _, _ in read_example_gradients(Reader(tmp_path / 'bounded.archx.mdl'))] == [1, 2]
+    assert r.stats.waited >= 1
