@@ -3,13 +3,13 @@
   "label": "macOS-py3.11",
   "command": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/Users/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/macOS-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "276 tests: 276 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "279 tests: 279 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 276,
+    "passed": 279,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 276
+    "total": 279
   },
   "failures": [],
   "tests": [
@@ -42,6 +42,9 @@
     "Tests.integration.test_end_to_end_proof::test_a_step_that_was_never_stored_is_still_answerable",
     "Tests.integration.test_end_to_end_proof::test_the_recorded_data_is_the_data_the_step_trained_on",
     "Tests.integration.test_end_to_end_proof::test_the_weights_and_the_data_can_be_told_apart_in_the_file",
+    "Tests.integration.test_file_map::test_every_tracked_file_has_an_entry",
+    "Tests.integration.test_file_map::test_no_entry_describes_a_file_that_no_longer_exists",
+    "Tests.integration.test_file_map::test_every_entry_has_the_four_fields_the_rules_list",
     "Tests.integration.test_format_spec_matches_code::test_the_tensor_registry_parses_byte_exactly",
     "Tests.integration.test_format_spec_matches_code::test_the_anchor_is_a_step_then_raw_tensor_bytes",
     "Tests.integration.test_format_spec_matches_code::test_the_delta_has_a_prefix_the_spec_describes",
@@ -290,21 +293,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-13T14:16:37.223992+00:00",
-  "duration_s": 46.927,
+  "started_utc": "2026-11-13T14:23:25.697080+00:00",
+  "duration_s": 56.364,
   "runner": {
     "os": "macOS-26.7.2-arm64-arm-64bit",
     "github_os": "macOS",
     "github_arch": "ARM64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "dd43568ee5f8fed0ad0bcf8ed2f4ce1f3f89997b"
+    "github_sha": "3c3082db8d4ffa9144df40ac15dc1068ceb92d4f"
   },
   "stdout_tail": [
-    "........................................................................ [ 26%]",
-    "........................................................................ [ 52%]",
-    "........................................................................ [ 78%]",
-    "............................................................             [100%]",
+    "........................................................................ [ 25%]",
+    "........................................................................ [ 51%]",
+    "........................................................................ [ 77%]",
+    "...............................................................          [100%]",
     "=============================== warnings summary ===============================",
     "../../../../../Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31",
     "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31: UserWarning: Skipping device Apple Paravirtual device that does not support Metal 2.0 (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/mps/MPSDevice.mm:28.)",
