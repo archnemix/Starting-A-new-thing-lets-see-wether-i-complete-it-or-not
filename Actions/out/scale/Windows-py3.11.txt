@@ -1,8 +1,8 @@
 model            1,004,176 parameters (d=164, 3 blocks, vocab 2100)
 training         40 steps, batch 32, loss 1.3938 -> 0.0052 (drop 1.3887)
-wall             10.4s, median step 14.0ms
+wall             7.6s, median step 9.5ms
 
-recording        77,021,687 bytes (76.7 bytes per parameter)
+recording        77,021,165 bytes (76.7 bytes per parameter)
 stored            28/40 steps (70%)
 data              40 segments, 40 shards, 40/40 decoded ok
 tier              3 (activations, data_segments, deltas, grad_norms, loss, steps)
@@ -13,11 +13,25 @@ vs live weights   max abs error 9.31e-10 (float32 rounding)
 anchors           1 in file, last rebuilds exactly
 
 checkpoint        4,028,021 bytes for ONE save
-recording         77,021,687 bytes for 28 stored steps (2,750,775 per step)
+recording         77,021,165 bytes for 28 stored steps (2,750,756 per step)
 per stored step   0.68x a checkpoint (like-for-like)
 whole recording   19.12x ONE checkpoint, for 28 steps of history
 
 dead units        0 summaries at >=30% zero, worst 0.0%
 saturated         0 summaries at >=50% |x|>=4
+
+hand test        the shipped CLI, on this file
+  PASS  info names the tier
+  PASS  info says tier 3's records
+  PASS  info says capture was on
+  PASS  info does not promise eval results
+  PASS  events lists stored steps
+  PASS  events names a region
+  PASS  activations lists layers
+  PASS  reconstruct answers an unstored step
+  PASS  reconstruct says the step was not stored
+  PASS  diff folds the recorded updates
+  PASS  diff names the biggest mover
+  11/11 pass
 
 written to Actions/out/scale/Windows-py3.11.json
