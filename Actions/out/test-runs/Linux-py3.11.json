@@ -3,13 +3,13 @@
   "label": "Linux-py3.11",
   "command": "/opt/hostedtoolcache/Python/3.11.18/x64/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/home/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/Linux-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "279 tests: 279 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "282 tests: 282 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 279,
+    "passed": 282,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 279
+    "total": 282
   },
   "failures": [],
   "tests": [
@@ -42,6 +42,9 @@
     "Tests.integration.test_end_to_end_proof::test_a_step_that_was_never_stored_is_still_answerable",
     "Tests.integration.test_end_to_end_proof::test_the_recorded_data_is_the_data_the_step_trained_on",
     "Tests.integration.test_end_to_end_proof::test_the_weights_and_the_data_can_be_told_apart_in_the_file",
+    "Tests.integration.test_example_gradients::test_dense_history_examples_and_sgd_update",
+    "Tests.integration.test_example_gradients::test_trace_rejects_incorrect_loss_and_budget",
+    "Tests.integration.test_example_gradients::test_trace_requires_dense_mode",
     "Tests.integration.test_file_map::test_every_tracked_file_has_an_entry",
     "Tests.integration.test_file_map::test_no_entry_describes_a_file_that_no_longer_exists",
     "Tests.integration.test_file_map::test_every_entry_has_the_four_fields_the_rules_list",
@@ -293,21 +296,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-13T14:23:10.351741+00:00",
-  "duration_s": 42.783,
+  "started_utc": "2026-11-13T16:14:51.693307+00:00",
+  "duration_s": 44.243,
   "runner": {
     "os": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
     "github_os": "Linux",
     "github_arch": "X64",
     "python": "3.11.18",
     "pytest": "9.2.0",
-    "github_sha": "3c3082db8d4ffa9144df40ac15dc1068ceb92d4f"
+    "github_sha": "659bab81a18618e1453ca68fd51c7880d722184c"
   },
   "stdout_tail": [
     "........................................................................ [ 25%]",
     "........................................................................ [ 51%]",
-    "........................................................................ [ 77%]",
-    "...............................................................          [100%]",
+    "........................................................................ [ 76%]",
+    "..................................................................       [100%]",
     "=============================== warnings summary ===============================",
     "Tests/integration/test_lightning_adapter.py::test_the_file_holds_the_weights_after_each_update",
     "Tests/integration/test_lightning_adapter.py::test_the_loss_is_recorded_without_any_user_code",
