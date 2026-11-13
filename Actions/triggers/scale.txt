@@ -4,3 +4,5 @@
 Deep recording and per-example gradient trace verification
 
 Measure adaptive lossless trace compression and bitwise fidelity
+
+Test adaptive sparse and byte-plane float compression at 1M

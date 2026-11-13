@@ -109,9 +109,12 @@ The enclosing block codec compresses the archive. Absence of both block 24 and 2
 for a step means the example trace was not recorded, not that its gradients were zero.
 
 `EXAMPLE_GRADIENTS_SHUFFLED` (25) is an independently decodable version-2 NPZ.
-It contains byte-shuffled `gN` uint8 arrays and an `examples` byte array; JSON
-metadata stores original dtype, shape and each example's length. Unshuffling and
-splitting recover all original bits and bytes. The writer compresses both 24 and
+It contains packed `gN` uint8 arrays and an `examples` byte array; JSON metadata
+stores the original dtype, shape, representation and each example's length. The
+`adaptive_float32_v1` representation chooses raw, byte-shuffled, or sparse per
+tensor. Sparse stores little-endian uint32 index gaps followed by the original
+4-byte nonzero values; negative zero is treated as a nonzero bit pattern. Decoding
+and splitting recover all original bits and bytes. The writer compresses both 24 and
 25 and stores the smaller; it may use codec NONE when compression expands the
 payload. Readers of this build support both. Older readers may skip block 25 and
 therefore cannot see every trace in a new file; upgrade before analyzing it.

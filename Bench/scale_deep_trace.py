@@ -6,6 +6,7 @@ of a batch loss, NOT evidence of an example's causal influence on future behavio
 from __future__ import annotations
 import argparse
 import base64
+from collections import Counter
 import io
 import json
 import sys
@@ -107,6 +108,8 @@ def run(steps, batch, output):
     selected_bytes = sum(b.stored_len for b in trace_blocks)
     assert selected_bytes <= baseline_bytes, (selected_bytes, baseline_bytes)
     compare_seconds = time.perf_counter() - t_compare
+    tensor_encodings = Counter(spec['kind'] for _, metadata, _ in traces
+                               for spec in metadata.get('tensors', []) if 'kind' in spec)
     report = {'parameters': count, 'steps': steps, 'batch': batch,
               'initial_anchors': 1, 'deltas': steps, 'example_records': len(traces),
               'examples_checked': steps * batch, 'gradients_bitwise_equal': True, 'loss_first': losses[0], 'loss_last': losses[-1],
@@ -121,6 +124,8 @@ def run(steps, batch, output):
               'raw_or_legacy_trace_blocks': sum(b.block_type == BlockType.EXAMPLE_GRADIENTS
                                                 for b in trace_blocks),
               'baseline_comparison_seconds': compare_seconds,
+              'selected_tensor_encodings': dict(tensor_encodings),
+              'writer_handle_seconds': recorder.stats.encode_seconds,
               'recording_bytes': output.stat().st_size,
               'checkpoint_weights_bytes': count * 4,
               'trace_seconds_total': sum(trace_times), 'wall_seconds': duration,

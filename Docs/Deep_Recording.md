@@ -77,9 +77,9 @@ update. The file stores actual total weight deltas separately.
 
 Each trace is compressed as an independent block by the background writer, with
 Zstandard by default (zlib fallback). For each trace, it compares the previous
-archive layout to a reversible byte-plane shuffle of gradients with packed example
-bytes; it writes the smaller compressed representation, or raw if compression
-expands it. It also compares shuffled and unshuffled lossless dense weight-delta
+archive layout to a layout with packed example bytes and per-tensor choices
+of raw, reversible byte-plane shuffle, or sparse bit-exact gradients. It writes
+the smaller compressed whole-block representation, or raw if compression expands it. It also compares shuffled and unshuffled lossless dense weight-delta
 encodings. Repeated ordinary data shards are already content-deduplicated and
 compressed; example text in a trace is compressed within its block but is not
 deduplicated across trace blocks. No gradient values or example bytes are discarded.

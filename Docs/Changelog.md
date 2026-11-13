@@ -13,7 +13,8 @@ every file.
 
 - The writer tests both legacy and byte-shuffled per-example gradient archives
   with the same compressor and stores the smaller, or raw when compression expands
-  it. Shuffled block 25 packs the example bytes instead of base64 encoding them.
+  it. Block 25 packs example bytes and adaptively chooses raw, shuffled, or sparse
+  bit-exact gradients per tensor before the final whole-block comparison.
   Both layouts decode without loss; older readers cannot read block 25.
 - Dense deltas now compare shuffled and unshuffled lossless encodings, rather than
   assuming one wins for every tensor. Existing compressed/deduplicated data shards

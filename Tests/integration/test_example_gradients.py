@@ -96,6 +96,8 @@ def test_shuffle_lossless_and_legacy_and_new_blocks(tmp_path):
     bits = np.array([0, 0x80000000, 1, 0x3f800000, 0xbf800000, 0x7f7fffff], dtype=np.uint32)
     arrays = {'dense': bits.view(np.float32).reshape(2, 3),
               'zeros': np.zeros((2, 512), dtype=np.float32)}
+    arrays['zeros'].view(np.uint32).flat[3] = 0x80000000  # negative zero is not discarded
+    arrays['zeros'].view(np.uint32).flat[-1] = 1  # smallest subnormal
     examples = [b'\x00\xff\x01', 'the input text'.encode()]
     meta = {'version': 1, 'meaning': 'local gradients', 'names': list(arrays),
             'examples_base64': [base64.b64encode(x).decode() for x in examples],
@@ -104,6 +106,7 @@ def test_shuffle_lossless_and_legacy_and_new_blocks(tmp_path):
     legacy = legacy_trace_payload(meta, arrays)
     shuffled = shuffle_trace_payload(legacy)
     rebuilt_meta, rebuilt = unshuffle_trace_payload(shuffled)
+    assert rebuilt_meta['tensors'][1]['kind'] == 'sparse'
     assert [base64.b64decode(s) for s in rebuilt_meta['examples_base64']] == examples
     for name in arrays:
         assert rebuilt[name].dtype == arrays[name].dtype
@@ -120,6 +123,18 @@ def test_shuffle_lossless_and_legacy_and_new_blocks(tmp_path):
         assert got_meta['examples_base64'] == meta['examples_base64']
         for name in arrays:
             assert got[name].tobytes() == arrays[name].tobytes()
+    # A crash/recovery must retain a complete new-style block without requiring
+    # earlier trace blocks or an external compression dictionary.
+    from archx.container.recovery import recover_in_place
+    torn = tmp_path / 'torn.archx.mdl'
+    writer = Writer(torn)
+    writer.write_block(BlockType.EXAMPLE_GRADIENTS_SHUFFLED, shuffled, step=2)
+    writer.abort()
+    recover_in_place(torn)
+    recovered = list(read_example_gradients(Reader(torn)))
+    assert len(recovered) == 1
+    for name in arrays:
+        assert recovered[0][2][name].tobytes() == arrays[name].tobytes()
 
 
 def test_shuffled_trace_corruption_is_rejected():
@@ -133,6 +148,14 @@ def test_shuffled_trace_corruption_is_rejected():
              examples=np.frombuffer(b'x', dtype=np.uint8))
     with pytest.raises(ValueError, match='invalid example lengths'):
         unshuffle_trace_payload(b.getvalue())
+    meta = {'version': 2, 'encoding': 'adaptive_float32_v1', 'names': ['x'],
+            'tensors': [{'shape': [10**9], 'dtype': '<f4', 'kind': 'sparse', 'nnz': 0}],
+            'example_lengths': []}
+    b = io.BytesIO()
+    np.savez(b, metadata=np.frombuffer(json.dumps(meta).encode(), dtype=np.uint8),
+             examples=np.array([], dtype=np.uint8), g0=np.array([], dtype=np.uint8))
+    with pytest.raises(ValueError, match='decoded size limit'):
+        unshuffle_trace_payload(b.getvalue(), max_output_bytes=1024)
 
 
 def test_deep_trace_waits_when_writer_falls_behind_without_losing_steps(tmp_path, monkeypatch):
