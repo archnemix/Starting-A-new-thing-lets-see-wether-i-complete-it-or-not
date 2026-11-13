@@ -1,0 +1,73 @@
+{
+  "model": {
+    "parameters": 1004176,
+    "vocab": 2100,
+    "dim": 164,
+    "layers": 3,
+    "heads": 4,
+    "out": 4,
+    "architecture": "causal transformer, 5 pre-norm blocks"
+  },
+  "training": {
+    "steps": 40,
+    "batch": 32,
+    "loss_first": 1.393838882446289,
+    "loss_last": 0.005165506154298782,
+    "loss_drop": 1.3886733762919903,
+    "wall_seconds": 5.4953573749999975,
+    "step_ms_median": 11.715124999994941
+  },
+  "recording": {
+    "path": "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/archx-1m-rplc4hge/transformer-1m.archx.mdl",
+    "bytes": 77022647,
+    "bytes_per_parameter": 76.70233803636016,
+    "steps_stored": 28,
+    "steps_seen": 40,
+    "store_ratio": 0.7,
+    "segments": 40,
+    "shards": 40,
+    "shards_decoded_ok": 40,
+    "activation_summaries": 784,
+    "capability_tier": 3,
+    "capabilities_present": [
+      "activations",
+      "data_segments",
+      "deltas",
+      "grad_norms",
+      "loss",
+      "steps"
+    ]
+  },
+  "fidelity": {
+    "rebuilt_step": 39,
+    "tensors": 42,
+    "values": 1004176,
+    "max_abs_error_vs_live": 9.313225746154785e-10,
+    "exact": false,
+    "anchor_steps": [
+      0
+    ],
+    "anchor_rebuild_ok": true
+  },
+  "comparison": {
+    "checkpoint_bytes_one_save": 4028021,
+    "recording_bytes": 77022647,
+    "ratio_recording_over_checkpoint": 19.12170939525886,
+    "bytes_per_stored_step": 2750808.8214285714,
+    "ratio_per_step": 0.6829181926878165,
+    "note": "the checkpoint figure is ONE step; the recording holds every stored step, so the per-step ratio is the like-for-like number and the total is not"
+  },
+  "overhead": {
+    "recorder_encode_seconds": 5.819470419999902,
+    "recorder_copy_seconds": 0.01877716799992868,
+    "blocks_written": 28,
+    "waited": 5
+  },
+  "activations": {
+    "summaries": 784,
+    "layers": 28,
+    "dead_summaries": 0,
+    "worst_zero_fraction": 0.0,
+    "saturated_summaries": 0
+  }
+}
