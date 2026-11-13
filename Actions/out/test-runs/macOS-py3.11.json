@@ -3,13 +3,13 @@
   "label": "macOS-py3.11",
   "command": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python -m pytest Tests -q -ra --tb=short --junitxml=/Users/runner/work/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/Actions/out/test-runs/macOS-py3.11.junit.xml",
   "exit_code": 0,
-  "summary_line": "263 tests: 263 passed, 0 failed, 0 errors, 0 skipped",
+  "summary_line": "265 tests: 265 passed, 0 failed, 0 errors, 0 skipped",
   "counts": {
-    "passed": 263,
+    "passed": 265,
     "failed": 0,
     "errors": 0,
     "skipped": 0,
-    "total": 263
+    "total": 265
   },
   "failures": [],
   "tests": [
@@ -20,6 +20,8 @@
     "Tests.integration.test_cli_activations::test_activations_json_is_machine_readable_and_has_every_documented_field",
     "Tests.integration.test_cli_activations::test_activations_can_be_filtered_to_a_layer_and_a_step",
     "Tests.integration.test_cli_activations::test_a_file_without_tier_three_explains_itself_instead_of_printing_nothing",
+    "Tests.integration.test_cli_activations::test_info_reports_the_achieved_tier_not_the_floor_in_meta",
+    "Tests.integration.test_cli_activations::test_an_unclosed_file_claims_no_tier_at_all",
     "Tests.integration.test_container_end_to_end::test_write_read_recover_read_roundtrip",
     "Tests.integration.test_container_end_to_end::test_process_killed_mid_run_leaves_a_recoverable_file",
     "Tests.integration.test_container_end_to_end::test_cli_info_reports_what_the_writer_wrote",
@@ -277,21 +279,21 @@
     "Tests.unit.test_recorder::test_a_full_queue_loses_no_step",
     "Tests.unit.test_recorder::test_the_first_stored_step_is_an_anchor_at_step_zero"
   ],
-  "started_utc": "2026-11-13T12:57:33.279178+00:00",
-  "duration_s": 70.284,
+  "started_utc": "2026-11-13T13:08:43.463852+00:00",
+  "duration_s": 29.426,
   "runner": {
     "os": "macOS-26.7.2-arm64-arm-64bit",
     "github_os": "macOS",
     "github_arch": "ARM64",
     "python": "3.11.9",
     "pytest": "9.2.0",
-    "github_sha": "14fc5bc23da1b8829f836c3d6b5e39100c9db43f"
+    "github_sha": "b50f721882694c2c946fc9c5c54b13e70331b430"
   },
   "stdout_tail": [
     "........................................................................ [ 27%]",
     "........................................................................ [ 54%]",
-    "........................................................................ [ 82%]",
-    "...............................................                          [100%]",
+    "........................................................................ [ 81%]",
+    ".................................................                        [100%]",
     "=============================== warnings summary ===============================",
     "../../../../../Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31",
     "  /Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/torch/backends/mps/__init__.py:31: UserWarning: Skipping device Apple Paravirtual device that does not support Metal 2.0 (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/mps/MPSDevice.mm:28.)",
