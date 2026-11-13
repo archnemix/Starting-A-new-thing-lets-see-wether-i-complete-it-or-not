@@ -27,3 +27,5 @@ trigger 2026-11-12T09:17:41Z phase3 torch adapter
 2026-11-12T16:30:55Z fix: overhead is a difference, not a ratio; dedupe as_bytes
 2026-11-13T12:56:13Z tier 3 activations + archx demo + README rewrite
 2026-11-13T13:07:55Z fix: archx info printed META's floor tier instead of the achieved one
+
+Verify adaptive lossless compression and crash recovery

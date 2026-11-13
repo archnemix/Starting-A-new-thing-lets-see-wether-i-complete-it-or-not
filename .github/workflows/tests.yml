@@ -20,7 +20,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # Serialize future test runs on the branch while old pre-compression jobs drain.
+  group: tests-compression-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
