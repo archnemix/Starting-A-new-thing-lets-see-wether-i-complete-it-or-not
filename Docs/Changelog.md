@@ -93,6 +93,21 @@ strictly sequential and only a real optimizer step produces gradients.
 - **`examples/quickstart.py`**: the tour, ending with the rebuilt weights compared against the
   live tensors (max abs error 1.9e-09 on the last step).
 
+### `archx info` reported the wrong tier
+
+Found by reading the output of the command in the new guide: `archx info` printed
+`capability_tier 0` for a recording that **listed every field it had recorded on the next
+line**. META carries the floor tier on purpose - it is written at open, before a step has
+happened - and the achieved tier is written in the capabilities block at close. The command
+printed META's.
+
+It now prints the achieved tier, and an unclosed file (which has no capabilities block, and in
+fact no blocks at all, because the writer buffers) reports no tier rather than a default. Two
+tests pin both halves.
+
+This is the kind of defect only a person running the product finds: every test passed, because
+every test read `reader.capabilities()` directly instead of reading what a user is shown.
+
 ### Roadmap 7.4 decided
 
 Ship the launcher as a **fallback**, not a headline. The decision is recorded as made on the
@@ -100,7 +115,10 @@ evidence, with the user delegating the call, rather than as an approval that nev
 `archx run` stays: it works on an untouched script and never lies about what it could not see,
 which is exactly what a fallback should be.
 
-Roadmap: **53 / 53 rows done.** Tests: **263 passed** locally.
+Roadmap: **53 / 53 rows done.** Tests: **263 passed** locally, and CI run
+`43429355746` is green on Linux, Windows and macOS at the same commit `14fc5bc` - 263 passed,
+0 failed, 0 skipped on each, with an **identical set of 263 test names** verified
+programmatically. First attempt, no re-runs.
 
 ## The CI record for the Phase 2 work: run 43259502790
 

@@ -774,6 +774,13 @@ sequential by design - correctly refused to award tier 3 on top of a missing tie
 was right and the probe was wrong. Worth remembering whenever a file "has the data but not the
 tier": that is the ladder working, not a bug.
 
+**The tests read the API and the product reads the CLI.** Every test of the capability block
+called `reader.capabilities()` and got tier 3. The command a user runs first printed
+`capability_tier 0`, because it read META - which carries the floor tier deliberately, being
+written before the first step - and then listed every recorded field underneath it. The file was
+right, the reader was right, and the sentence shown to a person was a contradiction. Nothing in
+the suite could see it, because nothing in the suite was looking at the output a human sees.
+
 The common thread with the eight defects above: none of them crashed, none of them turned a
 test red, and every one of them produced output that a careful reader would have accepted. The
 difference this time is that the suspicious numbers were *impossible* rather than merely

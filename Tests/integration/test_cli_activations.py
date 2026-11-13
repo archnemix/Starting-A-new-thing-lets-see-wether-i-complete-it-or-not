@@ -106,3 +106,56 @@ def test_a_file_without_tier_three_explains_itself_instead_of_printing_nothing(t
     assert result.returncode == 0, "no activations is not an error"
     assert "no activation summaries" in result.stdout
     assert "activations=True" in result.stdout, "it should say how to get them"
+
+
+def test_info_reports_the_achieved_tier_not_the_floor_in_meta(recorded):
+    """`archx info` printed META's `capability_tier`, which is 0 by construction.
+
+    META is written at open, before a step has happened, and carries the floor tier on purpose;
+    the achieved tier is written in the capabilities block at close. The command therefore
+    reported `capability_tier 0` while listing every recorded field on the next line - a file
+    contradicting itself, in the first command anyone runs.
+    """
+    from archx.container.reader import Reader
+
+    result = cli("info", str(recorded))
+    assert result.returncode == 0, result.stderr
+    achieved = Reader(str(recorded)).capabilities()["capability_tier"]
+    assert achieved == 3, "this fixture records with activations=True"
+
+    reported = [line for line in result.stdout.splitlines()
+                if line.startswith("capability_tier")]
+    assert reported, "info must state a tier"
+    assert reported[0].split()[-1] == "3", (
+        f"info said {reported[0].strip()!r} for a tier-{achieved} recording")
+
+
+def test_an_unclosed_file_claims_no_tier_at_all(tmp_path):
+    """A file with no capabilities block must not invent a tier.
+
+    Measured while writing this: a recorder that is never closed leaves a 40-byte header and
+    no blocks, because the writer buffers. So there is nothing to fall back to - and *that* is
+    the correct answer. Printing `capability_tier 0` from a META block that does not exist, or
+    from a default, would be the same class of lie this file is about.
+    """
+    import archx
+    from archx.policy import PhasePolicy
+
+    model = torch.nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    path = tmp_path / "unclosed.archx.mdl"
+    recorder = archx.attach(model, optimizer, str(path), data_level="none",
+                            policy=PhasePolicy(total_steps=4, min_warmup_steps=1))
+    optimizer.zero_grad()
+    loss = model(torch.randn(4, 4)).sum()
+    loss.backward()
+    recorder.log(loss=float(loss.detach()))
+    optimizer.step()
+    # Deliberately no close(): the capabilities block is never written.
+    result = cli("info", str(path))
+    assert result.returncode == 0, result.stderr
+    assert "closed         no" in result.stdout
+    assert "archx recover" in result.stdout, "it should say what to do about it"
+    assert not [l for l in result.stdout.splitlines() if l.startswith("capability_tier")], (
+        "no tier may be reported for a run that recorded none")
+    recorder.close()       # let the writer thread finish so the test leaves no daemon behind
