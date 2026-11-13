@@ -359,7 +359,7 @@
         "scale report",
         "recording"
       ],
-      "handles": "Measures cost and validates steps, examples, gradients and SGD updates."
+      "handles": "Checks 1M states, example bytes, bitwise gradient round trips, SGD updates and same-input compression savings."
     },
     "Docs/Change.md": {
       "purpose": "Inbox for user-requested additions and changes, each with an effect on the roadmap.",
@@ -687,7 +687,7 @@
       "outputs": [
         "pytest assertions"
       ],
-      "handles": "Checks every step, gradient sums, SGD update and failure cases."
+      "handles": "Checks full-history examples, bitwise trace fidelity, text, old/new blocks, corruption, crash recovery and bounded trace backlog."
     },
     "Tests/integration/test_file_map.py": {
       "purpose": "Integration: Docs/Files_Info.json lists every tracked file, describes nothing that was deleted, and gives each entry the four fields its own rules require.",
@@ -1021,7 +1021,7 @@
         "compressed trace payload",
         "gradient arrays"
       ],
-      "handles": "Checks additive gradients against the actual batch gradient; refuses oversized or unsupported traces."
+      "handles": "Validates batch-gradient sums and losslessly encodes/decodes raw, shuffled or sparse example gradients and packed examples, retaining legacy block support."
     },
     "archx/adapters/hf.py": {
       "purpose": "Hugging Face Trainer: one callback, no fork of the training loop.",
@@ -1270,7 +1270,7 @@
       "outputs": [
         ".archx.mdl bytes on disk"
       ],
-      "handles": "Torn-write safety (header first, footer last), CLOSED/RECOVERED flags, index of (step, offset, length)."
+      "handles": "Append-only block writing, CRCs, index, recovery flags, and smallest-of-candidate compression selection."
     },
     "archx/data/__init__.py": {
       "purpose": "Marks the data package: codecs and capture.",
@@ -1502,7 +1502,7 @@
         "RecorderStats",
         "Decision per step"
       ],
-      "handles": "Two promises: training never waits (bounded queue, drops detail), and recording never changes training (reads only). Writes movement, then observation, then data."
+      "handles": "Queues snapshots, observations and traces; compares dense delta encodings, compresses independent trace blocks and applies trace backpressure without dropping records."
     },
     "archx/version.py": {
       "purpose": "Single source of version and format constants (MAGIC, END_MAGIC, FORMAT_MAJOR/MINOR).",

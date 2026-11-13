@@ -105,7 +105,37 @@ gradient sums and the actual SGD update. Its report includes file size, raw and
 compressed trace bytes, timing and reconstruction errors. It does not measure
 influence on a model's future behaviour or demonstrate automated model repair.
 
-## Measured 1M run
+## Measured adaptive compression on 1M parameters
+
+GitHub Actions run `43469444653` passed the deep Linux test with 1,004,176
+parameters, six steps, and two synthetic token examples per step. It compared the
+previous compressed archive against the new writer using **the very same six
+uncompressed trace archives**, then read the written file and compared every
+gradient byte and example byte against the originals. On that run:
+
+| Measurement | Bytes |
+|---|---:|
+| Uncompressed gradient values | 48,200,448 |
+| Previous compressed trace blocks (same data) | 29,486,233 |
+| Adaptive compressed trace blocks | 25,896,178 |
+| Trace saving versus the previous compressed layout | 3,590,055 (12.18%) |
+| Complete new recording | 40,060,701 |
+| One raw weight snapshot | 4,016,704 |
+
+The six traces all chose the new block, using 122 shuffled and 130 unshuffled
+tensor representations; sparse was not selected on this particular workload. The
+maximum reconstructed-weight error was 3.73e-9 (float32 reconstruction rounding).
+Gradient arrays and supplied examples were byte-identical after decoding. Writer
+handling took 1.49 s, and end-to-end training/recording took 1.57 s; there was no
+same-run unoptimized training timing comparison, so those do not prove a speedup.
+The 1M examples were synthetic token IDs, not a realistic text corpus; text and
+arbitrary bytes are separately tested for lossless round trip. Larger models,
+longer runs, different batches and data distributions can compress differently.
+Full evidence is in `Actions/out/scale/deep-Linux-py3.11.json`; the 1M artifact
+is retained for seven days. The separate legacy scale test ran on all three OSes;
+the deep compression benchmark ran only on Linux.
+
+## Earlier 1M run before adaptive compression
 
 GitHub Actions run `43460610578`, Linux, trained the 1,004,176-parameter
 transformer for six updates with two synthetic examples per batch. It checked

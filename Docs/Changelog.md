@@ -22,8 +22,11 @@ every file.
 - The trace producer waits if its writer queue is full. Previously raw trace
   archives could accumulate without a bound when training outpaced compression.
   This trade-off can slow training and does not impose a global recorder memory cap.
-- The 1M benchmark compares both layouts on the *same* original gradients and
-  example bytes and verifies every decoded gradient bit against the input archive.
+- GitHub Actions `43469444653` compared the same six 1M-model trace archives:
+  29,486,233 old compressed bytes vs 25,896,178 adaptive bytes (12.18% less).
+  Every gradient and example decoded byte-for-byte. The complete recording was
+  40,060,701 bytes; writer handling was 1.49 s. Deep test on Linux, legacy scale
+  on Linux, Windows and macOS. This synthetic token test is not a text corpus.
 
 ## Unreleased: dense weight history and per-example gradients
 
