@@ -21,8 +21,11 @@ every file.
   storage cost, privacy, gradient assumptions, and Python reader.
 - Corrected a CLI defect: for an unstored step it used to call a prior stored state an anchor
   and leave the impression it was the exact requested state. It now explicitly says it is not.
-- The new 1M Actions experiment checks every stored step, every input, per-example gradient
-  sums, SGD updates and the measured storage/time. See `Actions/out/scale/deep-Linux-py3.11.json`.
+- The 1M Actions experiment (run 43460610578) passed: six SGD steps, 12 input examples,
+  seven verified states, max reconstruction error 4.19e-9 and gradient-sum error 1.19e-7.
+  The file was 45,334,246 bytes, including 29,480,143 compressed example-gradient bytes.
+  It ran on Linux; the legacy adaptive scale test also passed Windows and macOS. Full
+  measurements: `Actions/out/scale/deep-Linux-py3.11.json`.
 
 ## Unreleased (design phase)
 

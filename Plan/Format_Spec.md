@@ -96,6 +96,16 @@ Reader rules, all mandatory:
 Blocks 1-8 are version 1; new types are added as integers, never by changing these.
 | 21 | `DATA_POINTER` | JSON | content hash + source reference instead of content (level `pointers`, or a `sensitive` shard) |
 | 23 | `ACTIVATION` | JSON | per-layer output statistics for a stored step (tier 3) |
+| 24 | `EXAMPLE_GRADIENTS` | NumPy NPZ, container-compressed | optional per-example local loss gradients and caller-supplied example bytes for one optimizer step |
+
+`EXAMPLE_GRADIENTS` (24) carries an NPZ archive without pickle. Its `metadata` is
+UTF-8 JSON in a uint8 array: version, ordered tensor names, base64 example bytes,
+loss parts, raw size and gradient-sum error. Arrays `g0`, `g1`, etc. are float32,
+indexed first by example and then by the corresponding named tensor dimensions.
+The block step names the optimizer update; values are local derivatives of the
+provided loss parts, not causal influence or individually measured optimizer updates.
+The enclosing block codec compresses the archive. Absence of a block for a step
+means the example trace was not recorded for that step, not that its gradients were zero.
 
 Reserved ids are allocated so that a file written by a future version is skipped, not
 misread, by a v1 reader. `DATA_SEGMENT` (17) supersedes the previously reserved

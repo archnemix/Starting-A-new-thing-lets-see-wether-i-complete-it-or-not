@@ -56,6 +56,11 @@ for step, metadata, tensors in read_example_gradients(Reader("run.archx.mdl")):
     print(step, metadata["max_aggregate_abs_error"], list(tensors))
 ```
 
+The caller must call `trace_examples` on **every** update they want traced;
+`full_history=True` alone does not enable per-example capture. The provided bytes
+are caller-supplied labels and the recorder cannot verify they represent the actual
+input or target. A missing trace is not a zero gradient.
+
 The trace checks its gradients sum to the `.grad` values; mismatches, sparse or
 non-float32 gradients, and exceeding the default 256 MiB raw-per-step budget
 raise an error. Increase `max_bytes` explicitly if desired. The caller must
@@ -80,3 +85,19 @@ GitHub Actions scale job, checking each stored state, each example's bytes,
 gradient sums and the actual SGD update. Its report includes file size, raw and
 compressed trace bytes, timing and reconstruction errors. It does not measure
 influence on a model's future behaviour or demonstrate automated model repair.
+
+## Measured 1M run
+
+GitHub Actions run `43460610578`, Linux, trained the 1,004,176-parameter
+transformer for six updates with two synthetic examples per batch. It checked
+all seven weight states (initial plus six), twelve example byte strings, six
+per-example gradient blocks and the resulting plain-SGD updates. Maximum errors:
+weight reconstruction `4.19e-9`, gradient sum `1.19e-7`, SGD update `1.20e-7`.
+The recording was 45,334,246 bytes versus 4,016,704 raw parameter bytes for one
+snapshot; 48,200,448 raw gradient bytes compressed to 29,480,143 block payload
+bytes. Trace computation took 0.517 seconds total and the run 2.444 seconds on
+that runner. These numbers are for this small synthetic CPU workload, not a
+claim that arbitrary data or larger models compress similarly. Full results:
+`Actions/out/scale/deep-Linux-py3.11.json`; the recording is a 7-day Actions
+artifact. The legacy adaptive 1M benchmark also passed on Linux, Windows, macOS;
+the new deep benchmark ran only on Linux.
