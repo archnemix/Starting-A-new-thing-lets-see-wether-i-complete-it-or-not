@@ -6,13 +6,15 @@ on:
       - '.github/workflows/batch-history.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -30,3 +32,7 @@ jobs:
             Bench/out/batch-history-1m.archx.mdl
           if-no-files-found: error
           retention-days: 7
+      - name: Commit measurements
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: bash Actions/scripts/commit_results.sh "ci: 1M batch history measurements"
