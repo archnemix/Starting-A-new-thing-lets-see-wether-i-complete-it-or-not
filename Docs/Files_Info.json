@@ -1623,7 +1623,7 @@
       "outputs": [
         "batch-history-1m artifact with measurements and recording"
       ],
-      "handles": "See source and tests for exact guarantees and limitations."
+      "handles": "Runs the default 1M batch-history benchmark on Linux, uploads the recording, and commits measured results via the shared CI script."
     },
     "Bench/scale_batch_history.py": {
       "purpose": "Train 1M model and verify default update deltas, reconstructed states, logged token batches and history CLI.",
@@ -1668,6 +1668,16 @@
         "decoded batch"
       ],
       "handles": "See source and tests for exact guarantees and limitations."
+    },
+    "Actions/out/scale/batch-history-Linux.json": {
+      "purpose": "Measured 1M-parameter default batch-history verification results from GitHub Actions.",
+      "inputs": [
+        "Bench/scale_batch_history.py"
+      ],
+      "outputs": [
+        "measured JSON"
+      ],
+      "handles": "Six synthetic CPU SGD updates; full detail and caveats in Docs/Deep_Recording.md."
     }
   },
   "_generated": "2026-11-13 - v1.0.2: 1M-parameter scale test on CI (three runners green, hand test 11/11), six CLI/recovery defects fixed, 276 tests per runner",
