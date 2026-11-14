@@ -1,0 +1,21 @@
+{
+  "parameters": 1004176,
+  "updates": 6,
+  "batch_size": 2,
+  "sequence_length": 12,
+  "seconds_training_recording_and_close": 1.4084335990000056,
+  "recording_bytes": 13891377,
+  "raw_float32_anchor_and_deltas_bytes": 28116928,
+  "changed_delta_values": 3946208,
+  "max_reconstruction_abs_error": 3.725290298461914e-09,
+  "losses": [
+    1.6609461307525635,
+    2.408907175064087,
+    2.6598801612854004,
+    1.676171898841858,
+    1.7421410083770752,
+    1.5187753438949585
+  ],
+  "cli_history_verified_steps": 6,
+  "data": "synthetic tokens and targets, mean loss, CPU SGD"
+}
