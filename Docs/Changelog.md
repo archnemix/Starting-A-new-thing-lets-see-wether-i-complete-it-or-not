@@ -23,6 +23,8 @@ every file.
   fake update events; reused batch labels could conflate content; completeness of an
   available batch could be mistaken for availability of all batches. The query now
   separately reports closed state, contiguous updates, events and content availability.
+- CI defect: the first attempt to add a measurement-commit step used an unquoted YAML
+  colon and failed workflow validation (run 43609769402); changed it to a block scalar.
 - New GitHub Actions test is `batch-history-1m`; results must be read from that run,
   not inferred from the earlier example-gradient benchmark below.
 
