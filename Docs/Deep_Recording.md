@@ -65,6 +65,22 @@ compression costs CPU; arbitrary dense data need not compress well. The encoding
 of float32 deltas is lossless, but reconstructing by addition may round. Optimizer
 state and buffers are not recorded. `full_history` rejects non-float32 parameters.
 
+## Measured default batch-history run
+
+GitHub Actions run [43609820406](https://github.com/archnemix/Starting-A-new-thing-lets-see-wether-i-complete-it-or-not/actions/runs/43609820406)
+trained the 1,004,176-parameter transformer on Linux CPU, with six SGD updates,
+batch size two and synthetic 12-token inputs. It checked every stored delta
+against the live float32 subtraction, every reconstructed state, and all six
+input/target batches through the shipped history CLI. The largest reconstruction
+error was 3.73e-9. The whole recording was 13,891,377 bytes; seven raw float32
+parameter arrays would total 28,116,928 bytes (not a matched compressed-checkpoint
+comparison). Training, recording and close took 1.41 seconds on that runner,
+without an unrecorded baseline. These are six synthetic steps, not evidence of
+compression ratio or performance on a larger real dataset. Full measurements:
+`Actions/out/scale/batch-history-Linux.json`; the recording is a seven-day Actions
+artifact. The independent suite run `43609677825` passed 290 tests on each of
+Linux, Windows and macOS. The 1M batch-history test itself ran only on Linux.
+
 ## Optional individual-example gradient trace
 
 The trace differentiates the actual batched computation graph, not separate

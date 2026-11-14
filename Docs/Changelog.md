@@ -25,8 +25,11 @@ every file.
   separately reports closed state, contiguous updates, events and content availability.
 - CI defect: the first attempt to add a measurement-commit step used an unquoted YAML
   colon and failed workflow validation (run 43609769402); changed it to a block scalar.
-- New GitHub Actions test is `batch-history-1m`; results must be read from that run,
-  not inferred from the earlier example-gradient benchmark below.
+- GitHub Actions run `43609820406`: 1,004,176 parameters, six updates, every delta
+  and logged synthetic input/target batch verified; 13,891,377-byte recording and
+  maximum reconstructed-weight error 3.73e-9. Measured facts are in
+  `Actions/out/scale/batch-history-Linux.json`. This test ran only on Linux CPU.
+  Suite run `43609677825` passed 290 tests each on Linux, Windows and macOS.
 
 ## Unreleased: adaptive lossless compression
 
