@@ -182,6 +182,6 @@ def test_a_plain_run_is_unaffected_by_the_new_check(tmp_path):
     recorder.close()
 
     timeline = Timeline(Reader(path))
-    assert timeline.steps == [0, 1, 2, 3]
-    rebuilt = timeline.reconstruct(3)
+    assert timeline.steps == [0, 1, 2, 3, 4]
+    rebuilt = timeline.reconstruct(4)
     assert np.allclose(rebuilt["weight"], model.weight.detach().numpy(), atol=1e-6)

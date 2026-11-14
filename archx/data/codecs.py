@@ -144,7 +144,7 @@ def _looks_like_token_ids(data: bytes) -> bool:
     return top < (1 << 20)
 
 
-def encode_shard(data: bytes, *, codec: str | None = None) -> EncodedShard:
+def encode_shard(data: bytes, *, codec: str | None = None, compression_level: int = 3) -> EncodedShard:
     """Content-address and compress one shard. Lossless for every codec currently shipped."""
     import zlib
 
@@ -153,10 +153,10 @@ def encode_shard(data: bytes, *, codec: str | None = None) -> EncodedShard:
         tokens = np.frombuffer(data, dtype=np.uint32)
         body = b"".join([
             np.uint32(tokens.size).tobytes(),
-            compress(varint_encode(tokens), Codec.ZSTD),
+            compress(varint_encode(tokens), Codec.ZSTD, level=compression_level),
         ])
     else:
-        body = compress(data, Codec.ZSTD)
+        body = compress(data, Codec.ZSTD, level=compression_level)
 
     return EncodedShard(
         shard_id=content_id(data),

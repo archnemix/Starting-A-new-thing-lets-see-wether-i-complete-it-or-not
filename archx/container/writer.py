@@ -41,11 +41,15 @@ class Writer:
         path: str | os.PathLike[str],
         *,
         codec: Codec = Codec.ZSTD,
+        compression_level: int = 3,
         fsync_every_bytes: int = 8 * 1024 * 1024,
         fsync_every_seconds: float = 1.0,
         parameters_complete: bool = True,
     ) -> None:
         self.path = Path(path)
+        if not 1 <= compression_level <= 19:
+            raise ValueError("compression_level must be between 1 and 19")
+        self.compression_level = compression_level
         self.codec = _compress.effective_codec(codec)
         self.fsync_every_bytes = fsync_every_bytes
         self.fsync_every_seconds = fsync_every_seconds
@@ -76,7 +80,11 @@ class Writer:
             raise TypeError("payload must be bytes-like")
 
         raw = bytes(payload)
-        stored = _compress.compress(raw, self.codec)
+        stored = _compress.compress(raw, self.codec, level=self.compression_level)
+        if self.compression_level != 3:
+            baseline = _compress.compress(raw, self.codec, level=3)
+            if len(baseline) < len(stored):
+                stored = baseline
         return self._write_encoded(block_type, raw, stored, self.codec, step=step)
 
     def write_best_block(self, candidates, *, step: int | None = None) -> int:
@@ -90,7 +98,11 @@ class Writer:
         best = None
         for block_type, raw in candidates:
             raw = bytes(raw)
-            stored = _compress.compress(raw, self.codec)
+            stored = _compress.compress(raw, self.codec, level=self.compression_level)
+            if self.compression_level != 3:
+                baseline = _compress.compress(raw, self.codec, level=3)
+                if len(baseline) < len(stored):
+                    stored = baseline
             option = (block_type, raw, stored, self.codec)
             if len(raw) < len(stored):
                 option = (block_type, raw, raw, Codec.NONE)

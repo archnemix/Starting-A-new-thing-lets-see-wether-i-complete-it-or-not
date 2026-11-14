@@ -44,7 +44,8 @@ def test_every_architecture_reaches_tier_two_and_rebuilds_its_weights(tmp_path):
         recorder = archx.attach(model, optimizer, path=str(path), regions=regions,
                                 data_level="segments")
         dataset = list(batches(name, DATASET_SIZE))
-        truth = {}
+        truth = {0: {key: value.detach().cpu().numpy().copy()
+                     for key, value in model.state_dict().items()}}
         for step in range(steps):
             inputs, targets = dataset[step % DATASET_SIZE]
             optimizer.zero_grad()
@@ -52,7 +53,7 @@ def test_every_architecture_reaches_tier_two_and_rebuilds_its_weights(tmp_path):
             loss.backward()
             recorder.log(loss=float(loss.item()), data=inputs)
             optimizer.step()
-            truth[step] = {key: value.detach().cpu().numpy().copy()
+            truth[step + 1] = {key: value.detach().cpu().numpy().copy()
                            for key, value in model.state_dict().items()}
         recorder.close()
 

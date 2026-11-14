@@ -55,6 +55,16 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("--step-b", type=int, help="second step (default: the last)")
     diff.add_argument("--json", action="store_true", help="machine-readable output")
 
+    history = sub.add_parser("history", help="show batch-linked history of a tensor or weight")
+    history.add_argument("file", help="path to the recording")
+    history.add_argument("--tensor", required=True, help="recorded tensor name")
+    select = history.add_mutually_exclusive_group()
+    select.add_argument("--index", help="comma-separated indices, e.g. 0,3")
+    select.add_argument("--row", type=int, help="tensor row (not automatically a neuron)")
+    history.add_argument("--data", action="store_true", help="include recorded batch contents")
+    history.add_argument("--cochanges", type=int, default=0, metavar="N", help="show up to N co-changing weights per update (max 10000)")
+    history.add_argument("--json", action="store_true", help="machine-readable output")
+
     # `archx run` takes everything after `--` verbatim, which is why it must not be
     # parsed by argparse beyond the recording path: argparse would eat the training
     # script's own flags, including `--help`.
@@ -118,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         from .events import run_events
 
         return run_events(args.file, as_json=args.json)
+
+    if args.command == "history":
+        from .history import run_history
+        return run_history(args.file, tensor=args.tensor, index=args.index, row=args.row,
+                           include_data=args.data, cochanges=args.cochanges, as_json=args.json)
 
     if args.command == "diff":
         from .diff import run_diff

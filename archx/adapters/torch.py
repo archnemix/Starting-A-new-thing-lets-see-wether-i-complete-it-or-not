@@ -120,9 +120,20 @@ class TorchRecorder(Recorder):
         return report
 
     def log(self, *, loss: float | None = None, data: Any = None, lr: float | None = None,
-            segment_id: str = "", source: str = "") -> None:
-        super().log(loss=loss, data=as_bytes(data), lr=lr,
-                    segment_id=segment_id, source=source)
+            segment_id: str = "", source: str = "", loss_reduction: str = "unknown") -> None:
+        if not self.full_history:
+            super().log(loss=loss, data=as_bytes(data), lr=lr,
+                        segment_id=segment_id, source=source)
+            return
+        if loss_reduction not in ("mean", "sum", "none", "custom", "unknown"):
+            raise ValueError("loss_reduction must be mean, sum, none, custom or unknown")
+        if data is not None:
+            from ..data.batch import encode_batch
+            payload = encode_batch(data)
+            self._logged.setdefault("batch_items", []).append({
+                "payload": payload, "source": source, "name": segment_id,
+                "format": "structured_batch_v1", "loss_reduction": loss_reduction})
+        super().log(loss=loss, lr=lr)
 
 
 def attach(
@@ -134,6 +145,7 @@ def attach(
     regions: dict[str, str] | None = None,
     components: dict[str, str] | None = None,
     data_level: str = "segments",
+    data_max_bytes: int | None = None,
     queue_size: int = 8,
     max_rel_error: float = 1e-3,
     allow_partial: bool = False,
@@ -141,24 +153,26 @@ def attach(
     activations: bool = False,
     activation_layers: list[str] | None = None,
     max_activation_layers: int = 256,
-    full_history: bool = False,
+    full_history: bool | None = None,
+    compression_level: int = 9,
 ) -> Recorder:
     """Attach a recorder and return it. The training loop stays exactly as it was.
 
     `model` may be a `nn.Module` or any object with `named_parameters()`. The returned
     recorder's `log()` takes the loss and the batch; both are optional.
 
-    `max_rel_error` is the reconstruction budget per delta. The default (1e-3) is what makes
-    a run small; `0.0` restricts every delta to a lossless encoder and makes every stored step
-    rebuild exactly.
+    `max_rel_error` is the adaptive mode encoding error budget. Full-history mode forces
+    lossless encoding of float32 deltas; adding those deltas can still introduce rounding.
 
     Under FSDP or ZeRO-3, no rank holds a whole parameter, so a file recorded from one rank
     would rebuild weights that never existed. attach() therefore refuses, rather than writing
     a plausible-looking file; pass `allow_partial=True` to record anyway, and the file will
     say `parameters_complete: false` and name the wrapper.
 
-    `full_history=True` records the initial weights at step 0 and a delta after every
-    optimizer step. Delta encoding is lossless in this mode. This costs more.
+    The default records the initial weights at step 0 and a losslessly encoded delta
+    after every optimizer step. Supply every batch via log(data=...), including targets;
+    absent data is marked as missing. Explicit policy or full_history=False uses the
+    adaptive, lower-detail schedule. Every-step capture can cost substantial disk and time.
 
     `activations=True` reaches tier 3: a forward hook summarises each layer's output (shape,
     mean, std, min/max, dead-unit and saturation fractions) at every store point. It is off by
@@ -176,6 +190,10 @@ def attach(
             f"  step would rebuild weights that never existed. Nothing was opened.\n"
             f"  Either record on an unsharded run, or pass allow_partial=True and the file\n"
             f"  will state that its parameters are incomplete.")
+    # No policy means the user chose the default: retain every optimizer update.
+    # Supplying a policy explicitly opts into its adaptive schedule unless overridden.
+    if full_history is None:
+        full_history = policy is None
     parameters = dict(_named_parameters(model))
     if full_history:
         import torch
@@ -200,7 +218,9 @@ def attach(
                         queue_size=queue_size,
                         max_rel_error=max_rel_error,
                         data_level=data_level,
+                        data_max_bytes=data_max_bytes,
                         full_history=full_history,
+                        compression_level=compression_level,
                         meta={"adapter": "torch", "torch": _torch_version(),
                               "torch_initial_seed": int(torch.initial_seed()),
                               "torch_cpu_rng_state_base64": base64.b64encode(

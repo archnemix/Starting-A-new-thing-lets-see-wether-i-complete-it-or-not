@@ -27,6 +27,7 @@ archx info          demo.archx.mdl   # tier, size, and what it could NOT see
 archx events        demo.archx.mdl   # per step: loss, gradient norm, which region moved
 archx activations   demo.archx.mdl   # per layer: mean, std, dead units, saturation
 archx diff          demo.archx.mdl   # the last two steps, tensor by tensor
+archx history       demo.archx.mdl --tensor 0.weight --row 0 --data # choose an actual tensor name from info
 archx reconstruct   demo.archx.mdl --out weights.npz
 ```
 
@@ -50,9 +51,18 @@ batch — they are locals that die with the iteration — so hand them over, bef
 optimizer.zero_grad()
 loss = criterion(model(x), y)
 loss.backward()
-recorder.log(loss=loss.item(), data=x)    # optional, and the only extra line
+recorder.log(loss=loss.item(), data={"inputs": x, "targets": y},
+             source="your-dataset", loss_reduction="mean")  # log every batch
 optimizer.step()
 ```
+
+The default PyTorch mode saves an initial anchor and every optimizer update, with
+losslessly encoded float32 deltas and Zstandard level 9 (or zlib fallback). It
+cannot discover batches automatically: log each microbatch before its joint optimizer
+step, including targets. Missing batches are marked. History is observational, not
+proof of causation. Data can be sensitive; protect the file. Dense updates can be
+large, and this reader loads the entire file into memory. Use `full_history=False`
+or an explicit policy for adaptive recording. See `Docs/Deep_Recording.md`.
 
 At the end, `recorder.close()` writes the capability block. If you never call `close()` — a
 killed process, a lost machine — the file is still readable up to the last complete block:
@@ -113,7 +123,7 @@ with no data behind it reports a corrupt file rather than trusting it.
 
 ## Maximum-detail history and example gradients
 
-For float32 PyTorch models, `full_history=True` records an initial anchor plus a
+For float32 PyTorch models, the default (`full_history=True`) records an initial anchor plus a
 lossless delta after every optimizer step. An opt-in `trace_examples` call can also
 save each example's gradient of its additive loss part, tied to caller-supplied
 example bytes. It checks that these sum to the batch gradient; it does **not**

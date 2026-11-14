@@ -305,7 +305,13 @@ Tier 3 requires an `ACTIVATION` block behind the claim; a file that lists `activ
  "regions": {"body": 0.0235}, "segment_id": "data-4", "seconds": 1700000000.0}
 ```
 
-Written for every **stored** step. `loss`, `grad_norm` and `lr` are `null` when the adapter
+Written for every **stored** step in adaptive mode. In full-history mode step 0 is an
+initial anchor, not an update, so events start at step 1. Full-history events contain
+`batch_status` and ordered `batches` references with a 128-bit BLAKE2b content hash, source, name,
+format and caller-provided loss reduction. Structured batch v1 is a NumPy archive
+containing a JSON tree and non-object arrays; it is stored as a normal data shard.
+References may have no available content in pointer mode or after a data cap.
+`loss`, `grad_norm` and `lr` are `null` when the adapter
 could not see them - never a substitute value. `regions` holds per-region relative movement,
 which is what the policy's event trigger and the segment join both use.
 

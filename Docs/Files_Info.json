@@ -379,7 +379,7 @@
       "outputs": [
         "release notes per version"
       ],
-      "handles": "Features only; no implementation notes."
+      "handles": "Features only; no implementation notes. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Docs/Deep_Recording.md": {
       "purpose": "Explains dense history, trace setup, limits and costs",
@@ -389,7 +389,7 @@
       "outputs": [
         "user instructions"
       ],
-      "handles": "Distinguishes local gradients from causal influence and explains storage and metadata limitations."
+      "handles": "Distinguishes local gradients from causal influence and explains storage and metadata limitations. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Docs/Files_Info.json": {
       "purpose": "This file: the per-file map used instead of re-reading the codebase.",
@@ -556,7 +556,7 @@
       "outputs": [
         "header, block, payload, footer layouts and reader rules"
       ],
-      "handles": "Frozen by roadmap step 1.1; code must match it or the spec is amended."
+      "handles": "Frozen by roadmap step 1.1; code must match it or the spec is amended. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Plan/Open_Questions.md": {
       "purpose": "Decisions waiting on the user, with recommendation and evidence.",
@@ -608,7 +608,7 @@
       "outputs": [
         "none"
       ],
-      "handles": "Orientation only. Points to Plan/Architecture.md and Docs/Rules.md."
+      "handles": "Orientation only. Points to Plan/Architecture.md and Docs/Rules.md. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/README.md": {
       "purpose": "Folder README: test layers, when each runs, where records go.",
@@ -638,7 +638,7 @@
       "outputs": [
         "pass/fail, and the per-architecture tier in the assertion message"
       ],
-      "handles": "The regression guard for Bench/claim_arch_sweep.py; skips when torch is absent."
+      "handles": "The regression guard for Bench/claim_arch_sweep.py; skips when torch is absent. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/integration/test_cli_activations.py": {
       "purpose": "The two tier-3 CLI commands through `python -m archx`: demo output, refusal to overwrite, JSON shape, filters, and the no-activations explanation.",
@@ -687,7 +687,7 @@
       "outputs": [
         "pytest assertions"
       ],
-      "handles": "Checks full-history examples, bitwise trace fidelity, text, old/new blocks, corruption, crash recovery and bounded trace backlog."
+      "handles": "Checks full-history examples, bitwise trace fidelity, text, old/new blocks, corruption, crash recovery and bounded trace backlog. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/integration/test_file_map.py": {
       "purpose": "Integration: Docs/Files_Info.json lists every tracked file, describes nothing that was deleted, and gives each entry the four fields its own rules require.",
@@ -708,7 +708,7 @@
       "outputs": [
         "12 tests"
       ],
-      "handles": "Registry byte layout, anchor body, delta prefix, every JSON block's documented keys, and a rebuild using the spec alone."
+      "handles": "Registry byte layout, anchor body, delta prefix, every JSON block's documented keys, and a rebuild using the spec alone. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/integration/test_forward_compat.py": {
       "purpose": "Integration: a file written by a newer minor version is read with a warning, and a newer major is refused naming both versions.",
@@ -938,7 +938,7 @@
       "outputs": [
         "18 tests"
       ],
-      "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself."
+      "handles": "FSDP/ZeRO/TP names, nested wrappers, absent and meta parameters, hostile objects, and the allow_partial file telling the truth about itself. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/unit/test_policy.py": {
       "purpose": "Unit tests for the phase policy: phases, triggers, heartbeat, anchors.",
@@ -958,7 +958,7 @@
       "outputs": [
         "pass/fail"
       ],
-      "handles": "The two halves of the promise are asserted separately, because reporting only one of them would overstate or understate what a step gives you."
+      "handles": "The two halves of the promise are asserted separately, because reporting only one of them would overstate or understate what a step gives you. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "Tests/unit/test_recorder.py": {
       "purpose": "Unit tests for the recorder: observation, no mutation, degradation, observations written.",
@@ -1074,7 +1074,7 @@
         "TorchRecorder",
         "as_bytes() for any batch type"
       ],
-      "handles": "Global gradient norm read before zero_grad(), tied parameters kept via remove_duplicate=False, and the batch converted in exactly one place."
+      "handles": "Global gradient norm read before zero_grad(), tied parameters kept via remove_duplicate=False, and the batch converted in exactly one place. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/capabilities.py": {
       "purpose": "What a run could actually see: the tier reached and every field it could not see.",
@@ -1114,7 +1114,7 @@
       "outputs": [
         "a recorded .archx.mdl and the commands to read it"
       ],
-      "handles": "Refuses to overwrite an existing file, and needs torch (says so and exits 1 without it)."
+      "handles": "Refuses to overwrite an existing file, and needs torch (says so and exits 1 without it). Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/cli/diff.py": {
       "purpose": "archx diff: what changed between two steps of one run, or between two recordings.",
@@ -1161,7 +1161,7 @@
       "outputs": [
         "exit code"
       ],
-      "handles": "--version, info, recover; new commands are added as their modules land."
+      "handles": "--version, info, recover; new commands are added as their modules land. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/cli/reconstruct.py": {
       "purpose": "archx reconstruct: rebuild the weights at a step and write them to .npz.",
@@ -1270,7 +1270,7 @@
       "outputs": [
         ".archx.mdl bytes on disk"
       ],
-      "handles": "Append-only block writing, CRCs, index, recovery flags, and smallest-of-candidate compression selection."
+      "handles": "Append-only block writing, CRCs, index, recovery flags, and smallest-of-candidate compression selection. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/data/__init__.py": {
       "purpose": "Marks the data package: codecs and capture.",
@@ -1305,7 +1305,7 @@
         "Segment records with characteristics and per-region effects",
         "deduplicated shards"
       ],
-      "handles": "Four data levels, content dedup, sensitive shards, a cap that degrades to pointers, and a lock so the writer thread and the training thread cannot corrupt each other's view."
+      "handles": "Four data levels, content dedup, sensitive shards, a cap that degrades to pointers, and a lock so the writer thread and the training thread cannot corrupt each other's view. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/data/codecs.py": {
       "purpose": "Content id and per-shard codec: text-zstd, tokens-varint or zstd, all lossless.",
@@ -1316,7 +1316,7 @@
         "EncodedShard (id, codec, payload, crc)",
         "exact original bytes on decode"
       ],
-      "handles": "Content addressing and the measured varint threshold (ids < 128)."
+      "handles": "Content addressing and the measured varint threshold (ids < 128). Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/encoders/__init__.py": {
       "purpose": "Encoder package surface.",
@@ -1358,7 +1358,7 @@
       "outputs": [
         "Encoded (exact)"
       ],
-      "handles": "Guarantees every tensor has an exact option; shuffle is opt-in because it measured badly."
+      "handles": "Guarantees every tensor has an exact option; shuffle is opt-in because it measured badly. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/encoders/lowrank.py": {
       "purpose": "Encoding 3: truncated SVD of a 2-D delta at the smallest rank meeting the error budget.",
@@ -1393,7 +1393,7 @@
       "outputs": [
         "Encoded (exact)"
       ],
-      "handles": "Refuses when more than half the entries moved, because index cost then beats density."
+      "handles": "Refuses when more than half the entries moved, because index cost then beats density. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/encoders/unchanged.py": {
       "purpose": "Encoding 0: zero delta, zero bytes.",
@@ -1502,7 +1502,7 @@
         "RecorderStats",
         "Decision per step"
       ],
-      "handles": "Queues snapshots, observations and traces; compares dense delta encodings, compresses independent trace blocks and applies trace backpressure without dropping records."
+      "handles": "Queues snapshots, observations and traces; compares dense delta encodings, compresses independent trace blocks and applies trace backpressure without dropping records. Updated for default PyTorch batch-linked history and configurable stronger compression; see source for details."
     },
     "archx/version.py": {
       "purpose": "Single source of version and format constants (MAGIC, END_MAGIC, FORMAT_MAJOR/MINOR).",
@@ -1613,6 +1613,61 @@
         "console script"
       ],
       "handles": "Version is duplicated in archx/version.py by design (build backend needs it statically); both move together at release."
+    },
+    ".github/workflows/batch-history.yml": {
+      "purpose": "Run the standalone 1M default batch-history verification on GitHub Actions.",
+      "inputs": [
+        "Bench/scale_batch_history.py",
+        "workflow_dispatch"
+      ],
+      "outputs": [
+        "batch-history-1m artifact with measurements and recording"
+      ],
+      "handles": "See source and tests for exact guarantees and limitations."
+    },
+    "Bench/scale_batch_history.py": {
+      "purpose": "Train 1M model and verify default update deltas, reconstructed states, logged token batches and history CLI.",
+      "inputs": [
+        "synthetic token batches",
+        "PyTorch model"
+      ],
+      "outputs": [
+        "Actions/out/scale/batch-history-Linux.json",
+        "Bench/out/batch-history-1m.archx.mdl"
+      ],
+      "handles": "See source and tests for exact guarantees and limitations."
+    },
+    "Tests/integration/test_batch_history.py": {
+      "purpose": "Exercise default batch-linked history, accumulation, missing batches, cap, CLI and safe serialization.",
+      "inputs": [
+        "PyTorch small model"
+      ],
+      "outputs": [
+        "pytest results"
+      ],
+      "handles": "See source and tests for exact guarantees and limitations."
+    },
+    "archx/cli/history.py": {
+      "purpose": "Read newest-first per-weight or row history, batches, integrity and bounded co-changing weights.",
+      "inputs": [
+        "recording",
+        "tensor selection"
+      ],
+      "outputs": [
+        "history report or CLI JSON"
+      ],
+      "handles": "See source and tests for exact guarantees and limitations."
+    },
+    "archx/data/batch.py": {
+      "purpose": "Encode and decode structured training batches without pickle.",
+      "inputs": [
+        "batch of tensors, arrays and structured values"
+      ],
+      "outputs": [
+        "versioned NumPy archive",
+        "decoded batch"
+      ],
+      "handles": "See source and tests for exact guarantees and limitations."
     }
   },
   "_generated": "2026-11-13 - v1.0.2: 1M-parameter scale test on CI (three runners green, hand test 11/11), six CLI/recovery defects fixed, 276 tests per runner",

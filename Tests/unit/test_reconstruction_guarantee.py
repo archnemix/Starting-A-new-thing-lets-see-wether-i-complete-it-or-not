@@ -38,7 +38,8 @@ def _record(tmp_path, *, budget: float, steps: int = 40):
     x = torch.randn(8, 32, generator=generator)
     y = torch.randint(0, 8, (8,), generator=generator)
     path = tmp_path / f"b{budget}.archx.mdl"
-    recorder = archx.attach(model, optimizer, path=str(path), max_rel_error=budget)
+    recorder = archx.attach(model, optimizer, path=str(path), max_rel_error=budget,
+                            full_history=False)
     truth = {}
     for step in range(steps):
         optimizer.zero_grad()

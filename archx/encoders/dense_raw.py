@@ -24,13 +24,14 @@ class DenseRaw(Encoder):
     name = "dense_raw"
 
     def __init__(self, *, codec: Codec = Codec.ZSTD, value_dtype: str = "f32",
-                 shuffle_planes: bool = False) -> None:
+                 shuffle_planes: bool = False, compression_level: int = 3) -> None:
         # Measured (Bench/claim_plane_shuffle.py): shuffling hurts zero-heavy deltas (0.58x)
         # and barely helps dense ones (1.07x), so the exact path compresses raw bytes and the
         # shuffle is kept for data whose planes are genuinely uniform.
         self.codec = codec
         self.value_dtype = value_dtype
         self.shuffle_planes = shuffle_planes
+        self.compression_level = compression_level
 
     def encode(self, delta: np.ndarray) -> Encoded | None:
         if delta.size == 0:
@@ -41,7 +42,7 @@ class DenseRaw(Encoder):
         body = b"".join([
             np.uint8(values.dtype.itemsize).tobytes(),
             np.uint8(1 if self.shuffle_planes else 0).tobytes(),
-            compress(payload, self.codec),
+            compress(payload, self.codec, level=self.compression_level),
         ])
         return Encoded(self.encoding_id, body, delta.size, self.value_dtype, 0.0, 0.0)
 

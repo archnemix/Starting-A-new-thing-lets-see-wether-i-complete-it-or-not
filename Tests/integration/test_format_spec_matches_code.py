@@ -150,7 +150,9 @@ def test_the_events_are_written_for_stored_steps_only(recorded):
     path, _model = recorded
     timeline = Timeline(Reader(path))
     events = [json.loads(block.payload) for block in Reader(path).blocks(BlockType.EVENT)]
-    assert [event["step"] for event in events] == timeline.steps
+    # Step 0 is a pre-training anchor in the default full-history mode, not an event.
+    expected = timeline.steps[1:] if Reader(path).meta().get("weight_history") == "every_optimizer_step" else timeline.steps
+    assert [event["step"] for event in events] == expected
 
 
 def test_a_capability_block_is_written_last(recorded):

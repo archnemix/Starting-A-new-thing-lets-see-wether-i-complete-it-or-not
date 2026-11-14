@@ -9,6 +9,23 @@ every file.
 
 ---
 
+## Unreleased: default batch-linked PyTorch history
+
+- Default PyTorch attachment now records an initial anchor and every optimizer update;
+  explicit policy or `full_history=False` selects adaptive recording. Exact encoded
+  float32 deltas still incur arithmetic reconstruction rounding.
+- Structured, explicitly logged batches support multiple microbatches per update;
+  history reports missing or pointer-only content and bounded co-changing weights.
+  The link is observational, not per-example causal attribution. Data capture can expose
+  sensitive information; `data_max_bytes` is now available on PyTorch attach.
+- Use stronger compression by default, subject to CPU and data-dependent size costs.
+- Fixed defects discovered during implementation: initial anchors incorrectly generated
+  fake update events; reused batch labels could conflate content; completeness of an
+  available batch could be mistaken for availability of all batches. The query now
+  separately reports closed state, contiguous updates, events and content availability.
+- New GitHub Actions test is `batch-history-1m`; results must be read from that run,
+  not inferred from the earlier example-gradient benchmark below.
+
 ## Unreleased: adaptive lossless compression
 
 - The writer tests both legacy and byte-shuffled per-example gradient archives

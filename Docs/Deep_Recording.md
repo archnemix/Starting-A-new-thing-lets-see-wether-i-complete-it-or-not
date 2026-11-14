@@ -1,6 +1,7 @@
 # Maximum-detail training recording
 
-`full_history=True` is opt-in for PyTorch float32 parameters. Step 0 is the
+`full_history=True` is the default for PyTorch float32 parameters when no policy is supplied.
+An explicit policy or `full_history=False` chooses adaptive recording. Step 0 is the
 **pre-training** anchor, and step N is the state after optimizer update N. The
 recorder stores a losslessly encoded delta for every update rather than
 adaptive, skipped intervals. Reconstructed deltas can still accumulate float32
@@ -18,6 +19,51 @@ If attaching after initialization, the RNG state is the state at attach, not
 before model construction. Data storage requires a `recorder.log` call: pass the
 inputs and targets as needed and check the file's recorded capabilities. Never
 assume all data was stored if a capture limit, pointer mode or redaction applies.
+
+## Default batch-linked history
+
+```python
+recorder = archx.attach(model, optimizer, "run.archx.mdl")
+for inputs, targets in loader:
+    optimizer.zero_grad()
+    loss = criterion(model(inputs), targets)  # suppose this is a mean
+    loss.backward()
+    recorder.log(loss=loss.item(), data={"inputs": inputs, "targets": targets},
+                 source="dataset-version", loss_reduction="mean")
+    optimizer.step()
+recorder.close()
+```
+
+For gradient accumulation, log each microbatch before the shared optimizer step.
+The caller must provide the actual data and reduction; these cannot be inferred or
+verified. Text, bytes, scalars, nested lists/dicts and non-object tensors/arrays
+are accepted; unsupported tensor dtypes fail rather than silently changing bytes.
+Data is embedded by default and can contain private information. Set
+`data_level="pointers"` to keep fingerprints only, or `data_max_bytes=N` to
+switch to pointers once the cap is reached. No configured cap is the default.
+
+```bash
+archx info run.archx.mdl  # find tensor names
+archx history run.archx.mdl --tensor layer.weight --index 0,0 --data --cochanges 10
+archx history run.archx.mdl --tensor layer.weight --row 0 --json
+```
+
+The newest-first report lists updates where the selected weight or row changed,
+with batch references, availability, and optionally content and a bounded sample
+of co-changing weight indices/deltas. A row is not automatically a neuron.
+Associations describe a joint optimizer update, not the causal effect of any
+individual example. Momentum, weight decay, gradient accumulation and other
+factors can contribute. `complete_recorded_range` means contiguous stored updates
+starting at the anchor; inspect `file_closed`, `all_step_events_present` and
+`all_recorded_batches_available` separately. Even a closed file cannot prove that
+the user logged every microbatch or that the source/reduction is correct. The
+reader currently loads the whole recording and decoded history into memory.
+
+PyTorch uses Zstandard level 9 by default, comparing block encodings and level 3
+for outer block compression. Zlib is a fallback when zstd is unavailable. Strong
+compression costs CPU; arbitrary dense data need not compress well. The encoding
+of float32 deltas is lossless, but reconstructing by addition may round. Optimizer
+state and buffers are not recorded. `full_history` rejects non-float32 parameters.
 
 ## Optional individual-example gradient trace
 

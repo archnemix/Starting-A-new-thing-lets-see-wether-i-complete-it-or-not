@@ -99,7 +99,10 @@ class Recorder:
         data_max_bytes: int | None = None,
         activations: "ActivationCapture | None" = None,
         full_history: bool = False,
+        compression_level: int = 3,
     ) -> None:
+        if not 1 <= compression_level <= 19:
+            raise ValueError("compression_level must be between 1 and 19")
         self.registry = registry
         self._read = read
         self.policy = policy or PhasePolicy()
@@ -139,12 +142,12 @@ class Recorder:
         # the *default* configuration lossy: reconstruction stopped being exact at anchor
         # steps, which broke a documented promise. At the default 1e-3 the recorder is still
         # lossless; an opt-in budget such as 1e-2 buys the size.
-        self._encoders = [Unchanged(), Sparse(threshold=0.0), DenseQuant(bits=8),
-                          LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw(),
-                          DenseRaw(shuffle_planes=True)]
+        self._encoders = [Unchanged(), Sparse(threshold=0.0, compression_level=compression_level), DenseQuant(bits=8),
+                          LowRank(max_rank=16, max_rel_error=max_rel_error), DenseRaw(compression_level=compression_level),
+                          DenseRaw(shuffle_planes=True, compression_level=compression_level)]
         if max_rel_error > _INT16_MIN_BUDGET:
             self._encoders.insert(3, DenseQuant(bits=16))
-        self.data = DataCapture(data_level, max_bytes=data_max_bytes)
+        self.data = DataCapture(data_level, max_bytes=data_max_bytes, compression_level=compression_level)
         # Tier 3. The capture is owned by the adapter, which is the only layer that knows what
         # a forward pass is; the recorder only decides *when* to ask and writes the answer.
         self.activations = activations
@@ -156,7 +159,9 @@ class Recorder:
         # once, here, and never read again: step 0 is always an anchor.
         self._previous = self._snapshot()
 
-        self._writer_kwargs = {} if codec is None else {"codec": codec}
+        self._writer_kwargs = {"compression_level": compression_level}
+        if codec is not None:
+            self._writer_kwargs["codec"] = codec
         self._path = path
         self._meta = {
             "library": f"archx {__version__}",
@@ -166,6 +171,7 @@ class Recorder:
             "attribution": "observational",
             "data_level": self.data.level.value,
             "weight_history": "every_optimizer_step" if full_history else "adaptive",
+            "compression_level": compression_level,
             "tensors": len(registry),
             "ties": sum(1 for e in registry if e.tie_group),
             **(meta or {}),
@@ -225,17 +231,40 @@ class Recorder:
             if lr is not None:
                 self.capabilities.offer("learning_rate")
             segment = None
-            if data is not None:
-                segment = self.data.observe(data, step, segment_id=segment_id, source=source)
-                if segment is not None:
-                    # The data observed since the previous store point is what this store
-                    # point's movement is *caused by*. Remembering it here is what lets the
-                    # effect be attributed to a batch that arrived on a skipped step: the
-                    # weights moved because of every batch in the span, not only the last.
-                    if segment.segment_id not in self._span_segments:
+            if self.full_history:
+                batch_items = logged.get("batch_items", [])
+                if data is not None:
+                    batch_items = [*batch_items, {"payload": data, "source": source,
+                                                  "name": segment_id, "format": "legacy_bytes"}]
+                references = []
+                for batch in batch_items:
+                    from .data.codecs import content_id
+                    fingerprint = content_id(batch["payload"])
+                    # Name by hash, never by user label: reused labels can refer to different data.
+                    batch_segment = self.data.observe(batch["payload"], step,
+                                                      segment_id="batch-" + fingerprint,
+                                                      source=batch.get("source", ""))
+                    if batch_segment is not None:
+                        segment = batch_segment
+                        if batch_segment.segment_id not in self._span_segments:
+                            self._span_segments.append(batch_segment.segment_id)
+                    references.append({"hash": fingerprint, "source": batch.get("source", ""),
+                                       "name": batch.get("name", ""),
+                                       "format": batch.get("format", "legacy_bytes"),
+                                       "loss_reduction": batch.get("loss_reduction", "unknown")})
+                context = {"loss": loss, "grad_norm": grad_norm, "lr": lr,
+                           "segment_id": segment.segment_id if segment else ""}
+                if self.full_history:
+                    context["batches"] = references
+                    context["batch_status"] = "provided" if references else "not_provided"
+                    context["attribution"] = "observed_joint_update_not_causal"
+            else:
+                if data is not None:
+                    segment = self.data.observe(data, step, segment_id=segment_id, source=source)
+                    if segment is not None and segment.segment_id not in self._span_segments:
                         self._span_segments.append(segment.segment_id)
-            context = {"loss": loss, "grad_norm": grad_norm, "lr": lr,
-                       "segment_id": segment.segment_id if segment else ""}
+                context = {"loss": loss, "grad_norm": grad_norm, "lr": lr,
+                           "segment_id": segment.segment_id if segment else ""}
             if decision is Decision.SKIP:
                 self.stats.steps_skipped += 1
                 self.policy.observe(loss=loss, grad_norm=grad_norm)
@@ -601,6 +630,11 @@ class Recorder:
             payload = item.payload or self._payload_for(item)
             writer.write_block(BlockType.ANCHOR if item.kind == "anchor" else BlockType.DELTA,
                                payload, step=item.step)
+            # The initial state is not an optimizer update and has no batch or loss event.
+            if item.context.get("initial"):
+                self.stats.blocks_written += 1
+                self.stats.bytes_written = writer._fh.tell()
+                return
             # Data goes to disk right after the movement it explains, never before. The other
             # order would let a crash leave a segment naming step N in a file whose history
             # stops at N-1, and a reader would be told about data that moved nothing. This way

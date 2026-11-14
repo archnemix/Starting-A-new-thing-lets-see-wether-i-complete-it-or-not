@@ -1,0 +1,32 @@
+name: batch-history-1m
+on:
+  push:
+    paths:
+      - 'Bench/scale_batch_history.py'
+      - '.github/workflows/batch-history.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install -e .
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Train and verify default batch history and CLI
+        run: python Bench/scale_batch_history.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: batch-history-1m
+          path: |
+            Actions/out/scale/batch-history-Linux.json
+            Bench/out/batch-history-1m.archx.mdl
+          if-no-files-found: error
+          retention-days: 7

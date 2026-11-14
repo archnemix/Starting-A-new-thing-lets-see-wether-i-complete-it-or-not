@@ -80,7 +80,7 @@ def test_trace_rejects_incorrect_loss_and_budget(tmp_path):
 
 def test_trace_requires_dense_mode(tmp_path):
     m = torch.nn.Linear(1, 1); opt = torch.optim.SGD(m.parameters(), lr=.1)
-    r = archx.attach(m, opt, str(tmp_path / 'adaptive.archx.mdl'))
+    r = archx.attach(m, opt, str(tmp_path / 'adaptive.archx.mdl'), full_history=False)
     with pytest.raises(ValueError, match='full_history'):
         r.trace_examples(torch.ones(1), [b'a'])
     r.close()

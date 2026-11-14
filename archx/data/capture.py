@@ -136,9 +136,10 @@ class DataCapture:
     """
 
     def __init__(self, level: DataLevel | str = DataLevel.SEGMENTS, *,
-                 max_bytes: int | None = None) -> None:
+                 max_bytes: int | None = None, compression_level: int = 3) -> None:
         self.level = DataLevel(level)
         self.max_bytes = max_bytes
+        self.compression_level = compression_level
         self.shards: dict[str, EncodedShard] = {}
         self.segments: dict[str, Segment] = {}
         self.sensitive: set[str] = set()
@@ -255,7 +256,7 @@ class DataCapture:
             elif self.level is not DataLevel.FULL and shard_id in self.shards:
                 segment.shard_id = shard_id     # dedup: the second sighting costs nothing
             else:
-                encoded = encode_shard(data)
+                encoded = encode_shard(data, compression_level=self.compression_level)
                 # Under `segments` the key is the content hash, so an epoch over the same
                 # data costs pointers rather than copies - including when two *named*
                 # segments share bytes, which is the join case: two ids, one stored copy.

@@ -21,10 +21,11 @@ class Sparse(Encoder):
     name = "sparse"
 
     def __init__(self, *, threshold: float = 0.0, codec: Codec = Codec.ZSTD,
-                 value_dtype: str = "f32") -> None:
+                 value_dtype: str = "f32", compression_level: int = 3) -> None:
         self.threshold = threshold
         self.codec = codec
         self.value_dtype = value_dtype
+        self.compression_level = compression_level
 
     def encode(self, delta: np.ndarray) -> Encoded | None:
         flat = delta.ravel()
@@ -41,8 +42,8 @@ class Sparse(Encoder):
         values = flat[mask].astype(to_numpy(self.value_dtype))
         gaps = np.diff(indices, prepend=np.uint64(0)) if nnz else indices
 
-        gap_bytes = compress(gaps.tobytes(), self.codec)
-        value_bytes = compress(values.tobytes(), self.codec)
+        gap_bytes = compress(gaps.tobytes(), self.codec, level=self.compression_level)
+        value_bytes = compress(values.tobytes(), self.codec, level=self.compression_level)
         body = b"".join([
             np.uint64(nnz).tobytes(),
             np.uint64(len(gap_bytes)).tobytes(),

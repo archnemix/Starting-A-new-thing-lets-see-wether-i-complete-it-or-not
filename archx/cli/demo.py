@@ -28,7 +28,6 @@ def run_demo(out: str = "demo.archx.mdl", *, steps: int = 20, quiet: bool = Fals
         return 1
 
     import archx
-    from archx.policy import PhasePolicy
 
     path = Path(out)
     if path.exists():
@@ -54,14 +53,14 @@ def run_demo(out: str = "demo.archx.mdl", *, steps: int = 20, quiet: bool = Fals
         data_level="segments",
         activations=True,
         regions={"0": "input_projection", "2": "hidden", "4": "head"},
-        policy=PhasePolicy(total_steps=steps, min_warmup_steps=2, heartbeat_steps=4),
     )
     losses = []
     for inputs, targets in batches:
         optimizer.zero_grad()
         loss = torch.nn.functional.cross_entropy(model(inputs), targets)
         loss.backward()
-        recorder.log(loss=float(loss.detach()), data=inputs)
+        recorder.log(loss=float(loss.detach()), data={"inputs": inputs, "targets": targets},
+                     source="synthetic demo", loss_reduction="mean")
         optimizer.step()
         losses.append(float(loss.detach()))
     recorder.close()
@@ -76,6 +75,7 @@ def run_demo(out: str = "demo.archx.mdl", *, steps: int = 20, quiet: bool = Fals
         f"archx events        {path}",
         f"archx activations   {path}",
         f"archx diff          {path}",
+        f"archx history       {path} --tensor 0.weight --row 0 --data",
         f"archx reconstruct   {path} --out weights.npz",
     ):
         say(f"  {command}")
